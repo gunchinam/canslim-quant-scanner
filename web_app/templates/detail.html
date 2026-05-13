@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="color-scheme" content="light">
+<title>{{ ticker }} — (.)(.)검색기</title>
+<link rel="stylesheet" href="/static/theme.css">
+<style>
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background: var(--surface-page);
+  font-family: -apple-system, 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+  max-width: 900px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--surface-page);
+}
+
+/* TopBar */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 60px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 4px;
+  box-shadow: var(--shadow-card);
+}
+
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--icon-default);
+  flex-shrink: 0;
+}
+
+.icon-btn:hover { background: var(--surface-subtle); }
+
+.topbar-center {
+  flex: 1;
+  text-align: center;
+}
+
+.topbar-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: block;
+  line-height: 1.2;
+}
+
+.topbar-sub {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* Scroll content */
+.scroll-content {
+  padding-bottom: 32px;
+}
+
+/* Hero Card */
+.hero-wrap {
+  padding: 20px 24px 0;
+}
+
+.hero-card {
+  background: var(--card);
+  border-radius: 16px;
+  box-shadow: var(--shadow-elevated);
+  border: 1px solid var(--border);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.hero-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.hero-sector {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--brand-tint);
+  color: var(--brand);
+}
+
+.hero-main {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.hero-score {
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.hero-unit {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.hero-grade-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--surface-muted);
+  border-radius: 50%;
+  margin: 0 4px;
+  align-self: center;
+}
+
+.hero-grade {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--brand);
+  align-self: center;
+}
+
+.hero-bottom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.hero-change {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--success);
+}
+
+.hero-change-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.hero-watermark {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  opacity: 0.05;
+  pointer-events: none;
+}
+
+/* Tab nav */
+.tab-nav {
+  display: flex;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  margin-top: 20px;
+  position: sticky;
+  top: 60px;
+  z-index: 90;
+}
+
+.tab-btn {
+  flex: 1;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  font-family: inherit;
+  min-height: 44px;
+}
+
+.tab-btn.active {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+}
+
+/* Tab panels */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Common card */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border);
+}
+
+/* CAN SLIM tab */
+.canslim-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 24px 0;
+}
+
+.cs-item {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+}
+
+.cs-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cs-badge {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cs-name {
+  flex: 1;
+}
+
+.cs-name-en {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cs-name-ko {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}
+
+.cs-score {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.score-high { color: var(--success); }
+.score-mid  { color: var(--warning); }
+.score-low  { color: var(--destructive); }
+
+.cs-bar-wrap {
+  height: 6px;
+  background: var(--surface-subtle);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cs-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.cs-bar-fill.score-high { background: var(--success); }
+.cs-bar-fill.score-mid  { background: var(--warning); }
+.cs-bar-fill.score-low  { background: var(--destructive); }
+
+.cs-summary {
+  margin: 12px 24px 0;
+  background: var(--brand-tint);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  border: 1px solid rgba(49,130,246,0.12);
+}
+
+.cs-summary-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand);
+  text-align: center;
+}
+
+/* 4-axis tab */
+.axis-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 20px 24px 0;
+}
+
+.axis-card {
+  background: var(--card);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border);
+  padding: 14px;
+}
+
+.axis-label-en {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.axis-label-ko {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  margin-bottom: 8px;
+}
+
+.axis-score-row {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+}
+
+.axis-score-num {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.axis-score-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.axis-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+/* Radar chart */
+.radar-wrap {
+  padding: 20px 24px 0;
+}
+
+.radar-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border);
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+/* DartLab tab */
+.dartlab-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px 0;
+}
+
+.dartlab-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.dartlab-card-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dartlab-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dartlab-card-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  background: var(--surface-subtle);
+  padding: 2px 8px;
+  border-radius: 100px;
+}
+
+.data-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-row:last-child { border-bottom: none; }
+
+.data-label {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  flex: 1;
+}
+
+.data-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-right: 8px;
+}
+
+.data-change {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.data-change.pos { color: var(--success); }
+.data-change.neg { color: var(--destructive); }
+.data-change.neutral { color: var(--text-tertiary); }
+
+.check-icon {
+  color: var(--success);
+  font-size: 13px;
+  margin-right: 4px;
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- TopBar -->
+  <header class="topbar">
+    <button class="icon-btn" onclick="history.back()" aria-label="뒤로가기">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+    </button>
+    <div class="topbar-center">
+      <span id="detail-name" class="topbar-title">—</span>
+      <span id="detail-ticker" class="topbar-sub">{{ ticker }}</span>
+    </div>
+    <button class="icon-btn" aria-label="관심 종목 추가" id="bookmarkBtn" onclick="toggleBookmark(this)">
+      <svg id="bookmarkIcon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+      </svg>
+    </button>
+  </header>
+
+  <div class="scroll-content">
+    <!-- Hero Card -->
+    <div class="hero-wrap">
+      <div class="hero-card">
+        <div class="hero-top">
+          <span class="hero-label">종합점수</span>
+          <span id="detail-sector" class="hero-sector">—</span>
+        </div>
+        <div class="hero-main">
+          <span id="detail-score" class="hero-score">—</span>
+          <span class="hero-unit">점</span>
+          <span class="hero-grade-dot"></span>
+          <span id="detail-signal" class="hero-grade">—</span>
+        </div>
+        <div class="hero-bottom">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="18 15 12 9 6 15"/>
+          </svg>
+          <span id="detail-rsi" class="hero-change">—</span>
+          <span class="hero-change-label">RSI</span>
+        </div>
+        <div class="hero-bottom" style="margin-top:6px;">
+          <span style="font-size:12px;color:var(--text-secondary)">현재가 <strong id="detail-price">—</strong> &nbsp; 목표가 <strong id="detail-target">—</strong></span>
+        </div>
+        <!-- Watermark chart icon -->
+        <svg class="hero-watermark" width="140" height="100" viewBox="0 0 140 100" fill="none">
+          <polyline points="10,80 30,55 50,65 70,30 90,45 110,20 130,35" stroke="#3182F6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <line x1="10" y1="90" x2="130" y2="90" stroke="#3182F6" stroke-width="2"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- 핸드드로윙 차트 (항상 표시) -->
+    <div style="padding:20px 24px 0;">
+      <div id="fouraxis-loading" style="text-align:center; padding:24px; color:var(--text-tertiary);">차트 생성 중...</div>
+      <div id="fouraxis-error" style="text-align:center; padding:24px; color:var(--destructive); display:none;"></div>
+      <div id="fouraxis-chart-wrap" style="display:none;">
+        <img id="fouraxis-chart" src="" alt="핸드드로윙 차트"
+             style="width:100%; border-radius:var(--radius); box-shadow:var(--shadow-card); border:1px solid var(--border);" />
+      </div>
+    </div>
+
+    <!-- Tab nav -->
+    <nav class="tab-nav" role="tablist" aria-label="분석 탭">
+      <button class="tab-btn active" role="tab" aria-selected="true" aria-controls="tab-canslim" id="btn-canslim" onclick="switchTab('canslim')">CAN SLIM</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-dart" id="btn-dart" onclick="switchTab('dart')">DartLab</button>
+    </nav>
+
+    <!-- CAN SLIM Tab -->
+    <div class="tab-panel active" id="tab-canslim" role="tabpanel" aria-labelledby="btn-canslim">
+      <div class="canslim-list" id="breakdown-list"></div>
+      <div class="cs-summary">
+        <div class="cs-summary-text">평균점수 74점 &nbsp;·&nbsp; 7항목 중 5항목 양호</div>
+      </div>
+      <div style="height:24px;"></div>
+    </div>
+
+    <!-- DartLab Tab -->
+    <div class="tab-panel" id="tab-dart" role="tabpanel" aria-labelledby="btn-dart">
+      <div class="dartlab-sections">
+
+        <!-- 손익계산서 -->
+        <div class="dartlab-card">
+          <div class="dartlab-card-header">
+            <span class="dartlab-card-title">손익계산서</span>
+            <span class="dartlab-card-badge">IS</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">매출액</span>
+            <span class="data-value">28.5조</span>
+            <span class="data-change pos">YoY +8.2% ↑</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">영업이익</span>
+            <span class="data-value">3.8조</span>
+            <span class="data-change pos">YoY +22.1% ↑</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">순이익</span>
+            <span class="data-value">2.9조</span>
+            <span class="data-change pos">YoY +15.4% ↑</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">영업이익률</span>
+            <span class="data-value">13.3%</span>
+            <span class="data-change neutral">—</span>
+          </div>
+        </div>
+
+        <!-- 재무상태표 -->
+        <div class="dartlab-card">
+          <div class="dartlab-card-header">
+            <span class="dartlab-card-title">재무상태표</span>
+            <span class="dartlab-card-badge">BS</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">자산총계</span>
+            <span class="data-value">450.7조</span>
+            <span class="data-change neutral"></span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">부채총계</span>
+            <span class="data-value">156.3조</span>
+            <span class="data-change neutral"></span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">자본총계</span>
+            <span class="data-value">294.4조</span>
+            <span class="data-change neutral"></span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">부채비율</span>
+            <span class="data-value">53.1%</span>
+            <span class="data-change pos">안정</span>
+          </div>
+        </div>
+
+        <!-- 현금흐름표 -->
+        <div class="dartlab-card">
+          <div class="dartlab-card-header">
+            <span class="dartlab-card-title">현금흐름표</span>
+            <span class="dartlab-card-badge">CF</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">영업CF</span>
+            <span class="data-value">+5.2조</span>
+            <span class="data-change pos">✅ 양호</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">투자CF</span>
+            <span class="data-value">-8.1조</span>
+            <span class="data-change neutral">—</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">재무CF</span>
+            <span class="data-value">+1.3조</span>
+            <span class="data-change neutral">—</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">FCF</span>
+            <span class="data-value">-2.9조</span>
+            <span class="data-change neg">주의</span>
+          </div>
+        </div>
+
+      </div>
+      <div style="height:24px;"></div>
+    </div>
+
+  </div><!-- end scroll-content -->
+</div><!-- end shell -->
+
+<script>const TICKER = "{{ ticker }}";</script>
+<script src="/static/app.js"></script>
+</body>
+</html>

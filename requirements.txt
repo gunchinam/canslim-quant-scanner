@@ -1,0 +1,30 @@
+# canslim-quant-scanner — runtime dependencies
+# 설치: pip install -r requirements.txt
+
+# 웹 서버
+flask>=3.0
+
+# 데이터/수치
+numpy>=1.24
+pandas>=2.0
+yfinance>=0.2.40
+pyarrow>=14.0       # parquet 캐시
+
+# HTTP/환경변수
+requests>=2.31
+python-dotenv>=1.0
+
+# 차트/이미지
+matplotlib>=3.7
+Pillow>=10.0
+
+# 알림 (선택)
+plyer>=2.1          # Windows 토스트
+# win10toast>=0.9   # 폴백 (Win10/11)
+
+# 엑셀 리포트 (선택)
+xlsxwriter>=3.1
+
+# DartLab(선택) — 뉴스 요약/감성분석 — 무거우니 필요 시만 주석 해제
+# transformers>=4.40
+# torch>=2.2

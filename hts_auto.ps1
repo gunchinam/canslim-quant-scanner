@@ -47,7 +47,7 @@ public class HTSA {
 "@ -ReferencedAssemblies System.Windows.Forms,System.Drawing
 
 $HWND  = [IntPtr]266872
-$TMP   = "C:\Users\Administrator\AppData\Local\Temp"
+$TMP   = $env:TEMP
 
 # ── 창 좌표 계산 ─────────────────────────────────────────────
 [HTSA]::Focus($HWND)

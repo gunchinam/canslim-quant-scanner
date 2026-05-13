@@ -39,6 +39,7 @@ sca_debug.log
 _*.py
 _*.txt
 _*.png
+!__init__.py
 _pemco_caps/
 _pdf_pages/
 _renderer_test.png

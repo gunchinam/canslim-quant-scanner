@@ -36,8 +36,33 @@ warnings.filterwarnings("ignore", message=".*parseString.*")
 warnings.filterwarnings("ignore", message=".*resetCache.*")
 warnings.filterwarnings("ignore", message=".*enablePackrat.*")
 
-import tkinter as tk
-from tkinter import messagebox, ttk
+try:
+    import tkinter as tk
+    from tkinter import messagebox, ttk
+    _TK_AVAILABLE = True
+except Exception:
+    _TK_AVAILABLE = False
+
+    class _TkDummy:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __call__(self, *args, **kwargs):
+            return self
+
+        def __getattr__(self, _name):
+            return self
+
+        def __bool__(self):
+            return False
+
+    class _TkNamespace:
+        def __getattr__(self, _name):
+            return _TkDummy()
+
+    tk = _TkNamespace()  # type: ignore
+    ttk = _TkNamespace()  # type: ignore
+    messagebox = _TkNamespace()  # type: ignore
 import sys
 import os
 import threading

@@ -4,9 +4,12 @@
 .env.*.local
 .kis_token_cache.json
 config.json
+config.local.json
+config.*.local.json
 *.token
 *_secret*
 .quant_nexus_ui.json
+swing_scan/state/
 
 # === 데이터베이스/개인 데이터 ===
 *.sqlite3

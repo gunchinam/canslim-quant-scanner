@@ -129,13 +129,34 @@ def fetch_news(ticker: str, *, limit: int = 10) -> list[dict]:
     for item in raw_items[:limit]:
         if not isinstance(item, dict):
             continue
+        # yfinance 최신 버전: 데이터가 item["content"] dict 안에 중첩
+        content = item.get("content") if isinstance(item.get("content"), dict) else None
+        src = content or item
+        publisher = ""
+        if content:
+            prov = content.get("provider")
+            if isinstance(prov, dict):
+                publisher = _safe_str(prov.get("displayName"))
+        if not publisher:
+            publisher = _safe_str(item.get("publisher"))
+        link = ""
+        if content:
+            cu = content.get("canonicalUrl")
+            if isinstance(cu, dict):
+                link = _safe_str(cu.get("url"))
+            if not link:
+                ct = content.get("clickThroughUrl")
+                if isinstance(ct, dict):
+                    link = _safe_str(ct.get("url"))
+        if not link:
+            link = _extract_link(item)
         news_items.append(
             {
-                "title": _safe_str(item.get("title")),
-                "publisher": _safe_str(item.get("publisher")),
-                "link": _extract_link(item),
-                "published_ts": _extract_timestamp(item),
-                "summary": _extract_summary(item),
+                "title": _safe_str(src.get("title")),
+                "publisher": publisher,
+                "link": link,
+                "published_ts": _extract_timestamp(src),
+                "summary": _safe_str(src.get("summary")) or _safe_str(src.get("description")) or _extract_summary(item),
             }
         )
     return news_items

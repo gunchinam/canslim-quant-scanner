@@ -6,6 +6,9 @@
 <meta name="color-scheme" content="light">
 <title>{{ ticker }} — (.)(.)검색기</title>
 <link rel="stylesheet" href="/static/theme.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&family=Do+Hyeon&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after {
   box-sizing: border-box;
@@ -471,6 +474,592 @@ html, body {
   font-size: 13px;
   margin-right: 4px;
 }
+
+/* CAN SLIM 카드 그리드 (app.js _breakdownItemHtml 출력용) */
+.cs-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding: 12px 0 16px;
+}
+.cs-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow-card);
+}
+.cs-card-top { display: flex; align-items: flex-start; gap: 8px; }
+.cs-card-label { flex: 1; min-width: 0; }
+.cs-label-en {
+  font-size: 12px; font-weight: 700; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cs-label-concept {
+  font-size: 10px; color: var(--text-tertiary);
+  margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cs-badge {
+  min-width: 34px; height: 34px; padding: 0 6px;
+  border-radius: 9px;
+  background: var(--brand); color: var(--primary-foreground);
+  font-size: 11px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; line-height: 1; white-space: nowrap;
+}
+.cs-score-big {
+  font-size: 28px; font-weight: 800;
+  text-align: center; line-height: 1; padding: 4px 0 2px;
+}
+.cs-score-big.score-high { color: var(--success); }
+.cs-score-big.score-mid  { color: var(--warning); }
+.cs-score-big.score-low  { color: var(--destructive); }
+.cs-bar-wrap {
+  height: 5px; background: var(--surface-muted);
+  border-radius: 3px; overflow: hidden;
+}
+.cs-bar-fill {
+  height: 100%; border-radius: 3px;
+  transition: width 0.4s var(--ease-out);
+}
+.cs-desc-brief {
+  font-size: 11px; color: var(--text-secondary); line-height: 1.5;
+  overflow: hidden; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.cs-desc-full {
+  display: none;
+  font-size: 11px; color: var(--text-secondary); line-height: 1.6;
+}
+.cs-formula {
+  display: none;
+  font-size: 10px; font-weight: 600; color: var(--brand);
+  background: var(--brand-tint); border-radius: 6px;
+  padding: 6px 8px; margin-top: 4px; line-height: 1.4;
+}
+.cs-expandable { cursor: pointer; transition: box-shadow 0.2s var(--ease-default); }
+.cs-expandable:hover { box-shadow: var(--shadow-hover); }
+.cs-chevron {
+  flex-shrink: 0;
+  transition: transform 0.2s var(--ease-default);
+}
+/* 계산 과정 팝업 (바텀시트) */
+.cp-overlay {
+  display: none; position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.45); backdrop-filter: blur(2px);
+}
+.cp-overlay.visible { display: flex; align-items: flex-end; justify-content: center; }
+.cp-sheet {
+  width: 100%; max-width: 520px; max-height: 85vh;
+  background: var(--card); border-radius: 20px 20px 0 0;
+  padding: 0 20px 24px; overflow-y: auto;
+  animation: cpSlideUp 0.25s var(--ease-out);
+}
+@keyframes cpSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.cp-handle { display: flex; justify-content: center; padding: 10px 0 14px; cursor: pointer; }
+.cp-handle-bar { width: 36px; height: 4px; background: var(--surface-muted); border-radius: 2px; }
+.cp-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.cp-score { font-size: 28px; font-weight: 800; line-height: 1; }
+.cp-score.score-high { color: var(--success); }
+.cp-score.score-mid  { color: var(--warning); }
+.cp-score.score-low  { color: var(--destructive); }
+.cp-bar-wrap { height: 6px; background: var(--surface-subtle); border-radius: 4px; overflow: hidden; margin-bottom: 16px; }
+.cp-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 12px; }
+.cp-formula {
+  font-size: 12px; font-weight: 600; color: var(--brand);
+  background: var(--brand-tint); border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 12px; line-height: 1.5;
+}
+.cp-detail { margin-bottom: 16px; }
+.cp-section-title { font-size: 13px; font-weight: 700; color: var(--text-primary); margin: 12px 0 6px; }
+.cp-step {
+  font-size: 12px; color: var(--text-secondary); line-height: 1.7;
+  padding: 2px 0 2px 8px; border-left: 2px solid var(--brand-tint);
+  margin-bottom: 2px;
+}
+.cp-line { font-size: 12px; color: var(--text-tertiary); line-height: 1.6; padding-left: 8px; }
+.cp-close-btn {
+  width: 100%; height: 44px; border: none; border-radius: var(--radius);
+  background: var(--surface-subtle); color: var(--text-secondary);
+  font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.cp-close-btn:hover { background: var(--surface-muted); }
+.cs-section-banner {
+  grid-column: 1 / -1;
+  background: var(--brand-tint);
+  border: 1px solid rgba(114,31,229,0.15);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+.cs-canslim-wrap {
+  grid-column: 1 / -1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.cs-canslim-hdr {
+  font-size: 13px; font-weight: 700; color: var(--brand);
+  text-align: center; margin-bottom: 4px;
+}
+.cs-tag {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 12px; border-radius: 8px;
+  border-left: 3px solid var(--border);
+  background: var(--surface-page);
+}
+.cs-tag-pass  { border-left-color: var(--success);     background: rgba(52,199,89,0.06); }
+.cs-tag-fail  { border-left-color: var(--destructive); background: rgba(255,59,48,0.06); }
+.cs-tag-warn  { border-left-color: var(--warning);     background: rgba(255,149,0,0.06); }
+.cs-tag-neutral { border-left-color: var(--text-tertiary); }
+.cs-tag-b {
+  min-width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800;
+  color: var(--brand); background: var(--brand-tint);
+  border-radius: 6px; flex-shrink: 0;
+}
+.cs-tag-b-aux { min-width: 44px; font-size: 10px; font-weight: 700; }
+.cs-tag-t { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+.cs-tag-sep {
+  font-size: 11px; color: var(--text-tertiary);
+  text-align: center; padding: 4px 0;
+  border-top: 1px solid var(--border); margin-top: 2px;
+}
+
+/* 기술/재무 지표 행 */
+.ind-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  border-left: 3px solid transparent;
+  transition: border-left-color 0.15s;
+}
+.ind-pos  { border-left-color: var(--success); background: rgba(52,199,89,0.03); }
+.ind-neg  { border-left-color: var(--destructive); background: rgba(255,59,48,0.03); }
+.ind-info { border-left-color: var(--info); background: rgba(59,130,246,0.03); }
+.ind-label { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
+.ind-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.ind-val { font-size: 16px; font-weight: 700; white-space: nowrap; }
+
+/* 공시·뉴스 탭 */
+.dn-sentiment-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow-card);
+}
+.dn-sentiment-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.dn-sentiment-title { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.dn-sentiment-badge {
+  font-size: 11px; font-weight: 700; padding: 3px 10px;
+  border-radius: 100px;
+}
+.dn-sentiment-badge.positive { background: rgba(52,199,89,0.12); color: var(--success); }
+.dn-sentiment-badge.negative { background: rgba(255,59,48,0.12); color: var(--destructive); }
+.dn-sentiment-badge.neutral  { background: var(--surface-subtle); color: var(--text-tertiary); }
+.dn-sentiment-bars {
+  display: flex; gap: 8px; margin-bottom: 8px;
+  font-size: 12px; color: var(--text-secondary);
+}
+.dn-bar-wrap {
+  flex: 1; height: 6px; background: var(--surface-subtle);
+  border-radius: 3px; overflow: hidden;
+}
+.dn-bar-pos { height: 100%; background: var(--success); border-radius: 3px; }
+.dn-bar-neg { height: 100%; background: var(--destructive); border-radius: 3px; }
+.dn-summary-text {
+  font-size: 13px; color: var(--text-secondary); line-height: 1.6;
+}
+.dn-news-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.dn-news-item:last-child { border-bottom: none; }
+.dn-news-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px;
+}
+.dn-news-dot.positive { background: var(--success); }
+.dn-news-dot.negative { background: var(--destructive); }
+.dn-news-dot.neutral  { background: var(--text-tertiary); }
+.dn-news-title {
+  font-size: 13px; color: var(--text-primary); font-weight: 500;
+  line-height: 1.5; flex: 1;
+}
+.dn-news-title a { color: var(--brand); text-decoration: none; cursor: pointer; }
+.dn-news-title a:hover { color: var(--info); text-decoration: underline; }
+.dn-filing-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden; box-shadow: var(--shadow-card);
+}
+.dn-filing-header {
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  font-size: 14px; font-weight: 700; color: var(--text-primary);
+  display: flex; align-items: center; gap: 8px;
+}
+.dn-filing-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+}
+.dn-filing-item:last-child { border-bottom: none; }
+.dn-filing-date {
+  font-size: 11px; color: var(--text-tertiary); white-space: nowrap; flex-shrink: 0;
+}
+.dn-filing-title {
+  font-size: 13px; color: var(--text-primary); flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dn-filing-title a { color: var(--brand); text-decoration: none; cursor: pointer; }
+.dn-filing-title a:hover { color: var(--info); text-decoration: underline; }
+.dn-empty {
+  padding: 24px; text-align: center;
+  color: var(--text-tertiary); font-size: 13px;
+}
+
+/* US 인사이트 탭 */
+.us-metric-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+}
+.us-metric-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px;
+  box-shadow: var(--shadow-card);
+}
+.us-metric-label {
+  font-size: 11px; font-weight: 600; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.3px;
+}
+.us-metric-value {
+  font-size: 22px; font-weight: 700; color: var(--text-primary);
+  margin-top: 4px; line-height: 1;
+}
+.us-metric-sub {
+  font-size: 11px; color: var(--text-tertiary); margin-top: 4px;
+}
+.us-earnings-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px;
+  box-shadow: var(--shadow-card);
+  display: flex; align-items: center; gap: 14px;
+}
+.us-earnings-chip {
+  font-size: 13px; font-weight: 700; padding: 6px 14px;
+  border-radius: 100px; white-space: nowrap; flex-shrink: 0;
+}
+.us-earnings-info { flex: 1; }
+.us-earnings-date {
+  font-size: 14px; font-weight: 600; color: var(--text-primary);
+}
+.us-earnings-sub {
+  font-size: 12px; color: var(--text-tertiary); margin-top: 2px;
+}
+.us-rec-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+}
+.us-rec-item:last-child { border-bottom: none; }
+.us-rec-action {
+  font-size: 10px; font-weight: 700; padding: 2px 8px;
+  border-radius: 100px; white-space: nowrap; flex-shrink: 0;
+}
+.us-rec-action.upgrade { background: rgba(52,199,89,0.12); color: var(--success); }
+.us-rec-action.downgrade { background: rgba(255,59,48,0.12); color: var(--destructive); }
+.us-rec-action.init { background: var(--brand-tint); color: var(--brand); }
+.us-rec-action.reiterated { background: var(--surface-subtle); color: var(--text-tertiary); }
+.us-rec-firm {
+  font-size: 13px; color: var(--text-primary); font-weight: 500; flex: 1;
+}
+.us-rec-grade {
+  font-size: 12px; color: var(--text-secondary); white-space: nowrap;
+}
+/* === Silkscreen Lettering Poster (한줄평) === */
+.hero-oneliner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: 0 0 14px 0;
+  padding: 28px 24px;
+  min-height: 110px;
+  font-family: 'Noto Sans KR', 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  font-size: clamp(32px, 6.5vw, 52px);
+  font-weight: 800;
+  line-height: 1.16;
+  letter-spacing: -0.02em;
+  color: #1a1a1a;
+  background: #F4ECD8;
+  border: 3px solid #1a1a1a;
+  border-radius: 14px;
+  box-shadow: 6px 6px 0 #1a1a1a;
+  overflow: hidden;
+  word-break: keep-all;
+  text-wrap: balance;
+}
+.hero-oneliner::before,
+.hero-oneliner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.32;
+}
+/* High-density patterns: keep a bit subtler */
+.hero-oneliner[data-tag="BUBBLE"]::before,
+.hero-oneliner[data-tag="BREAKOUT"]::before,
+.hero-oneliner[data-tag="FALLING_KNIFE"]::before { opacity: 0.28; }
+/* Low-density patterns: can stay slightly stronger for presence */
+.hero-oneliner[data-tag="VALUE_TRAP"]::before,
+.hero-oneliner[data-tag="OVERBOUGHT"]::before,
+.hero-oneliner[data-tag="STRONG_BUY"]::before,
+.hero-oneliner[data-tag="AVOID"]::before { opacity: 0.45; }
+
+/* TRUE_VALUE — teal + halftone dots */
+.hero-oneliner[data-tag="TRUE_VALUE"] {
+  background: #18B8A8; color: #FFF8E7; border-color: #0B5F58;
+  box-shadow: 6px 6px 0 #0B5F58;
+}
+.hero-oneliner[data-tag="TRUE_VALUE"]::before {
+  background-image: radial-gradient(#FFF8E7 1.6px, transparent 2px);
+  background-size: 14px 14px;
+}
+.hero-oneliner[data-tag="TRUE_VALUE"]::after {
+  content: '◉'; font-family: serif; position: absolute;
+  top: 8px; right: 14px; font-size: 22px; opacity: 0.6; inset: auto 14px auto auto;
+}
+
+/* VALUE_TRAP — mustard + warning stripes */
+.hero-oneliner[data-tag="VALUE_TRAP"] {
+  background: #E8B922; color: #2A1B05; border-color: #2A1B05;
+  box-shadow: 6px 6px 0 #2A1B05;
+}
+.hero-oneliner[data-tag="VALUE_TRAP"]::before {
+  background-image: repeating-linear-gradient(135deg,
+    transparent 0 18px, rgba(42,27,5,0.18) 18px 28px);
+}
+
+/* EXPENSIVE_JUSTIFIED — navy + cream dots */
+.hero-oneliner[data-tag="EXPENSIVE_JUSTIFIED"] {
+  background: #1F2D5C; color: #FFE9A8; border-color: #0A0F25;
+  box-shadow: 6px 6px 0 #0A0F25;
+}
+.hero-oneliner[data-tag="EXPENSIVE_JUSTIFIED"]::before {
+  background-image: radial-gradient(#FFE9A8 1.4px, transparent 1.8px);
+  background-size: 18px 18px;
+}
+
+/* BUBBLE — hot pink + circle outlines */
+.hero-oneliner[data-tag="BUBBLE"] {
+  background: #FF4FA3; color: #FFF8E7; border-color: #6E0B3D;
+  box-shadow: 6px 6px 0 #6E0B3D;
+}
+.hero-oneliner[data-tag="BUBBLE"]::before {
+  background-image:
+    radial-gradient(circle, transparent 8px, rgba(255,248,231,0.35) 8.5px, transparent 10px);
+  background-size: 32px 32px;
+}
+
+/* MOMENTUM_LEADER — electric blue + diagonal lines */
+.hero-oneliner[data-tag="MOMENTUM_LEADER"] {
+  background: #2D6BFF; color: #FFF8E7; border-color: #0B1F66;
+  box-shadow: 6px 6px 0 #0B1F66;
+}
+.hero-oneliner[data-tag="MOMENTUM_LEADER"]::before {
+  background-image: repeating-linear-gradient(60deg,
+    transparent 0 22px, rgba(255,248,231,0.22) 22px 24px);
+}
+
+/* OVERBOUGHT — orange + bold stripes */
+.hero-oneliner[data-tag="OVERBOUGHT"] {
+  background: #FF7A1A; color: #2A1505; border-color: #2A1505;
+  box-shadow: 6px 6px 0 #2A1505;
+}
+.hero-oneliner[data-tag="OVERBOUGHT"]::before {
+  background-image: repeating-linear-gradient(45deg,
+    transparent 0 16px, rgba(42,21,5,0.2) 16px 22px);
+}
+
+/* OVERSOLD — deep purple + halftone */
+.hero-oneliner[data-tag="OVERSOLD"] {
+  background: #4A2A6E; color: #F4E7C5; border-color: #1A0F2A;
+  box-shadow: 6px 6px 0 #1A0F2A;
+}
+.hero-oneliner[data-tag="OVERSOLD"]::before {
+  background-image: radial-gradient(#F4E7C5 1.8px, transparent 2.2px);
+  background-size: 16px 16px;
+}
+
+/* BREAKOUT — lime green + chevrons */
+.hero-oneliner[data-tag="BREAKOUT"] {
+  background: #A8E018; color: #1A2A05; border-color: #1A2A05;
+  box-shadow: 6px 6px 0 #1A2A05;
+}
+.hero-oneliner[data-tag="BREAKOUT"]::before {
+  background-image:
+    linear-gradient(45deg, transparent 48%, rgba(26,42,5,0.2) 49% 51%, transparent 52%),
+    linear-gradient(-45deg, transparent 48%, rgba(26,42,5,0.2) 49% 51%, transparent 52%);
+  background-size: 28px 28px;
+}
+
+/* FALLING_KNIFE — black + red warning stripes */
+.hero-oneliner[data-tag="FALLING_KNIFE"] {
+  background: #1a1a1a; color: #FF3A3A; border-color: #FF3A3A;
+  box-shadow: 6px 6px 0 #FF3A3A;
+}
+.hero-oneliner[data-tag="FALLING_KNIFE"]::before {
+  background-image: repeating-linear-gradient(-45deg,
+    transparent 0 14px, rgba(255,58,58,0.35) 14px 18px);
+}
+
+/* SLEEPING_GIANT — sage + dots */
+.hero-oneliner[data-tag="SLEEPING_GIANT"] {
+  background: #8FB088; color: #1A2A1A; border-color: #1A2A1A;
+  box-shadow: 6px 6px 0 #1A2A1A;
+}
+.hero-oneliner[data-tag="SLEEPING_GIANT"]::before {
+  background-image: radial-gradient(#1A2A1A 1.4px, transparent 1.8px);
+  background-size: 18px 18px;
+  opacity: 0.25;
+}
+
+/* CASH_COW — gold + small dots */
+.hero-oneliner[data-tag="CASH_COW"] {
+  background: #D4A82C; color: #2A1B00; border-color: #2A1B00;
+  box-shadow: 6px 6px 0 #2A1B00;
+}
+.hero-oneliner[data-tag="CASH_COW"]::before {
+  background-image: radial-gradient(#2A1B00 1.2px, transparent 1.6px);
+  background-size: 12px 12px;
+  opacity: 0.3;
+}
+
+/* STORY_STOCK — violet + sparkle grid */
+.hero-oneliner[data-tag="STORY_STOCK"] {
+  background: #8E4FE0; color: #FFF8E7; border-color: #2A0F5C;
+  box-shadow: 6px 6px 0 #2A0F5C;
+}
+.hero-oneliner[data-tag="STORY_STOCK"]::before {
+  background-image:
+    linear-gradient(rgba(255,248,231,0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,248,231,0.18) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* SECTOR_LEADER — emerald + horizontal lines */
+.hero-oneliner[data-tag="SECTOR_LEADER"] {
+  background: #1AAE6F; color: #FFF8E7; border-color: #053E25;
+  box-shadow: 6px 6px 0 #053E25;
+}
+.hero-oneliner[data-tag="SECTOR_LEADER"]::before {
+  background-image: repeating-linear-gradient(0deg,
+    transparent 0 18px, rgba(255,248,231,0.22) 18px 20px);
+}
+
+/* DEFENSIVE — olive + grid */
+.hero-oneliner[data-tag="DEFENSIVE"] {
+  background: #7A8C3F; color: #FFF8E7; border-color: #1F2A0F;
+  box-shadow: 6px 6px 0 #1F2A0F;
+}
+.hero-oneliner[data-tag="DEFENSIVE"]::before {
+  background-image:
+    linear-gradient(rgba(255,248,231,0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,248,231,0.18) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* EARNINGS_BEAT — coral + halftone dots */
+.hero-oneliner[data-tag="EARNINGS_BEAT"] {
+  background: #FF6B5C; color: #2A0A05; border-color: #2A0A05;
+  box-shadow: 6px 6px 0 #2A0A05;
+}
+.hero-oneliner[data-tag="EARNINGS_BEAT"]::before {
+  background-image: radial-gradient(#2A0A05 1.4px, transparent 1.8px);
+  background-size: 15px 15px;
+  opacity: 0.3;
+}
+
+/* STRONG_BUY — red + diagonal */
+.hero-oneliner[data-tag="STRONG_BUY"] {
+  background: #E63946; color: #FFF8E7; border-color: #2A0508;
+  box-shadow: 6px 6px 0 #2A0508;
+}
+.hero-oneliner[data-tag="STRONG_BUY"]::before {
+  background-image: repeating-linear-gradient(135deg,
+    transparent 0 20px, rgba(255,248,231,0.18) 20px 24px);
+}
+
+/* AVOID — charcoal + yellow warning stripes */
+.hero-oneliner[data-tag="AVOID"] {
+  background: #2A2A2A; color: #FFD83A; border-color: #FFD83A;
+  box-shadow: 6px 6px 0 #FFD83A;
+}
+.hero-oneliner[data-tag="AVOID"]::before {
+  background-image: repeating-linear-gradient(45deg,
+    transparent 0 16px, rgba(255,216,58,0.22) 16px 22px);
+}
+
+/* NEUTRAL — cream + soft dots */
+.hero-oneliner[data-tag="NEUTRAL"] {
+  background: #F4ECD8; color: #2A2418; border-color: #2A2418;
+  box-shadow: 6px 6px 0 #2A2418;
+}
+.hero-oneliner[data-tag="NEUTRAL"]::before {
+  background-image: radial-gradient(#2A2418 1.2px, transparent 1.6px);
+  background-size: 16px 16px;
+  opacity: 0.18;
+}
+.ai-comment-card {
+  margin: 0 0 12px 0;
+  padding: 12px 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--brand) 16%, var(--border));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 10%, var(--card)), var(--card));
+}
+.ai-comment-card[hidden] { display: none; }
+.ai-comment-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand);
+  letter-spacing: 0.2px;
+}
+.ai-comment-body {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.ai-comment-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-comment-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--brand) 16%, transparent);
+  border-top-color: var(--brand);
+  animation: aiCommentSpin 0.8s linear infinite;
+}
+@keyframes aiCommentSpin {
+  to { transform: rotate(360deg); }
+}
 </style>
 </head>
 <body>
@@ -497,8 +1086,14 @@ html, body {
     <!-- Hero Card -->
     <div class="hero-wrap">
       <div class="hero-card">
+        <div id="detail-oneliner" class="hero-oneliner" style="display:none;"></div>
+        <div id="ai-comment-card" class="ai-comment-card" hidden>
+          <div class="ai-comment-head">AI 종목 코멘트</div>
+          <div id="ai-comment-body" class="ai-comment-body"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;margin-bottom:2px;">🏆 이 회사 자체는 좋은가?</div>
         <div class="hero-top">
-          <span class="hero-label">종합점수</span>
+          <span class="hero-label">종합점수 <span style="font-size:10px;font-weight:500;color:var(--text-tertiary);margin-left:4px;">(재무·밸류·기술 모두 합산)</span></span>
           <span id="detail-sector" class="hero-sector">—</span>
         </div>
         <div class="hero-main">
@@ -507,15 +1102,27 @@ html, body {
           <span class="hero-grade-dot"></span>
           <span id="detail-signal" class="hero-grade">—</span>
         </div>
-        <div class="hero-bottom">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <div class="hero-bottom" id="detail-rsi-wrap">
+          <svg id="detail-rsi-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="18 15 12 9 6 15"/>
           </svg>
-          <span id="detail-rsi" class="hero-change">—</span>
+          <span id="detail-rsi" class="hero-change" style="color:var(--text-tertiary)">—</span>
           <span class="hero-change-label">RSI</span>
         </div>
-        <div class="hero-bottom" style="margin-top:6px;">
-          <span style="font-size:12px;color:var(--text-secondary)">현재가 <strong id="detail-price">—</strong> &nbsp; 목표가 <strong id="detail-target">—</strong></span>
+        <div style="margin-top:8px; display:flex; flex-direction:column; gap:8px; font-size:12px; color:var(--text-secondary);">
+          <div>현재가 <strong id="detail-price">—</strong> <span id="detail-day-chg" style="font-size:11px;font-weight:700;margin-left:4px;"></span></div>
+          <div style="padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:color-mix(in srgb, var(--brand) 6%, var(--card));">
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+              <span style="font-size:11px; font-weight:800; color:var(--brand);">메인 목표가</span>
+              <span style="font-size:10px; color:var(--text-tertiary);">현재 점수 계산 기준</span>
+            </div>
+            <div>노무라식 목표가 <span style="font-size:10px;color:var(--text-tertiary);">(섹터별 라우팅: PB / PE / SOTP / DCF)</span> <strong id="detail-nomura-target">—</strong> <span id="detail-nomura-upside" style="font-size:11px;font-weight:700;margin-left:2px;"></span> <span id="detail-nomura-method" style="font-size:10px;color:var(--text-tertiary);margin-left:4px;"></span></div>
+          </div>
+          <div style="padding:10px 12px; border:1px dashed var(--border); border-radius:12px; background:var(--bg-tertiary);">
+            <div style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">보조 검증값</div>
+            <div>DCF 적정가 <strong id="detail-target">—</strong> <span id="detail-dcf-upside" style="font-size:11px;font-weight:700;margin-left:2px;"></span> <span id="detail-target-src" style="font-size:10px;color:var(--text-tertiary);margin-left:4px;"></span></div>
+            <div style="margin-top:4px;">증권사 목표가 <strong id="detail-broker-target">—</strong> <span id="detail-broker-upside" style="font-size:11px;font-weight:700;margin-left:2px;"></span> <span id="detail-broker-src" style="font-size:11px;color:var(--text-tertiary);margin-left:4px;"></span></div>
+          </div>
         </div>
         <!-- Watermark chart icon -->
         <svg class="hero-watermark" width="140" height="100" viewBox="0 0 140 100" fill="none">
@@ -525,119 +1132,151 @@ html, body {
       </div>
     </div>
 
-    <!-- 핸드드로윙 차트 (항상 표시) -->
-    <div style="padding:20px 24px 0;">
-      <div id="fouraxis-loading" style="text-align:center; padding:24px; color:var(--text-tertiary);">차트 생성 중...</div>
-      <div id="fouraxis-error" style="text-align:center; padding:24px; color:var(--destructive); display:none;"></div>
-      <div id="fouraxis-chart-wrap" style="display:none;">
-        <img id="fouraxis-chart" src="" alt="핸드드로윙 차트"
-             style="width:100%; border-radius:var(--radius); box-shadow:var(--shadow-card); border:1px solid var(--border);" />
+    <!-- 증권사 컨센서스 상세 -->
+    <div id="consensus-wrap" style="padding:12px 24px 0; display:none;">
+      <div class="card" style="padding:14px 16px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <span style="font-size:13px; font-weight:700; color:var(--text-primary);">증권사 컨센서스</span>
+          <span id="cons-opinion-badge" style="font-size:11px; font-weight:600; padding:2px 10px; border-radius:100px; background:var(--brand-tint); color:var(--brand);"></span>
+        </div>
+        <div id="cons-range" style="display:flex; gap:16px; font-size:12px; color:var(--text-secondary); margin-bottom:8px;">
+          <span>최저 <strong id="cons-low">—</strong></span>
+          <span>평균 <strong id="cons-mean">—</strong></span>
+          <span>최고 <strong id="cons-high">—</strong></span>
+          <span id="cons-count-wrap" style="color:var(--text-tertiary);"></span>
+        </div>
+        <div id="cons-reports" style="display:flex; flex-direction:column; gap:0;"></div>
+      </div>
+    </div>
+
+    <!-- 진입 타이밍 카드 (V5.1 풀백 진입) -->
+    <div style="padding:12px 24px 0;">
+      <div id="dp-entry-card" class="card entry-card" style="padding:14px 16px;">
+        <style>
+          .entry-card { border-left:4px solid var(--text-tertiary); transition:border-color .2s; }
+          .entry-card.green  { border-left-color:#16A34A; }
+          .entry-card.yellow { border-left-color:#F59E0B; }
+          .entry-card.red    { border-left-color:#DC2626; }
+          .entry-bar { position:relative; height:8px; background:var(--bg-tertiary); border-radius:6px; overflow:hidden; margin-top:4px; }
+          .entry-bar-fill { position:absolute; left:0; top:0; height:100%; background:linear-gradient(90deg,#DC2626 0%,#F59E0B 50%,#16A34A 100%); border-radius:6px; transition:width .3s; }
+          .entry-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:12px; font-size:12px; }
+          .entry-grid .lbl { color:var(--text-tertiary); font-size:11px; margin-bottom:2px; display:block; }
+          .entry-grid .val { font-weight:700; color:var(--text-primary); font-size:13px; }
+          .entry-meta { display:flex; gap:14px; flex-wrap:wrap; margin-top:8px; font-size:11px; color:var(--text-secondary); }
+        </style>
+        <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;margin-bottom:6px;">📈 지금 사기 좋은 타이밍인가? <span style="font-weight:400;">— RSI·BB·MACD·이동평균·레짐 종합</span></div>
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span id="dp-entry-icon" style="font-size:18px;">⚪</span>
+            <span id="dp-entry-phrase" style="font-size:13px; font-weight:700; color:var(--text-primary);">진입 타이밍</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:11px; color:var(--text-tertiary);">진입점수</span>
+            <span id="dp-entry-score" style="font-size:16px; font-weight:800; color:var(--text-primary);">—</span>
+            <span style="font-size:11px; color:var(--text-tertiary);">/ 100</span>
+          </div>
+        </div>
+        <div class="entry-bar"><div id="dp-entry-bar-fill" class="entry-bar-fill" style="width:0%;"></div></div>
+
+        <div class="entry-grid">
+          <div>
+            <span class="lbl">진입가 (풀백)</span>
+            <span class="val" id="dp-entry-px-entry">—</span>
+            <span id="dp-entry-discount" style="font-size:10px; color:var(--brand); font-weight:700; margin-left:2px;"></span>
+          </div>
+          <div>
+            <span class="lbl">손절</span>
+            <span class="val" id="dp-entry-px-stop" style="color:var(--destructive);">—</span>
+          </div>
+          <div>
+            <span class="lbl">목표가1 <span style="font-size:9px;color:var(--text-tertiary);">(T1)</span></span>
+            <span class="val" id="dp-entry-px-t1" style="color:var(--success);">—</span>
+          </div>
+          <div>
+            <span class="lbl">목표가2 <span style="font-size:9px;color:var(--text-tertiary);">(T2)</span></span>
+            <span class="val" id="dp-entry-px-t2" style="color:var(--success);">—</span>
+          </div>
+        </div>
+
+        <div class="entry-meta">
+          <span id="dp-entry-type" style="font-weight:700;"></span>
+          <span id="dp-entry-rr"></span>
+          <span id="dp-entry-stop-method"></span>
+          <span id="dp-entry-current" style="color:var(--text-tertiary);"></span>
+        </div>
+        <div id="dp-aq-row" style="display:none; margin-top:10px; padding-top:8px; border-top:1px dashed var(--border); font-size:11px; color:var(--text-secondary);">
+          <div style="margin-bottom:4px;padding:4px 8px;background:var(--bg-tertiary);border-radius:6px;font-size:10px;color:var(--text-tertiary);line-height:1.4;">
+            💡 규칙 기반 종합 판단입니다(ML 추론이 아님). 200/50일선·RSI·MACD·BB·시장 국면을 점수 합산해 산출.
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span style="font-size:10px; color:var(--text-tertiary); font-weight:600;">AI 종합판단 <span style="font-size:9px;color:var(--text-tertiary);">(AgentQuant)</span></span>
+            <span id="dp-aq-verdict" style="font-weight:700; padding:1px 8px; border-radius:100px; font-size:10px;"></span>
+            <span id="dp-aq-regime" style="color:var(--text-tertiary);"></span>
+            <span id="dp-aq-detail" style="color:var(--text-tertiary); margin-left:auto;"></span>
+          </div>
+          <div id="dp-aq-reasons" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; font-size:10px;"></div>
+        </div>
       </div>
     </div>
 
     <!-- Tab nav -->
     <nav class="tab-nav" role="tablist" aria-label="분석 탭">
       <button class="tab-btn active" role="tab" aria-selected="true" aria-controls="tab-canslim" id="btn-canslim" onclick="switchTab('canslim')">CAN SLIM</button>
-      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-dart" id="btn-dart" onclick="switchTab('dart')">DartLab</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-tech" id="btn-tech" onclick="switchTab('tech')">기술 지표</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-finance" id="btn-finance" onclick="switchTab('finance')">재무 지표</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-dartnews" id="btn-dartnews" onclick="switchTab('dartnews')" style="display:none;">공시·뉴스</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-usinsight" id="btn-usinsight" onclick="switchTab('usinsight')" style="display:none;">US 인사이트</button>
     </nav>
 
     <!-- CAN SLIM Tab -->
     <div class="tab-panel active" id="tab-canslim" role="tabpanel" aria-labelledby="btn-canslim">
-      <div class="canslim-list" id="breakdown-list"></div>
-      <div class="cs-summary">
-        <div class="cs-summary-text">평균점수 74점 &nbsp;·&nbsp; 7항목 중 5항목 양호</div>
+      <div class="canslim-list" id="dp-breakdown-list"></div>
+
+      <!-- 핸드드로윙 차트 (참고용, 컴팩트) -->
+      <div style="padding:8px 24px 4px;">
+        <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;margin-bottom:6px;letter-spacing:0.02em;">참고 차트</div>
+        <div id="fouraxis-loading" style="text-align:center; padding:12px; color:var(--text-tertiary); font-size:12px;">차트 생성 중…</div>
+        <div id="fouraxis-error" style="text-align:center; padding:12px; color:var(--destructive); display:none; font-size:12px;"></div>
+        <div id="fouraxis-chart-wrap" style="display:none;">
+          <img id="fouraxis-chart" src="" alt="핸드드로윙 차트"
+               style="width:100%; max-width:520px; display:block; margin:0 auto; border-radius:var(--radius); border:1px solid var(--border); opacity:.92;" />
+        </div>
+      </div>
+
+      <div class="cs-summary" id="detail-cs-summary" style="display:none;">
+        <div class="cs-summary-text" id="detail-cs-summary-text">—</div>
       </div>
       <div style="height:24px;"></div>
     </div>
 
-    <!-- DartLab Tab -->
-    <div class="tab-panel" id="tab-dart" role="tabpanel" aria-labelledby="btn-dart">
-      <div class="dartlab-sections">
+    <!-- 기술 지표 Tab -->
+    <div class="tab-panel" id="tab-tech" role="tabpanel" aria-labelledby="btn-tech">
+      <div id="dp-tech-content" style="padding:20px 24px;display:flex;flex-direction:column;gap:10px;">
+        <div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px;">로딩 중...</div>
+      </div>
+      <div style="height:24px;"></div>
+    </div>
 
-        <!-- 손익계산서 -->
-        <div class="dartlab-card">
-          <div class="dartlab-card-header">
-            <span class="dartlab-card-title">손익계산서</span>
-            <span class="dartlab-card-badge">IS</span>
-          </div>
-          <div class="data-row">
-            <span class="data-label">매출액</span>
-            <span class="data-value">28.5조</span>
-            <span class="data-change pos">YoY +8.2% ↑</span>
-          </div>
-          <div class="data-row">
-            <span class="data-label">영업이익</span>
-            <span class="data-value">3.8조</span>
-            <span class="data-change pos">YoY +22.1% ↑</span>
-          </div>
-          <div class="data-row">
-            <span class="data-label">순이익</span>
-            <span class="data-value">2.9조</span>
-            <span class="data-change pos">YoY +15.4% ↑</span>
-          </div>
-          <div class="data-row">
-            <span class="data-label">영업이익률</span>
-            <span class="data-value">13.3%</span>
-            <span class="data-change neutral">—</span>
-          </div>
-        </div>
+    <!-- 재무 지표 Tab -->
+    <div class="tab-panel" id="tab-finance" role="tabpanel" aria-labelledby="btn-finance">
+      <div id="dp-finance-content" style="padding:20px 24px;display:flex;flex-direction:column;gap:10px;">
+        <div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px;">로딩 중...</div>
+      </div>
+      <div style="height:24px;"></div>
+    </div>
 
-        <!-- 재무상태표 -->
-        <div class="dartlab-card">
-          <div class="dartlab-card-header">
-            <span class="dartlab-card-title">재무상태표</span>
-            <span class="dartlab-card-badge">BS</span>
-          </div>
-          <div class="data-row">
-            <span class="data-label">자산총계</span>
-            <span class="data-value">450.7조</span>
-            <span class="data-change neutral"></span>
-          </div>
-          <div class="data-row">
-            <span class="data-label">부채총계</span>
-            <span class="data-value">156.3조</span>
-            <span class="data-change neutral"></span>
-          </div>
-          <div class="data-row">
-            <span class="data-label">자본총계</span>
-            <span class="data-value">294.4조</span>
-            <span class="data-change neutral"></span>
-          </div>
-          <div class="data-row">
-            <span class="data-label">부채비율</span>
-            <span class="data-value">53.1%</span>
-            <span class="data-change pos">안정</span>
-          </div>
-        </div>
+    <!-- US 인사이트 Tab (US only) -->
+    <div class="tab-panel" id="tab-usinsight" role="tabpanel" aria-labelledby="btn-usinsight">
+      <div id="usinsight-content" style="padding:20px 24px;display:flex;flex-direction:column;gap:12px;">
+        <div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px;">탭을 클릭하면 로딩됩니다</div>
+      </div>
+      <div style="height:24px;"></div>
+    </div>
 
-        <!-- 현금흐름표 -->
-        <div class="dartlab-card">
-          <div class="dartlab-card-header">
-            <span class="dartlab-card-title">현금흐름표</span>
-            <span class="dartlab-card-badge">CF</span>
-          </div>
-          <div class="data-row">
-            <span class="data-label">영업CF</span>
-            <span class="data-value">+5.2조</span>
-            <span class="data-change pos">✅ 양호</span>
-          </div>
-          <div class="data-row">
-            <span class="data-label">투자CF</span>
-            <span class="data-value">-8.1조</span>
-            <span class="data-change neutral">—</span>
-          </div>
-          <div class="data-row">
-            <span class="data-label">재무CF</span>
-            <span class="data-value">+1.3조</span>
-            <span class="data-change neutral">—</span>
-          </div>
-          <div class="data-row">
-            <span class="data-label">FCF</span>
-            <span class="data-value">-2.9조</span>
-            <span class="data-change neg">주의</span>
-          </div>
-        </div>
-
+    <!-- 공시·뉴스 Tab (KR only) -->
+    <div class="tab-panel" id="tab-dartnews" role="tabpanel" aria-labelledby="btn-dartnews">
+      <div id="dartnews-content" style="padding:20px 24px;display:flex;flex-direction:column;gap:12px;">
+        <div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px;">탭을 클릭하면 로딩됩니다</div>
       </div>
       <div style="height:24px;"></div>
     </div>

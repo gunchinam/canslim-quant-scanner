@@ -44,9 +44,61 @@ def _korean_font() -> Optional[str]:
     for c in candidates:
         if c in available:
             return c
+
+    # 폰트 매니저 캐시에 없으면 시스템 폰트 디렉토리에서 직접 등록 시도
+    import os as _os
+    import sys as _sys
+    font_paths = []
+    if _sys.platform.startswith("win"):
+        winfonts = _os.path.join(_os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+        for fn, nm in [
+            ("malgun.ttf", "Malgun Gothic"),
+            ("malgunbd.ttf", "Malgun Gothic"),
+            ("NanumGothic.ttf", "NanumGothic"),
+            ("gulim.ttc", "Gulim"),
+            ("batang.ttc", "Batang"),
+        ]:
+            p = _os.path.join(winfonts, fn)
+            if _os.path.exists(p):
+                font_paths.append((p, nm))
+    elif _sys.platform == "darwin":
+        for p in ("/Library/Fonts/AppleSDGothicNeo.ttc",
+                  "/System/Library/Fonts/AppleSDGothicNeo.ttc"):
+            if _os.path.exists(p):
+                font_paths.append((p, "Apple SD Gothic Neo"))
+    else:
+        for p in ("/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+                  "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"):
+            if _os.path.exists(p):
+                font_paths.append((p, "NanumGothic"))
+
+    for path, name in font_paths:
+        try:
+            fm.fontManager.addfont(path)
+            # 등록 후 캐시 재확인
+            if name in {f.name for f in fm.fontManager.ttflist}:
+                return name
+        except Exception:
+            continue
+
+    # 마지막 폴백: 파일이 있으면 그 폰트 이름 자체를 리턴 (matplotlib가 경로로 찾아줌)
+    if font_paths:
+        try:
+            fp = fm.FontProperties(fname=font_paths[0][0])
+            return fp.get_name()
+        except Exception:
+            pass
     return None
 
 KFONT = _korean_font()
+# matplotlib 전역 폰트도 설정 (개별 fontname 지정 누락된 곳 대비)
+if KFONT:
+    try:
+        import matplotlib as _mpl
+        _mpl.rcParams["font.family"] = [KFONT, "DejaVu Sans"]
+        _mpl.rcParams["axes.unicode_minus"] = False
+    except Exception:
+        pass
 
 # ───────── 지표 계산 헬퍼 ─────────────────────────────────────────
 def _ema_local(s: pd.Series, n: int) -> pd.Series:

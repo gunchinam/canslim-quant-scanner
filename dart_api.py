@@ -45,20 +45,47 @@ def _get(path: str, params: dict) -> dict:
         return json.loads(r.read())
 
 
+_stock_to_corp: Dict[str, str] = {}  # stock_code(6자리) → corp_code 캐시
+
+
+def _load_corp_code_map() -> Dict[str, str]:
+    """DART corpCode.xml(zip)을 다운로드해 stock_code→corp_code 매핑을 구축."""
+    global _stock_to_corp
+    if _stock_to_corp:
+        return _stock_to_corp
+
+    import zipfile
+    import io
+    import xml.etree.ElementTree as ET
+
+    url = f"{_BASE}/corpCode.xml?crtfc_key={_key()}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        zdata = r.read()
+    with zipfile.ZipFile(io.BytesIO(zdata)) as zf:
+        xml_name = zf.namelist()[0]
+        tree = ET.parse(zf.open(xml_name))
+    for el in tree.getroot().iter("list"):
+        sc = (el.findtext("stock_code") or "").strip()
+        cc = (el.findtext("corp_code") or "").strip()
+        if sc and cc:
+            _stock_to_corp[sc] = cc
+    return _stock_to_corp
+
+
 @lru_cache(maxsize=512)
 def get_corp_code(stock_code: str) -> Optional[str]:
     """주식코드 → DART 고유번호 (corp_code).
 
-    DART API에서 corp_code 없이는 재무제표 조회 불가.
+    DART corpCode.xml에서 매핑을 다운로드(첫 호출 시 1회)하여 변환한다.
     실패 시 None 반환.
     """
     if not is_available():
         return None
     code = stock_code.split(".")[0].zfill(6)
     try:
-        d = _get("company.json", {"stock_code": code})
-        if d.get("status") == "000":
-            return d.get("corp_code")
+        mapping = _load_corp_code_map()
+        return mapping.get(code)
     except Exception:
         pass
     return None
@@ -84,12 +111,14 @@ def get_filings(
     code = stock_code.split(".")[0].zfill(6)
     corp_code = get_corp_code(code)
 
-    params: dict = {"page_count": min(count, 100), "sort": "date", "sort_mth": "desc"}
+    import datetime
+    # bgn_de 필수 — 최근 1년 범위로 조회
+    one_year_ago = (datetime.date.today() - datetime.timedelta(days=365)).strftime("%Y%m%d")
+    params: dict = {"bgn_de": one_year_ago, "page_count": min(count, 100), "sort": "date", "sort_mth": "desc"}
     if corp_code:
         params["corp_code"] = corp_code
     else:
-        # corp_code 없이 stock_code로 시도 (일부 API 버전 지원)
-        params["stock_code"] = code
+        return []  # corp_code 없이는 조회 불가
     if report_type:
         params["pblntf_ty"] = report_type
 
@@ -100,7 +129,7 @@ def get_filings(
         items = d.get("list", [])
         result = []
         for item in items:
-            rcp_no = item.get("rcp_no", "")
+            rcp_no = item.get("rcept_no", "")
             result.append({
                 "date":      item.get("rcept_dt", ""),
                 "title":     item.get("report_nm", ""),

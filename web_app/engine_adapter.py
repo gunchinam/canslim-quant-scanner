@@ -68,9 +68,10 @@ class ScanAdapter:
 
     def _build_sectors(self) -> None:
         raw = self.kr_sectors if self._market == "KR" else self.us_sectors
+        sub_kr = getattr(self, 'us_sector_labels_kr', {}) if self._market != "KR" else {}
         for cat_data in raw.values():
             for subcat, tickers in cat_data.items():
-                self._sectors[subcat] = tickers
+                self._sectors[sub_kr.get(subcat, subcat)] = tickers
 
     # ── QuantNexusApp이 사용하는 메서드 (tkinter 콜백 대체) ──────────────
 
@@ -78,7 +79,7 @@ class ScanAdapter:
         logging.debug("[ScanAdapter] %s", msg)
 
     def _fetch_naver_target(self, ticker: str):
-        """네이버 증권 목표가 — 원본 엔진 메서드 위임."""
+        """(DEPRECATED) DCF 목표가로 대체됨 — 호환성 유지용."""
         return _qn.QuantNexusApp._fetch_naver_target(self, ticker)
 
     def _fetch_naver_fundamentals(self, ticker: str):
@@ -86,7 +87,7 @@ class ScanAdapter:
         return _qn.QuantNexusApp._fetch_naver_fundamentals(self, ticker)
 
     def _save_naver_cache(self):
-        """네이버 목표가 캐시 저장 — 원본 엔진 메서드 위임."""
+        """(DEPRECATED) DCF 목표가로 대체됨 — 호환성 유지용."""
         _qn.QuantNexusApp._save_naver_cache(self)
 
     def _save_naver_fund_cache(self):
@@ -102,7 +103,19 @@ class ScanAdapter:
     def get_sector_groups(self) -> dict[str, list[str]]:
         """카테고리 → 서브섹터 리스트 반환 (사이드바 그룹 표시용)."""
         raw = self.kr_sectors if self._market == "KR" else self.us_sectors
-        return {cat: list(subsectors.keys()) for cat, subsectors in raw.items()}
+        if self._market == "KR":
+            return {cat: list(subsectors.keys()) for cat, subsectors in raw.items()}
+        cat_kr = getattr(self, 'us_sector_category_kr', {})
+        sub_kr = getattr(self, 'us_sector_labels_kr', {})
+        result = {}
+        for cat, subsectors in raw.items():
+            translated_cat = cat
+            for en, kr in cat_kr.items():
+                if en in cat:
+                    translated_cat = cat.replace(en, kr)
+                    break
+            result[translated_cat] = [sub_kr.get(s, s) for s in subsectors.keys()]
+        return result
 
     def analyze_ticker(self, ticker: str) -> dict | None:
         """단일 종목 분석 — QuantNexusApp.analyze_ticker 직접 위임."""

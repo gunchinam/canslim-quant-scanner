@@ -83,6 +83,20 @@ def main():
     logger.info("=== SWING-MOM 스캔 알리미 시작 (자동매매 OFF) ===")
     logger.info(f"유니버스={args.universe_n}종목, 스캔시간={p['entry_start']}~{p['entry_end']}")
 
+    # ── 텔레그램 스팸 방지: 시장 시간 외 / 주말 시작 시 알림 발송 금지 ──
+    # 이유: web_app 가 부팅·재시작마다 _start_swing_scanner() 호출 → 시장외에서도
+    # "[시작]/[종료]" 2건씩 텔레그램 발송. (2026-05-15 23시 다중 재시작 확인)
+    _now_dt = datetime.now()
+    _now_hhmm = _now_dt.strftime("%H:%M")
+    _is_weekend = _now_dt.weekday() >= 5  # 5=Sat 6=Sun
+    _in_window = (p["entry_start"] <= _now_hhmm < "15:30") and not _is_weekend
+    if not _in_window:
+        logger.info(
+            f"스캔 윈도우 외(now={_now_hhmm}, weekend={_is_weekend}) — "
+            "텔레그램 발송 없이 즉시 종료"
+        )
+        return
+
     today_str = date.today().isoformat()
     kis = get_client()
     notifier = get_notifier()
@@ -129,12 +143,14 @@ def main():
     last_ctx_bar = ""
     prev_alert_tickers: Set[str] = set()
 
+    start_sent = False
     if notifier and notifier.is_enabled():
         notifier.send_message(
             f"<b>[스캔 알리미 시작]</b>\n"
             f"유니버스 {len(tickers)}종목 | {p['entry_start']}~{p['entry_end']}\n"
             f"자동매매 OFF — 신호 알림만 전송합니다."
         )
+        start_sent = True
 
     logger.info(f"대기 중... ({p['entry_start']} 스캔 시작)")
 
@@ -272,7 +288,7 @@ def main():
         else:
             logger.warning("텔레그램 미설정 — 알림 전송 불가")
 
-    if notifier and notifier.is_enabled():
+    if start_sent and notifier and notifier.is_enabled():
         notifier.send_message("<b>[스캔 알리미 종료]</b> 장 마감")
     logger.info("=== 스캔 알리미 종료 ===")
 

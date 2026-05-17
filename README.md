@@ -194,6 +194,12 @@ python backtest/score_variants_test.py
 
 ## 📜 라이선스
 
+## Public Repo Notes
+
+- Keep real API keys, bot tokens, and account numbers only in `.env` or local `config.json`.
+- Commit `.env.example` and `config.example.json`, but never commit live credentials.
+- Token caches, local UI state, and files under `swing_scan/state/` are excluded from the public repo.
+
 [MIT License](LICENSE)
 
 ---

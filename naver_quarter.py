@@ -1,0 +1,174 @@
+# -*- coding: utf-8 -*-
+"""naver_quarter.py — 네이버 모바일 분기 재무 API → TTM (최근 4분기) 구성.
+
+KIS 재무 엔드포인트는 직전 연도 결산(예: 202512)이 최신이라 2026 기준 DCF 에 부적합.
+네이버 모바일 `finance/quarter` 는 직전 보고분기 + 다음 분기 컨센서스(isConsensus='Y')
+까지 포함하므로, 최신 4 개 분기를 합산해 trailing-twelve-month 입력을 만든다.
+
+공개 API:
+    get_ttm_financials(code) -> dict
+        {
+          "operating_income": float,  # 원 (TTM 합계)
+          "net_income":       float,
+          "revenue":          float,
+          "ebitda":           float,  # 영업이익을 보수적 프록시로 사용
+          "eps":              float,  # 4분기 EPS 합산
+          "bps":              float,  # 최신 분기
+          "roe":              float,
+          "debt_ratio":       float,
+          "shares_outstanding": float,
+          "fiscal_period":    str,    # 예: "TTM 202506~202603(E)"
+          "has_consensus":    bool,   # 컨센서스 분기 포함 여부
+          "source":           "Naver-Q",
+          "available":        bool,
+        }
+"""
+from __future__ import annotations
+
+import json
+import time
+import threading
+import urllib.request
+from typing import Any, Dict, List, Optional
+
+_URL_TMPL = "https://m.stock.naver.com/api/stock/{code}/finance/quarter"
+_HEADERS  = {"User-Agent": "Mozilla/5.0"}
+_TTL      = 43200  # 12h
+_cache: Dict[str, tuple[Dict[str, Any], float]] = {}
+_lock     = threading.Lock()
+
+# 네이버 row title → 표준 키 매핑 (부분 일치)
+_FIELD_MAP = [
+    ("매출액",       "revenue"),
+    ("영업이익",     "operating_income"),
+    ("당기순이익",   "net_income"),
+    ("ROE",          "roe"),
+    ("부채비율",     "debt_ratio"),
+    ("EPS",          "eps"),
+    ("BPS",          "bps"),
+]
+
+
+def _to_float(x: Any) -> float:
+    try:
+        s = str(x).replace(",", "").strip()
+        if s in ("", "-", "N/A"):
+            return 0.0
+        return float(s)
+    except Exception:
+        return 0.0
+
+
+def _fetch_raw(code: str) -> Dict[str, Any]:
+    """code: 6자리 코드. 네이버 quarter API 원본 JSON."""
+    url = _URL_TMPL.format(code=code)
+    req = urllib.request.Request(url, headers=_HEADERS)
+    with urllib.request.urlopen(req, timeout=8) as r:
+        return json.loads(r.read())
+
+
+def _extract_value(rowlist: List[Dict[str, Any]], title_kw: str, period_key: str) -> float:
+    """rowList 에서 title 에 키워드를 포함하는 row 의 특정 분기 값."""
+    for row in rowlist:
+        if title_kw in str(row.get("title", "")):
+            cols = row.get("columns", {}) or {}
+            cell = cols.get(period_key) or {}
+            return _to_float(cell.get("value"))
+    return 0.0
+
+
+def get_ttm_financials(code: str) -> Dict[str, Any]:
+    """TTM 재무 데이터 (네이버 모바일 분기 API 기반).
+
+    최신 분기(컨센서스 포함) 부터 역순으로 4 개 분기를 합산.
+    flow 항목(매출/영업이익/순이익/EPS): 4분기 합산.
+    stock 항목(BPS/ROE/부채비율): 가장 최근 actual 분기 값.
+    """
+    code6 = code.split(".")[0].zfill(6)
+    now = time.time()
+    with _lock:
+        cached = _cache.get(code6)
+        if cached and (now - cached[1]) < _TTL:
+            return cached[0]
+
+    out: Dict[str, Any] = {"source": "Naver-Q", "available": False}
+    try:
+        raw = _fetch_raw(code6)
+        fi = raw.get("financeInfo", {}) or {}
+        titles = fi.get("trTitleList", []) or []
+        rows   = fi.get("rowList", []) or []
+        if not titles or not rows:
+            return out
+
+        # trTitleList 는 시간 오름차순; 마지막부터 4개 선택
+        if len(titles) < 4:
+            return out
+        last4 = titles[-4:]  # 가장 최신 4분기 (마지막이 가장 최신)
+        period_keys = [t.get("key") for t in last4]
+        has_consensus = any(t.get("isConsensus") == "Y" for t in last4)
+
+        # flow 항목 합산
+        def _sum(title_kw: str) -> float:
+            return sum(_extract_value(rows, title_kw, pk) for pk in period_keys)
+
+        revenue = _sum("매출액") * 1e8  # 억원→원
+        op_inc  = _sum("영업이익") * 1e8 if any("영업이익" in r.get("title","") for r in rows) else 0.0
+        # "영업이익률" 도 매칭되므로 더 엄격한 매칭 필요
+        op_inc = 0.0
+        for r in rows:
+            t = str(r.get("title",""))
+            if t.strip() == "영업이익" or (t.startswith("영업이익") and "률" not in t):
+                cols = r.get("columns", {})
+                op_inc = sum(_to_float((cols.get(pk) or {}).get("value")) for pk in period_keys) * 1e8
+                break
+        net_inc = 0.0
+        for r in rows:
+            t = str(r.get("title",""))
+            if t.strip() == "당기순이익":
+                cols = r.get("columns", {})
+                net_inc = sum(_to_float((cols.get(pk) or {}).get("value")) for pk in period_keys) * 1e8
+                break
+        eps_ttm = _sum("EPS")  # EPS 는 원/주, 단위 환산 없음
+
+        # stock 항목: 최신 actual 분기에서 추출 (컨센서스는 보통 '-')
+        latest_actual_key = None
+        for t in reversed(titles):
+            if t.get("isConsensus") != "Y":
+                latest_actual_key = t.get("key")
+                break
+        latest_actual_key = latest_actual_key or last4[-1].get("key")
+
+        bps  = _extract_value(rows, "BPS", latest_actual_key)
+        roe  = _extract_value(rows, "ROE", latest_actual_key)
+        debt = _extract_value(rows, "부채비율", latest_actual_key)
+
+        # 발행주식수: net_income (TTM, 원) / EPS (TTM, 원/주)
+        shares = 0.0
+        if eps_ttm > 0 and net_inc > 0:
+            shares = net_inc / eps_ttm
+
+        out.update({
+            "revenue":           revenue,
+            "operating_income":  op_inc,
+            "net_income":        net_inc,
+            "ebitda":            op_inc,  # 보수적: D&A 미합산
+            "eps":               eps_ttm,
+            "bps":               bps,
+            "roe":               roe,
+            "debt_ratio":        debt,
+            "shares_outstanding": shares,
+            "fiscal_period":     f"TTM {period_keys[0]}~{period_keys[-1]}" + ("(E)" if has_consensus else ""),
+            "has_consensus":     has_consensus,
+            "available":         bool(op_inc or net_inc or eps_ttm),
+        })
+        with _lock:
+            _cache[code6] = (out, now)
+    except Exception as e:
+        out["error"] = str(e)
+    return out
+
+
+if __name__ == "__main__":
+    for c in ("005930", "000660", "035420"):
+        r = get_ttm_financials(c)
+        print(c, json.dumps(r, ensure_ascii=False, indent=2))

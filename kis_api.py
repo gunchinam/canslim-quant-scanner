@@ -554,6 +554,197 @@ def get_minute_candles(code: str, period: int = 30, count: int = 20) -> List[Dic
         return []
 
 
+# ── 재무 데이터 (DCF 입력용) ─────────────────────────────────────────────────
+_FINANCE_RATIO_PATH    = "/uapi/domestic-stock/v1/finance/financial-ratio"
+_INCOME_STATEMENT_PATH = "/uapi/domestic-stock/v1/finance/income-statement"
+_STOCK_INFO_PATH       = "/uapi/domestic-stock/v1/quotations/search-stock-info"
+
+# 모듈 레벨 캐시 (프로세스 수명동안 12h)
+_finance_cache: Dict[str, tuple[Dict[str, Any], float]] = {}
+_FINANCE_TTL = 43200  # 12h
+_finance_lock = threading.Lock()
+
+
+def _to_float(x: Any) -> float:
+    try:
+        return float(str(x).replace(",", "").strip())
+    except Exception:
+        return 0.0
+
+
+def _fetch_finance_ratio(isin: str, mode: str = "ttm") -> Dict[str, float]:
+    """국내주식 재무비율 — 최근 4분기 합산(TTM) EPS, 최신 분기 BPS/ROE/부채비율.
+
+    mode="ttm": FID_DIV_CLS_CODE=0 (분기) → 최근 4분기 EPS 합산.
+    mode="annual": FID_DIV_CLS_CODE=1 (연간) → 가장 최근 결산.
+    """
+    token = _get_token()
+    headers = {
+        "authorization": f"Bearer {token}",
+        "appkey":        _app_key(),
+        "appsecret":     _app_secret(),
+        "tr_id":         "FHKST66430300",
+        "custtype":      "P",
+    }
+    params = {
+        "FID_COND_MRKT_DIV_CODE": "J",
+        "FID_INPUT_ISCD":         isin,
+        "FID_DIV_CLS_CODE":       "1" if mode == "ttm" else "0",  # KIS: 0=년, 1=분기
+    }
+    raw = _http_get(_FINANCE_RATIO_PATH, params, headers)
+    rows = raw.get("output", []) or []
+    if not rows:
+        return {}
+    latest = rows[0]
+    if mode == "ttm" and len(rows) >= 4:
+        eps_ttm = sum(_to_float(r.get("eps")) for r in rows[:4])
+        period_label = f"{rows[0].get('stac_yymm','')}~{rows[3].get('stac_yymm','')} (TTM)"
+    else:
+        eps_ttm = _to_float(latest.get("eps"))
+        period_label = str(latest.get("stac_yymm", ""))
+    return {
+        "stac_yymm":  period_label,
+        "eps":        eps_ttm,
+        "bps":        _to_float(latest.get("bps")),
+        "roe":        _to_float(latest.get("roe_val")),
+        "debt_ratio": _to_float(latest.get("lblt_rate")),
+        "rsrv_rate":  _to_float(latest.get("rsrv_rate")),
+    }
+
+
+def _fetch_income_statement(isin: str, mode: str = "ttm") -> Dict[str, float]:
+    """국내주식 손익계산서 — TTM(최근 4분기 합산) 또는 연간 결산.
+
+    KIS 응답 단위는 억원 → 원 환산 (×1e8).
+    mode="ttm": 분기(FID_DIV_CLS_CODE=0) → 최근 4분기 영업이익/순이익 합산.
+    mode="annual": 연간 → 가장 최근 결산.
+    """
+    token = _get_token()
+    headers = {
+        "authorization": f"Bearer {token}",
+        "appkey":        _app_key(),
+        "appsecret":     _app_secret(),
+        "tr_id":         "FHKST66430200",
+        "custtype":      "P",
+    }
+    params = {
+        "FID_COND_MRKT_DIV_CODE": "J",
+        "FID_INPUT_ISCD":         isin,
+        "FID_DIV_CLS_CODE":       "1" if mode == "ttm" else "0",  # KIS: 0=년, 1=분기
+    }
+    raw = _http_get(_INCOME_STATEMENT_PATH, params, headers)
+    rows = raw.get("output", []) or []
+    if not rows:
+        return {}
+    if mode == "ttm" and len(rows) >= 4:
+        sample = rows[:4]
+        op_inc = sum(_to_float(r.get("bsop_prti")) for r in sample) * 1e8
+        net    = sum(_to_float(r.get("thtr_ntin")) for r in sample) * 1e8
+        depr   = sum(_to_float(r.get("depr_cost")) for r in sample) * 1e8
+        period_label = f"{sample[0].get('stac_yymm','')}~{sample[3].get('stac_yymm','')} (TTM)"
+    else:
+        latest = rows[0]
+        op_inc = _to_float(latest.get("bsop_prti")) * 1e8
+        net    = _to_float(latest.get("thtr_ntin")) * 1e8
+        depr   = _to_float(latest.get("depr_cost")) * 1e8
+        period_label = str(latest.get("stac_yymm", ""))
+    # KIS depr_cost 는 종목 무관하게 동일 placeholder 가 자주 반환됨 → EBITDA 는 영업이익 단독을 보수적 프록시로 사용
+    return {
+        "stac_yymm":        period_label,
+        "operating_income": op_inc,
+        "net_income":       net,
+        "depreciation":     depr,
+        "ebitda":           op_inc,
+    }
+
+
+def _fetch_stock_info(isin: str) -> Dict[str, float]:
+    """국내주식 현재가 조회의 lstn_stcn 필드로 상장주식수 획득."""
+    token = _get_token()
+    headers = {
+        "authorization": f"Bearer {token}",
+        "appkey":        _app_key(),
+        "appsecret":     _app_secret(),
+        "tr_id":         "FHKST01010100",
+        "custtype":      "P",
+    }
+    params = {
+        "FID_COND_MRKT_DIV_CODE": "J",
+        "FID_INPUT_ISCD":         isin,
+    }
+    raw = _http_get(_PRICE_PATH, params, headers)
+    out = raw.get("output", {}) or {}
+    return {
+        "shares_outstanding": _to_float(out.get("lstn_stcn")),  # 주 단위
+    }
+
+
+def get_financials(code: str) -> Dict[str, Any]:
+    """KIS Open API 재무 데이터 통합 조회 (EPS/BPS/ROE/영업이익/EBITDA/발행주식수).
+
+    Returns:
+        {
+          "eps":                float,   # 원/주
+          "bps":                float,   # 원/주
+          "roe":                float,   # %
+          "debt_ratio":         float,   # %
+          "operating_income":   float,   # 원 (총액)
+          "net_income":         float,   # 원
+          "depreciation":       float,   # 원
+          "ebitda":             float,   # 원
+          "shares_outstanding": float,   # 주
+          "fiscal_period":      str,     # YYYYMM
+          "source":             "KIS",
+          "available":          bool,
+        }
+    """
+    if not is_available():
+        return {"available": False, "error": "KIS 키 미설정"}
+
+    isin = _normalize_code(code)
+    now  = time.time()
+    with _finance_lock:
+        cached = _finance_cache.get(isin)
+        if cached and (now - cached[1]) < _FINANCE_TTL:
+            return cached[0]
+
+    result: Dict[str, Any] = {"source": "KIS", "available": False}
+    try:
+        # 세 엔드포인트 직렬 호출 (KIS rate-limit 보호)
+        try:
+            result.update(_fetch_finance_ratio(isin))
+        except Exception as e:
+            result["_err_ratio"] = str(e)
+        try:
+            result.update(_fetch_income_statement(isin))
+        except Exception as e:
+            result["_err_income"] = str(e)
+        try:
+            result.update(_fetch_stock_info(isin))
+        except Exception as e:
+            result["_err_stockinfo"] = str(e)
+
+        # shares 폴백: 직접 조회 실패 시 net_income / EPS 로 역산
+        if (not result.get("shares_outstanding")
+                and result.get("net_income") and result.get("eps")):
+            try:
+                result["shares_outstanding"] = result["net_income"] / result["eps"]
+                result["_shares_derived"] = True
+            except Exception:
+                pass
+
+        # 최소한 EPS/BPS 또는 영업이익 중 하나라도 있어야 사용 가능
+        if result.get("eps") or result.get("bps") or result.get("operating_income"):
+            result["available"] = True
+            result["fiscal_period"] = result.get("stac_yymm", "")
+
+        with _finance_lock:
+            _finance_cache[isin] = (result, now)
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
 # ── 셀프테스트 ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     print(f"[kis_api] available={is_available()} mock={_is_mock()}")
@@ -562,5 +753,7 @@ if __name__ == "__main__":
         print("[kis_api] 삼성전자:", r)
         r2 = get_price("000660")
         print("[kis_api] SK하이닉스:", r2)
+        fin = get_financials("005930")
+        print("[kis_api] 삼성전자 재무:", fin)
     else:
         print("[kis_api] .env 파일에서 KIS 키를 읽지 못했습니다.")

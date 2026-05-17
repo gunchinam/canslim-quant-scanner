@@ -48,6 +48,39 @@ class ValuationResult:
     method_scores: dict[str, float] = field(default_factory=dict)
 
 
+def target_upside_score(distance: float) -> tuple[float, str]:
+    """Convert target-price upside/downside into a continuous score plus view.
+
+    The legacy implementation used stepwise bins, which made sector bias changes
+    invisible whenever the upside stayed inside the same bucket. This helper
+    keeps the same view bands but interpolates score inside each band so the
+    final score moves continuously with the target-price delta.
+
+    Args:
+        distance: (target_price - current_price) / current_price
+
+    Returns:
+        ``(score, view)``
+    """
+    d = float(distance or 0.0)
+
+    if d > 0.40:
+        return 15.0, "STRONG_BUY"
+    if d > 0.30:
+        return 12.0 + ((d - 0.30) / 0.10) * 3.0, "BUY"
+    if d > 0.15:
+        return 8.0 + ((d - 0.15) / 0.15) * 4.0, "MODERATE_BUY"
+    if d > 0.05:
+        return 4.0 + ((d - 0.05) / 0.10) * 4.0, "SLIGHT_UPSIDE"
+    if d < -0.15:
+        return -12.0, "OVERVALUED"
+    if d < -0.10:
+        return -12.0 + ((d + 0.15) / 0.05) * 4.0, "SLIGHT_OVERVALUED"
+    if d < 0:
+        return -8.0 + ((d + 0.10) / 0.10) * 3.0, "AT_TARGET"
+    return -5.0 + (d / 0.05) * 9.0, "NEUTRAL"
+
+
 # ---------------------------------------------------------------------------
 # Internal DCF helper
 # ---------------------------------------------------------------------------
@@ -196,6 +229,10 @@ def run(
     book_value: float = float(financials.get("book_value", 0) or 0)
     ebitda: float = float(financials.get("ebitda", 0) or 0)
     shares: float = float(financials.get("shares_outstanding", financials.get("shares", 0)) or 0)
+    # EV → Equity bridge: 비영업자산(현금) − 부채. 둘 다 총액(원/달러). 미공급 시 0.
+    cash: float = float(financials.get("cash", 0) or 0)
+    debt: float = float(financials.get("debt", 0) or 0)
+    net_cash_ps: float = (cash - debt) / shares if shares > 0 else 0.0
 
     # 총액 → 주당 정규화: shares가 있으면 무조건 per-share로 변환
     if shares > 0:
@@ -204,24 +241,26 @@ def run(
         if ebitda != 0:
             ebitda = ebitda / shares
 
-    # --- 3-Stage DCF (base / low / high) ---
-    dcf_base: float = _dcf_value(fcf, wacc, growth_stage1, growth_stage2, terminal_growth)
-    dcf_low: float = _dcf_value(fcf, wacc + 0.01, growth_stage1, growth_stage2, terminal_growth)
-    dcf_high: float = _dcf_value(fcf, wacc - 0.01, growth_stage1, growth_stage2, terminal_growth)
+    # --- 3-Stage DCF (base / low / high) + EV→Equity bridge ---
+    # 표준 공식: (Σ Stage PV) + 비영업자산(현금) − 부채 ÷ 발행주식수
+    dcf_base: float = _dcf_value(fcf, wacc, growth_stage1, growth_stage2, terminal_growth) + net_cash_ps
+    dcf_low:  float = _dcf_value(fcf, wacc + 0.01, growth_stage1, growth_stage2, terminal_growth) + net_cash_ps
+    dcf_high: float = _dcf_value(fcf, wacc - 0.01, growth_stage1, growth_stage2, terminal_growth) + net_cash_ps
 
     # --- Relative valuation ---
     try:
-        per_fair: float = eps * per_multiple
+        per_fair: float = eps * per_multiple  # equity multiple, no bridge
     except (ZeroDivisionError, ValueError):
         per_fair = 0.0
 
     try:
-        pbr_fair: float = book_value * pbr_multiple
+        pbr_fair: float = book_value * pbr_multiple  # equity multiple, no bridge
     except (ZeroDivisionError, ValueError):
         pbr_fair = 0.0
 
     try:
-        ev_ebitda_fair: float = ebitda * ev_ebitda_multiple
+        # EV/EBITDA 는 enterprise multiple → equity 변환 시 bridge 적용
+        ev_ebitda_fair: float = ebitda * ev_ebitda_multiple + net_cash_ps
     except (ZeroDivisionError, ValueError):
         ev_ebitda_fair = 0.0
 
@@ -275,6 +314,251 @@ def run(
         discount_pct=discount_pct,
         method_scores=method_scores,
     )
+
+
+# ---------------------------------------------------------------------------
+# Nomura-style target price (sector-routed)
+# ---------------------------------------------------------------------------
+#
+# Nomura의 12개월 선행 목표주가 산정 방식을 종목 유형별로 라우팅한다.
+#   - 시클리컬/메모리/소재: forward BPS × target P/B (P/B는 Gordon으로 정당화)
+#   - 은행·보험·증권:       2-stage Gordon Growth로 도출한 P/B × 2y forward BPS
+#   - 다각화 대기업(SOTP):  사업부별 EBITDA(또는 순이익) × peer 멀티플 합산
+#   - 안정 성장주:          forward EPS × peer P/E
+#   - 고성장/현금흐름:      DCF (기존 _dcf_value 재사용)
+#
+# 참고: SK하이닉스 사례 - BPS 668,186원 × 3.5배 = 약 2,340,000원
+
+_CYCLICAL_SECTORS  = {"반도체", "디스플레이", "철강", "조선", "화학", "정유", "해운", "자동차"}
+_FINANCIAL_SECTORS = {"은행", "보험", "증권", "지주"}
+_STABLE_SECTORS    = {"소비재", "통신", "유틸리티", "건설", "유통", "음식료", "방산"}
+_GROWTH_SECTORS    = {"바이오", "제약", "플랫폼", "게임", "엔터", "인터넷", "AI인프라"}
+
+# 노무라 섹터별 톤 보정 계수 — 2026년 5월 기준 실제 리서치 톤 반영.
+# 1.0 = 중립. >1.0 = 노무라가 강세, <1.0 = 약세.
+#
+# 2026 톤 핵심 근거:
+#   - KOSPI 상반기 타겟 7,500~8,000 (반도체 슈퍼사이클·밸류업·AI 인프라)
+#   - 한국 시장 overweight, 2026 EPS +129%, 2027 +25% 전망
+#   - 메모리 슈퍼사이클 2027까지 지속 (SEC 16만, 하이닉스 88만→234만 상향)
+#   - AI 인프라·HBM·물리 AI 밸류체인 재평가
+#   - 자동차 underweight (일본 동일, 한국도 상대적으로 약세)
+#   - 조선: 2022 신조 피크론 (HD현대중공업 다운그레이드)
+#   - 철강·화학: 중국 공급과잉 지속
+#   - 방산: stable performance, 중립~소폭 강세
+#   - 건설/부동산: BOK 금리 동결, 부동산 우려 유지
+_NOMURA_SECTOR_BIAS: dict[str, float] = {
+    # 강세 (overweight)
+    "반도체":     1.20,   # 메모리 슈퍼사이클 (2026 톤 상향)
+    "AI인프라":   1.15,   # AI 밸류체인 재평가
+    "플랫폼":     1.10,   # IT overweight 일관성
+    "방산":       1.05,   # stable performance
+    "인터넷":     1.05,
+    # 중립
+    "통신":       1.00,
+    "엔터":       1.00,
+    "증권":       1.00,
+    "은행":       1.00,   # 밸류업 수혜 / BOK 금리 동결
+    "소비재":     0.95,
+    "유통":       0.95,
+    "음식료":     0.95,
+    "보험":       0.95,
+    "디스플레이": 0.95,
+    "게임":       0.95,
+    "유틸리티":   0.90,
+    "지주":       0.90,   # 지주사 디스카운트
+    "바이오":     0.90,
+    "제약":       0.90,
+    # 약세 (underweight)
+    "자동차":     0.85,   # 노무라 일관 underweight
+    "화학":       0.85,   # 중국 공급과잉
+    "정유":       0.85,
+    "건설":       0.80,   # 부동산 우려
+    "철강":       0.80,   # 중국 공급과잉
+    "해운":       0.80,
+    "조선":       0.70,   # 신조 발주 2022 피크론 (2026 추가 강화)
+}
+
+
+def _nomura_bias(sector: str) -> float:
+    """노무라 톤 보정 계수. 모르는 섹터는 1.0(중립).
+
+    정확 일치 우선, 없으면 부분일치(예: "🔧 반도체 / 메모리" → "반도체").
+    """
+    s = (sector or "").strip()
+    if not s:
+        return 1.0
+    if s in _NOMURA_SECTOR_BIAS:
+        return float(_NOMURA_SECTOR_BIAS[s])
+    for key, val in _NOMURA_SECTOR_BIAS.items():
+        if key in s:
+            return float(val)
+    return 1.0
+
+
+def _route_sector(sector: str) -> str:
+    """입력 섹터명을 라우팅 키워드로 정규화 (부분일치).
+
+    예: "🔧 반도체 / 메모리" → "반도체", "은행/지방은행" → "은행".
+    매칭 실패 시 빈 문자열 (기본 Forward-PE 경로).
+    """
+    s = (sector or "").strip()
+    if not s:
+        return ""
+    all_keys = _CYCLICAL_SECTORS | _FINANCIAL_SECTORS | _STABLE_SECTORS | _GROWTH_SECTORS
+    if s in all_keys:
+        return s
+    for key in all_keys:
+        if key in s:
+            return key
+    return ""
+
+
+def _gordon_target_pb(roe: float, coe: float, g: float) -> float:
+    """Gordon Growth 기반 정당화 P/B: (ROE - g) / (COE - g).
+
+    Args:
+        roe: 지속가능 자기자본이익률 (예: 0.20 = 20%).
+        coe: 자기자본비용 (예: 0.10 = 10%).
+        g:   장기 성장률 (보통 2~3%).
+
+    Returns:
+        정당화 P/B. COE <= g 이면 0.0.
+    """
+    try:
+        if coe <= g:
+            return 0.0
+        pb = (roe - g) / (coe - g)
+        return max(pb, 0.0)
+    except (ZeroDivisionError, ValueError):
+        return 0.0
+
+
+def _forward_bps(bps_current: float, roe: float, payout_ratio: float, months: int = 12) -> float:
+    """현재 BPS를 N개월 후로 롤포워드.
+
+    BPS_{t+1} = BPS_t × (1 + ROE × (1 - payout))
+    """
+    try:
+        if bps_current <= 0 or months <= 0:
+            return bps_current
+        retention = max(0.0, 1.0 - payout_ratio)
+        years = months / 12.0
+        return bps_current * math.pow(1.0 + roe * retention, years)
+    except (ZeroDivisionError, ValueError, OverflowError):
+        return bps_current
+
+
+def nomura_target_price(
+    sector: str,
+    financials: dict[str, Any],
+    *,
+    coe: float = 0.10,
+    terminal_growth: float = 0.025,
+    payout_ratio: float = 0.30,
+    forward_months: int = 12,
+    sotp_segments: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """노무라식 12개월 선행 목표주가.
+
+    Args:
+        sector: 종목 업종명 (한글). 라우팅에만 사용.
+        financials: 입력 재무 데이터. 키:
+            - ``bps``: 현재 BPS (per share).
+            - ``eps``: 12M 선행 EPS (per share).
+            - ``roe``: 지속가능 ROE (decimal, 예: 0.20).
+            - ``shares_outstanding`` (SOTP 시 필요).
+        coe: Cost of Equity. 한국 일반 종목 기본 10%.
+        terminal_growth: 장기 성장률 g.
+        payout_ratio: 배당성향 (BPS 롤포워드용).
+        forward_months: 선행 개월수. 금융은 24개월 권장.
+        sotp_segments: SOTP용 사업부 리스트. 각 dict:
+            ``{"value": float}``  사업부 가치 (총액, 같은 통화).
+
+    Returns:
+        ``{"target_price": float, "method": str, "components": dict}``
+    """
+    raw_sector = (sector or "").strip()
+    sector = _route_sector(raw_sector)
+    bps   = float(financials.get("bps", financials.get("book_value", 0)) or 0)
+    eps   = float(financials.get("eps", 0) or 0)
+    roe   = float(financials.get("roe", 0) or 0)
+    shares = float(financials.get("shares_outstanding", financials.get("shares", 0)) or 0)
+    bias  = _nomura_bias(raw_sector)
+
+    # --- A. SOTP (segments이 명시되면 최우선) ---
+    if sotp_segments:
+        total_value = sum(float(s.get("value", 0) or 0) for s in sotp_segments)
+        if shares > 0 and total_value > 0:
+            tp = (total_value / shares) * bias
+            return {
+                "target_price": tp,
+                "method": "SOTP",
+                "components": {
+                    "segments": sotp_segments,
+                    "total_value": total_value,
+                    "shares": shares,
+                    "nomura_bias": bias,
+                },
+            }
+
+    # --- B. 은행·보험·증권: 2-stage Gordon Growth ---
+    if sector in _FINANCIAL_SECTORS:
+        months = max(forward_months, 24)
+        fwd_bps = _forward_bps(bps, roe, payout_ratio, months=months)
+        target_pb = _gordon_target_pb(roe, coe, terminal_growth) * bias
+        tp = fwd_bps * target_pb
+        return {
+            "target_price": tp,
+            "method": "Gordon-PB",
+            "components": {
+                "forward_bps": fwd_bps,
+                "target_pb": target_pb,
+                "roe": roe, "coe": coe, "g": terminal_growth,
+                "forward_months": months,
+                "nomura_bias": bias,
+            },
+        }
+
+    # --- C. 시클리컬/메모리/소재: forward BPS × target P/B ---
+    if sector in _CYCLICAL_SECTORS:
+        fwd_bps = _forward_bps(bps, roe, payout_ratio, months=forward_months)
+        target_pb = _gordon_target_pb(roe, coe, terminal_growth) * bias
+        tp = fwd_bps * target_pb
+        return {
+            "target_price": tp,
+            "method": "Cyclical-PB",
+            "components": {
+                "forward_bps": fwd_bps,
+                "target_pb": target_pb,
+                "roe": roe, "coe": coe, "g": terminal_growth,
+                "nomura_bias": bias,
+            },
+        }
+
+    # --- D. 고성장: DCF (기존 엔진 재사용) ---
+    if sector in _GROWTH_SECTORS:
+        fcf = float(financials.get("fcf", 0) or 0)
+        if shares > 0 and fcf != 0 and abs(fcf) > shares:
+            fcf = fcf / shares
+        cash = float(financials.get("cash", 0) or 0)
+        debt = float(financials.get("debt", 0) or 0)
+        net_cash_ps = (cash - debt) / shares if shares > 0 else 0.0
+        dcf = (_dcf_value(fcf, coe, 0.20, 0.10, terminal_growth) + net_cash_ps) * bias
+        return {
+            "target_price": dcf,
+            "method": "DCF",
+            "components": {"fcf_ps": fcf, "wacc": coe, "nomura_bias": bias},
+        }
+
+    # --- E. 기본/안정 성장주: forward EPS × peer P/E ---
+    peer_pe = float(financials.get("peer_pe", 15.0) or 15.0)
+    tp = eps * peer_pe * bias
+    return {
+        "target_price": tp,
+        "method": "Forward-PE",
+        "components": {"forward_eps": eps, "peer_pe": peer_pe, "nomura_bias": bias},
+    }
 
 
 # ---------------------------------------------------------------------------

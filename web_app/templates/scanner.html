@@ -6,6 +6,9 @@
 <meta name="color-scheme" content="light">
 <title>(.)(.)검색기 — 종목 스캐너</title>
 <link rel="stylesheet" href="/static/theme.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&family=Do+Hyeon&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -72,6 +75,41 @@ html, body {
   flex: 1;
   max-width: 320px;
   position: relative;
+}
+.oneliner-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warning) 16%, var(--card));
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.oneliner-filter-chip[hidden] { display: none; }
+.oneliner-filter-chip-label { line-height: 1; }
+.oneliner-filter-chip-clear {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.08);
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--duration-fast), transform var(--duration-fast);
+}
+.oneliner-filter-chip-clear:hover {
+  background: rgba(0,0,0,0.14);
+  transform: scale(1.05);
 }
 .search-icon {
   position: absolute;
@@ -230,6 +268,58 @@ html, body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 4px 14px 8px;
+}
+
+.sector-heatmap-wrap {
+  padding: 0 12px 12px;
+}
+
+.sector-heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.sector-heatmap-empty {
+  padding: 14px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: center;
+  background: var(--surface-page);
+}
+
+.sector-heatmap-card {
+  min-height: 60px;
+  padding: 10px 10px 9px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  color: #fff;
+  cursor: pointer;
+  transition: transform var(--duration-fast), box-shadow var(--duration-fast), opacity var(--duration-fast);
+  box-shadow: 0 8px 18px rgba(15,23,42,0.14);
+}
+
+.sector-heatmap-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px rgba(15,23,42,0.18);
+}
+
+.sector-heatmap-name {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  word-break: keep-all;
+}
+
+.sector-heatmap-score {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
 }
 
 #filter-list { display: flex; flex-direction: column; gap: 0; }
@@ -472,6 +562,52 @@ td.score-col {
 .stock-name { font-weight: 600; font-size: 14px; display: block; overflow: hidden; text-overflow: ellipsis; }
 .stock-code { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
 .stock-desc { font-size: 11px; color: var(--text-secondary); margin-top: 2px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+/* === Silkscreen Mini Poster Chip (한줄평) === */
+.stock-oneliner {
+  position: relative;
+  display: inline-block;
+  margin-top: 4px;
+  padding: 4px 10px;
+  font-family: 'Black Han Sans', 'Jua', 'Do Hyeon', 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: #1a1a1a;
+  background: #F4ECD8;
+  border: 1.5px solid #1a1a1a;
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+  cursor: pointer;
+  transition: transform var(--duration-fast), box-shadow var(--duration-fast);
+}
+.stock-oneliner:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 #1a1a1a;
+}
+/* Scanner chips: 10~15% desaturated/darkened vs hero poster for AA + 탐색 톤 */
+.stock-oneliner[data-tag="TRUE_VALUE"]          { background: #149B8E; color: #FFF8E7; border-color: #094B45; box-shadow: 2px 2px 0 #094B45; }
+.stock-oneliner[data-tag="VALUE_TRAP"]          { background: #D9AB1E; color: #2A1B05; border-color: #2A1B05; box-shadow: 2px 2px 0 #2A1B05; }
+.stock-oneliner[data-tag="EXPENSIVE_JUSTIFIED"] { background: #1F2D5C; color: #FFE9A8; border-color: #0A0F25; box-shadow: 2px 2px 0 #0A0F25; }
+.stock-oneliner[data-tag="BUBBLE"]              { background: #E8408F; color: #FFF8E7; border-color: #5C0930; box-shadow: 2px 2px 0 #5C0930; }
+.stock-oneliner[data-tag="MOMENTUM_LEADER"]     { background: #2557D9; color: #FFF8E7; border-color: #0B1F66; box-shadow: 2px 2px 0 #0B1F66; }
+.stock-oneliner[data-tag="OVERBOUGHT"]          { background: #E66C12; color: #2A1505; border-color: #2A1505; box-shadow: 2px 2px 0 #2A1505; }
+.stock-oneliner[data-tag="OVERSOLD"]            { background: #4A2A6E; color: #F4E7C5; border-color: #1A0F2A; box-shadow: 2px 2px 0 #1A0F2A; }
+.stock-oneliner[data-tag="BREAKOUT"]            { background: #94C815; color: #1A2A05; border-color: #1A2A05; box-shadow: 2px 2px 0 #1A2A05; }
+.stock-oneliner[data-tag="FALLING_KNIFE"]       { background: #1a1a1a; color: #FF3A3A; border-color: #FF3A3A; box-shadow: 2px 2px 0 #FF3A3A; }
+.stock-oneliner[data-tag="SLEEPING_GIANT"]      { background: #7DA078; color: #1A2A1A; border-color: #1A2A1A; box-shadow: 2px 2px 0 #1A2A1A; }
+.stock-oneliner[data-tag="CASH_COW"]            { background: #BF9624; color: #2A1B00; border-color: #2A1B00; box-shadow: 2px 2px 0 #2A1B00; }
+.stock-oneliner[data-tag="STORY_STOCK"]         { background: #7A40C7; color: #FFF8E7; border-color: #2A0F5C; box-shadow: 2px 2px 0 #2A0F5C; }
+.stock-oneliner[data-tag="SECTOR_LEADER"]       { background: #16955F; color: #FFF8E7; border-color: #053E25; box-shadow: 2px 2px 0 #053E25; }
+.stock-oneliner[data-tag="DEFENSIVE"]           { background: #6B7C37; color: #FFF8E7; border-color: #1F2A0F; box-shadow: 2px 2px 0 #1F2A0F; }
+.stock-oneliner[data-tag="EARNINGS_BEAT"]       { background: #E55A4D; color: #2A0A05; border-color: #2A0A05; box-shadow: 2px 2px 0 #2A0A05; }
+.stock-oneliner[data-tag="STRONG_BUY"]          { background: #C9303D; color: #FFF8E7; border-color: #2A0508; box-shadow: 2px 2px 0 #2A0508; }
+.stock-oneliner[data-tag="AVOID"]               { background: #2A2A2A; color: #FFD83A; border-color: #FFD83A; box-shadow: 2px 2px 0 #FFD83A; }
+.stock-oneliner[data-tag="NEUTRAL"]             { background: #E8DFC8; color: #2A2418; border-color: #2A2418; box-shadow: 2px 2px 0 #2A2418; }
 
 .sector-tag {
   display: inline-flex;
@@ -586,6 +722,94 @@ td.score-col {
 .dp-chart-section {
   border-top: 1px solid var(--border);
   background: var(--card);
+}
+
+/* 1008-풀 한줄평 포스터 (스캐너 슬라이드 패널용) */
+.dp-oneliner-poster {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: 14px 20px;
+  padding: 24px 20px;
+  min-height: 90px;
+  font-family: 'Noto Sans KR', 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  font-size: clamp(28px, 5.5vw, 46px);
+  font-weight: 800;
+  line-height: 1.16;
+  letter-spacing: -0.02em;
+  color: #1a1a1a;
+  background: #F4ECD8;
+  border: 3px solid #1a1a1a;
+  border-radius: 14px;
+  box-shadow: 6px 6px 0 #1a1a1a;
+  overflow: hidden;
+  word-break: keep-all;
+  text-wrap: balance;
+}
+.dp-oneliner-poster::before,
+.dp-oneliner-poster::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.32;
+}
+.dp-oneliner-poster[data-tag="TRUE_VALUE"] {
+  background: #18B8A8; color: #FFF8E7; border-color: #0B5F58; box-shadow: 6px 6px 0 #0B5F58;
+}
+.dp-oneliner-poster[data-tag="VALUE_TRAP"] {
+  background: #E8B922; color: #2A1B05; border-color: #2A1B05; box-shadow: 6px 6px 0 #2A1B05;
+}
+.dp-oneliner-poster[data-tag="EXPENSIVE_JUSTIFIED"] {
+  background: #1F2D5C; color: #FFE9A8; border-color: #0A0F25; box-shadow: 6px 6px 0 #0A0F25;
+}
+.dp-oneliner-poster[data-tag="BUBBLE"] {
+  background: #FF4FA3; color: #FFF8E7; border-color: #6E0B3D; box-shadow: 6px 6px 0 #6E0B3D;
+}
+.dp-oneliner-poster[data-tag="BREAKOUT"] {
+  background: #FF6B2B; color: #FFF8E7; border-color: #6E2A05; box-shadow: 6px 6px 0 #6E2A05;
+}
+.dp-oneliner-poster[data-tag="MOMENTUM_LEADER"] {
+  background: #2E7DDA; color: #FFF8E7; border-color: #0B3A6E; box-shadow: 6px 6px 0 #0B3A6E;
+}
+.dp-oneliner-poster[data-tag="FALLING_KNIFE"] {
+  background: #3A0F0F; color: #FFB347; border-color: #1A0505; box-shadow: 6px 6px 0 #1A0505;
+}
+.dp-oneliner-poster[data-tag="OVERBOUGHT"] {
+  background: #FFE066; color: #5C3A05; border-color: #5C3A05; box-shadow: 6px 6px 0 #5C3A05;
+}
+.dp-oneliner-poster[data-tag="OVERSOLD"] {
+  background: #A8E6CF; color: #1A3D2E; border-color: #1A3D2E; box-shadow: 6px 6px 0 #1A3D2E;
+}
+.dp-oneliner-poster[data-tag="STRONG_BUY"] {
+  background: #16C172; color: #FFF8E7; border-color: #0A5F38; box-shadow: 6px 6px 0 #0A5F38;
+}
+.dp-oneliner-poster[data-tag="AVOID"] {
+  background: #2A2A2A; color: #FF6B6B; border-color: #0A0A0A; box-shadow: 6px 6px 0 #0A0A0A;
+}
+.dp-oneliner-poster[data-tag="SECTOR_LEADER"] {
+  background: #C9A227; color: #2A1B05; border-color: #2A1B05; box-shadow: 6px 6px 0 #2A1B05;
+}
+.dp-oneliner-poster[data-tag="EARNINGS_BEAT"] {
+  background: #00B4D8; color: #FFF8E7; border-color: #03405C; box-shadow: 6px 6px 0 #03405C;
+}
+.dp-oneliner-poster[data-tag="CASH_COW"] {
+  background: #6BCB77; color: #1A3D2E; border-color: #1A3D2E; box-shadow: 6px 6px 0 #1A3D2E;
+}
+.dp-oneliner-poster[data-tag="SLEEPING_GIANT"] {
+  background: #4D5BCE; color: #FFF8E7; border-color: #1A1F5C; box-shadow: 6px 6px 0 #1A1F5C;
+}
+.dp-oneliner-poster[data-tag="STORY_STOCK"] {
+  background: #9D4EDD; color: #FFF8E7; border-color: #3A0F5C; box-shadow: 6px 6px 0 #3A0F5C;
+}
+.dp-oneliner-poster[data-tag="DEFENSIVE"] {
+  background: #8DA9C4; color: #1A2A3D; border-color: #1A2A3D; box-shadow: 6px 6px 0 #1A2A3D;
+}
+.dp-oneliner-poster[data-tag="NEUTRAL"] {
+  background: #E8E8E8; color: #2A2A2A; border-color: #2A2A2A; box-shadow: 6px 6px 0 #2A2A2A;
 }
 
 /* Left column */
@@ -875,6 +1099,97 @@ td.score-col {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
+.cs-desc-full {
+  display: none;
+  font-size: 11px; color: var(--text-secondary); line-height: 1.6;
+}
+.cs-formula {
+  display: none;
+  font-size: 10px; font-weight: 600; color: var(--brand);
+  background: var(--brand-tint); border-radius: 6px;
+  padding: 6px 8px; margin-top: 4px; line-height: 1.4;
+}
+.cs-expandable { cursor: pointer; transition: box-shadow 0.2s var(--ease-default); }
+.cs-expandable:hover { box-shadow: var(--shadow-hover); }
+.cs-chevron {
+  flex-shrink: 0;
+  transition: transform 0.2s var(--ease-default);
+}
+/* 공시·뉴스 탭 */
+.dn-sentiment-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow-card);
+}
+.dn-sentiment-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.dn-sentiment-title { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.dn-sentiment-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 100px; }
+.dn-sentiment-badge.positive { background: rgba(52,199,89,0.12); color: var(--success); }
+.dn-sentiment-badge.negative { background: rgba(255,59,48,0.12); color: var(--destructive); }
+.dn-sentiment-badge.neutral  { background: var(--surface-subtle); color: var(--text-tertiary); }
+.dn-sentiment-bars { display: flex; gap: 8px; margin-bottom: 8px; font-size: 12px; color: var(--text-secondary); }
+.dn-bar-wrap { flex: 1; height: 6px; background: var(--surface-subtle); border-radius: 3px; overflow: hidden; }
+.dn-bar-pos { height: 100%; background: var(--success); border-radius: 3px; }
+.dn-bar-neg { height: 100%; background: var(--destructive); border-radius: 3px; }
+.dn-summary-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+.dn-news-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.dn-news-item:last-child { border-bottom: none; }
+.dn-news-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+.dn-news-dot.positive { background: var(--success); }
+.dn-news-dot.negative { background: var(--destructive); }
+.dn-news-dot.neutral  { background: var(--text-tertiary); }
+.dn-news-title { font-size: 13px; color: var(--text-primary); font-weight: 500; line-height: 1.5; flex: 1; }
+.dn-news-title a { color: var(--brand); text-decoration: none; cursor: pointer; }
+.dn-news-title a:hover { color: var(--info); text-decoration: underline; }
+.dn-filing-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-card); }
+.dn-filing-header { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+.dn-filing-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.dn-filing-item:last-child { border-bottom: none; }
+.dn-filing-date { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; flex-shrink: 0; }
+.dn-filing-title { font-size: 13px; color: var(--text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dn-filing-title a { color: var(--brand); text-decoration: none; cursor: pointer; }
+.dn-filing-title a:hover { color: var(--info); text-decoration: underline; }
+.dn-empty { padding: 24px; text-align: center; color: var(--text-tertiary); font-size: 13px; }
+/* 계산 과정 팝업 (바텀시트) */
+.cp-overlay {
+  display: none; position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.45); backdrop-filter: blur(2px);
+}
+.cp-overlay.visible { display: flex; align-items: flex-end; justify-content: center; }
+.cp-sheet {
+  width: 100%; max-width: 520px; max-height: 85vh;
+  background: var(--card); border-radius: 20px 20px 0 0;
+  padding: 0 20px 24px; overflow-y: auto;
+  animation: cpSlideUp 0.25s var(--ease-out);
+}
+@keyframes cpSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.cp-handle { display: flex; justify-content: center; padding: 10px 0 14px; cursor: pointer; }
+.cp-handle-bar { width: 36px; height: 4px; background: var(--surface-muted); border-radius: 2px; }
+.cp-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.cp-score { font-size: 28px; font-weight: 800; line-height: 1; }
+.cp-score.score-high { color: var(--success); }
+.cp-score.score-mid  { color: var(--warning); }
+.cp-score.score-low  { color: var(--destructive); }
+.cp-bar-wrap { height: 6px; background: var(--surface-subtle); border-radius: 4px; overflow: hidden; margin-bottom: 16px; }
+.cp-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 12px; }
+.cp-formula {
+  font-size: 12px; font-weight: 600; color: var(--brand);
+  background: var(--brand-tint); border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 12px; line-height: 1.5;
+}
+.cp-detail { margin-bottom: 16px; }
+.cp-section-title { font-size: 13px; font-weight: 700; color: var(--text-primary); margin: 12px 0 6px; }
+.cp-step {
+  font-size: 12px; color: var(--text-secondary); line-height: 1.7;
+  padding: 2px 0 2px 8px; border-left: 2px solid var(--brand-tint);
+  margin-bottom: 2px;
+}
+.cp-line { font-size: 12px; color: var(--text-tertiary); line-height: 1.6; padding-left: 8px; }
+.cp-close-btn {
+  width: 100%; height: 44px; border: none; border-radius: var(--radius);
+  background: var(--surface-subtle); color: var(--text-secondary);
+  font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.cp-close-btn:hover { background: var(--surface-muted); }
 .cs-section-banner {
   grid-column: 1 / -1;
   background: var(--brand-tint);
@@ -1062,6 +1377,46 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   font-size: 13px; line-height: 1.5; color: var(--text-primary);
 }
 .stock-popup.visible { display: block; }
+
+.compare-fab-group {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.compare-fab-group[hidden] { display: none; }
+
+.compare-fab-clear,
+.compare-fab-open {
+  height: 44px;
+  border: none;
+  border-radius: 999px;
+  padding: 0 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 14px 30px rgba(15,23,42,0.22);
+}
+
+.compare-fab-clear {
+  background: var(--card);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.compare-fab-open {
+  background: var(--brand);
+  color: var(--primary-foreground);
+}
+
+.compare-fab-open:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .popup-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
 .popup-name   { font-size: 15px; font-weight: 700; color: var(--text-primary); }
 .popup-ticker { font-size: 12px; color: var(--text-tertiary); font-weight: 500; }
@@ -1107,6 +1462,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         </svg>
         <input id="search-input" class="search-input" type="text" placeholder="종목명 또는 티커 검색...">
       </div>
+      <div id="oneliner-filter-chip" class="oneliner-filter-chip" hidden></div>
       <button id="btn-scan" class="btn-scan">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -1124,6 +1480,12 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
         내보내기
+      </button>
+      <button id="btn-share" class="btn-scan" style="background:#00C073;" onclick="generateShareCard()" title="선택 종목 공유 카드 생성">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+        </svg>
+        공유 카드 <span id="share-count" style="background:rgba(255,255,255,0.3);border-radius:8px;padding:0 6px;margin-left:2px;font-size:11px;">0</span>
       </button>
     </div>
     <span class="topbar-date" id="topbar-date"></span>
@@ -1147,11 +1509,11 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
       <div id="filter-chips" class="filter-chips">
         <button class="chip active" data-filter="all">전체</button>
         <button class="chip" data-filter="watchlist">⭐ 워치리스트 <span class="chip-count" id="chip-watch-count">0</span></button>
-        <button class="chip" data-filter="entry_green" title="진입 타이밍 점수 70+ (RSI·BB·VWAP·52주·MACD·레짐 종합)">🟢 진입좋음</button>
-        <button class="chip" data-filter="strong" title="시그널이 BREAKOUT / STRONG LEADER / MOMENTUM 인 종목">🔥 강력매수</button>
-        <button class="chip" data-filter="near_high" title="52주 신고가 근접 종목 (NearHighPass)">📈 신고가</button>
-        <button class="chip" data-filter="oversold" title="RSI &lt; 30 — 과매도 구간">📉 RSI&lt;30</button>
-        <button class="chip" data-filter="intraday" title="ORB / NR7 / BB Mean-Reversion 단타 신호 보유">⚡ 단타신호</button>
+        <button class="chip" data-filter="entry_green" title="진입점수 70점 이상 — 6가지 기술 신호(RSI·볼린저밴드·VWAP·52주 위치·MACD·시장 국면)가 모두 양호한 종목">🟢 진입좋음</button>
+        <button class="chip" data-filter="strong" title="시그널이 돌파(BREAKOUT)·강한 주도주(STRONG LEADER)·강모멘텀(MOMENTUM) 중 하나인 종목">🔥 강력매수</button>
+        <button class="chip" data-filter="near_high" title="52주 신고가에 근접한 종목 — 추세 돌파 후보">📈 신고가</button>
+        <button class="chip" data-filter="oversold" title="RSI 30 미만 — 과매도 반등 후보">📉 RSI&lt;30</button>
+        <button class="chip" data-filter="intraday" title="당일 단타 신호 보유 — 시초가 돌파(ORB), 좁은범위(NR7), 볼린저 평균회귀 중 하나 이상 트리거">⚡ 단타신호</button>
       </div>
     </div>
   </div>
@@ -1161,6 +1523,11 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
     <!-- Sidebar: Sector List -->
     <aside class="sidebar">
       <div class="sidebar-title">섹터</div>
+      <div class="sector-heatmap-wrap">
+        <div id="sector-heatmap" class="sector-heatmap-grid">
+          <div class="sector-heatmap-empty">스캔 완료 후 섹터 히트맵을 표시합니다.</div>
+        </div>
+      </div>
       <div id="filter-list">
         <div style="padding:20px 10px;color:var(--text-tertiary);font-size:12px;">로딩 중...</div>
       </div>
@@ -1172,22 +1539,24 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         <table class="stock-table">
           <thead>
             <tr>
+              <th style="width:32px;" class="center"><input type="checkbox" id="select-all-cb" onclick="toggleSelectAll()" title="전체 선택/해제" style="cursor:pointer;width:16px;height:16px;accent-color:#3182F6;"></th>
               <th style="width:32px;" class="center" title="클릭으로 워치리스트 추가/제거"></th>
               <th style="width:44px;" class="center">#</th>
               <th>종목</th>
               <th class="desc-col">설명</th>
-              <th>섹터</th>
+              <th class="sortable" data-sort="Sector">섹터 <span class="sort-arrow"></span></th>
               <th class="score-col sortable" data-sort="TotalScore" title="5개 전략(균형/모멘텀/가치/CAN SLIM/스캘핑)을 평균 60% + 최고 40% 로 통합한 복합 점수">점수 <span class="sort-arrow"></span></th>
               <th>시그널</th>
               <th class="right sortable" data-sort="Price">현재가 <span class="sort-arrow"></span></th>
               <th class="right sortable" data-sort="DayChg">등락 <span class="sort-arrow"></span></th>
               <th class="right sortable" data-sort="RSI">RSI <span class="sort-arrow"></span></th>
-              <th class="right sortable" data-sort="TargetUpside">목표가↑ <span class="sort-arrow"></span></th>
+              <th class="right sortable" data-sort="TargetUpside" title="현재 점수 계산에 사용되는 메인 목표가 대비 상승여력 — 기본은 노무라식 목표가, 없으면 DCF 폴백">메인 목표가↑ <span class="sort-arrow"></span></th>
+              <th class="right sortable" data-sort="BrokerTarget" title="증권사 컨센서스 목표가 — KR: 네이버 증권 국내 증권사 평균 / US: Yahoo Finance Analyst Mean Target">증권사 목표가 <span class="sort-arrow"></span></th>
               <th class="reason-col">핵심 이유</th>
             </tr>
           </thead>
           <tbody id="stock-list">
-            <tr><td colspan="12" class="state-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</td></tr>
+            <tr><td colspan="14" class="state-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</td></tr>
           </tbody>
         </table>
       </div>
@@ -1211,6 +1580,12 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         <p id="dp-about" style="font-size:12px;color:var(--text-tertiary);line-height:1.5;margin:0;
            display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;"></p>
       </div>
+      <button onclick="captureDetail()" title="이 종목 분석을 이미지로 캡쳐" style="height:32px;padding:0 12px;background:#00C073;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px;margin-right:8px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+        </svg>
+        캡쳐
+      </button>
       <button class="dp-close-btn" onclick="closeDetailBtn()" aria-label="닫기">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -1222,19 +1597,25 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
     <!-- 풀폭 차트 섹션 (헤더 바로 아래에 우선 노출) -->
     <section class="dp-chart-section">
+      <!-- 1008-풀 한줄평 포스터 (4축 카드보다 먼저 표시) -->
+      <div id="dp-fa-haiku" class="dp-oneliner-poster" style="display:none;"></div>
       <div id="dp-fouraxis-loading" style="text-align:center;padding:40px;color:var(--text-tertiary);display:none;">차트 생성 중...</div>
       <div id="dp-fouraxis-error"   style="text-align:center;padding:24px;color:var(--destructive);display:none;"></div>
       <div id="dp-fouraxis-header" style="display:none;padding:14px 20px 8px;">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px;font-weight:600;">📈 지금 사기 좋은 타이밍인가? <span style="font-weight:400;color:var(--text-tertiary);">— 차트의 4가지 신호만 평가</span></div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
           <span id="dp-fa-phase" style="font-size:15px;font-weight:700;color:var(--text-primary);"></span>
-          <span id="dp-fa-stars" style="font-size:14px;color:var(--warning);"></span>
+          <span id="dp-fa-stars" style="font-size:16px;color:var(--warning);"></span>
+          <span id="dp-fa-stars-meaning" style="font-size:12px;color:var(--text-secondary);font-weight:600;"></span>
         </div>
-        <div id="dp-fa-haiku" style="font-size:13px;color:var(--text-secondary);font-style:italic;margin-bottom:12px;"></div>
+        <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:8px;line-height:1.5;background:var(--bg-tertiary);padding:6px 10px;border-radius:6px;">
+          💡 별점은 <b>지금 진입해도 될지</b>만 봅니다. 회사의 펀더멘털이나 가치는 아래의 <b>종합점수</b>가 따로 평가해요. 그래서 ★5인데 종합점수가 낮을 수도 있어요(차트는 좋지만 회사는 비싸거나 약함).
+        </div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
-          <div class="dp-axis-item"><div class="dp-axis-label">추세</div><div class="dp-axis-val"><span id="dp-fa-trend-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-trend-verdict"></div></div>
-          <div class="dp-axis-item"><div class="dp-axis-label">모멘텀</div><div class="dp-axis-val"><span id="dp-fa-mom-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-mom-verdict"></div></div>
-          <div class="dp-axis-item"><div class="dp-axis-label">변동성</div><div class="dp-axis-val"><span id="dp-fa-vol-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-vol-verdict"></div></div>
-          <div class="dp-axis-item"><div class="dp-axis-label">수급</div><div class="dp-axis-val"><span id="dp-fa-volm-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-volm-verdict"></div></div>
+          <div class="dp-axis-item"><div class="dp-axis-label">추세<div style="font-size:9px;font-weight:500;color:var(--text-tertiary);margin-top:1px;">(이동평균 기울기·정렬)</div></div><div class="dp-axis-val"><span id="dp-fa-trend-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-trend-verdict"></div></div>
+          <div class="dp-axis-item"><div class="dp-axis-label">모멘텀<div style="font-size:9px;font-weight:500;color:var(--text-tertiary);margin-top:1px;">(최근 가격 가속도)</div></div><div class="dp-axis-val"><span id="dp-fa-mom-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-mom-verdict"></div></div>
+          <div class="dp-axis-item"><div class="dp-axis-label">변동성<div style="font-size:9px;font-weight:500;color:var(--text-tertiary);margin-top:1px;">(BB 폭·ATR 안정성)</div></div><div class="dp-axis-val"><span id="dp-fa-vol-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-vol-verdict"></div></div>
+          <div class="dp-axis-item"><div class="dp-axis-label">수급<div style="font-size:9px;font-weight:500;color:var(--text-tertiary);margin-top:1px;">(거래량 추세·이격도)</div></div><div class="dp-axis-val"><span id="dp-fa-volm-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-volm-verdict"></div></div>
         </div>
       </div>
       <div id="dp-fouraxis-chart-wrap" style="display:none;padding:12px 20px;">
@@ -1250,7 +1631,8 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
       <!-- Left: Hero + Metrics -->
       <div class="dp-left">
         <div class="dp-hero-card" style="position:relative;overflow:hidden;">
-          <div class="dp-hero-label">종합 점수</div>
+          <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;margin-bottom:2px;">🏆 이 회사 자체는 좋은가?</div>
+          <div class="dp-hero-label" style="font-size:13px;">종합 점수 <span style="font-size:10px;font-weight:500;color:var(--text-tertiary);margin-left:4px;">(재무·밸류·기술 모두 합산)</span></div>
           <div class="dp-hero-score-row">
             <span id="dp-score" class="dp-score-num">—</span>
             <span class="dp-score-unit">점</span>
@@ -1276,14 +1658,23 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           </div>
           <div class="dp-metric-row">
             <span class="dp-metric-label">
-              목표가
+              메인 목표가
               <span id="dp-target-src" class="dp-metric-sublabel"></span>
             </span>
-            <span id="dp-target" class="dp-metric-val">—</span>
+            <span style="display:flex;align-items:baseline;gap:6px;">
+              <span id="dp-target" class="dp-metric-val">—</span>
+              <span id="dp-dcf-upside" style="font-size:12px;font-weight:700;"></span>
+            </span>
           </div>
           <div class="dp-metric-row">
-            <span class="dp-metric-label">상승여력</span>
-            <span id="dp-upside" class="dp-metric-val">—</span>
+            <span class="dp-metric-label">
+              증권사 목표가
+              <span id="dp-broker-src" class="dp-metric-sublabel">컨센서스</span>
+            </span>
+            <span style="display:flex;align-items:baseline;gap:6px;">
+              <span id="dp-broker-target" class="dp-metric-val">—</span>
+              <span id="dp-broker-upside" style="font-size:12px;font-weight:700;"></span>
+            </span>
           </div>
           <div class="dp-metric-row">
             <span class="dp-metric-label">RSI</span>
@@ -1329,6 +1720,10 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
               <span class="dp-entry-px-val dp-entry-px-tp" id="dp-entry-px-t2">—</span>
             </div>
           </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:6px 10px;background:var(--surface-subtle);border-radius:8px;font-size:11px;">
+            <span id="dp-entry-stop-method" style="color:var(--text-tertiary);">—</span>
+            <span id="dp-entry-rr" style="font-weight:700;">—</span>
+          </div>
         </div>
 
         <div class="dp-axis-grid">
@@ -1362,6 +1757,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           <button class="dp-tab-btn active" data-tab="canslim" onclick="switchDpTab('canslim')">CAN SLIM 분석</button>
           <button class="dp-tab-btn" data-tab="tech" onclick="switchDpTab('tech')">기술 지표</button>
           <button class="dp-tab-btn" data-tab="finance" onclick="switchDpTab('finance')">재무 지표</button>
+          <button class="dp-tab-btn" data-tab="dartnews" id="dp-btn-dartnews" onclick="switchDpTab('dartnews')" style="display:none;">공시·뉴스</button>
         </nav>
         <div class="dp-tab-panel active" id="dp-tab-canslim">
           <div id="dp-breakdown-list"></div>
@@ -1372,6 +1768,9 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         <div class="dp-tab-panel" id="dp-tab-finance">
           <div id="dp-finance-content" style="padding:16px;display:flex;flex-direction:column;gap:10px;"></div>
         </div>
+        <div class="dp-tab-panel" id="dp-tab-dartnews">
+          <div id="dp-dartnews-content" style="padding:16px;"></div>
+        </div>
       </div>
     </div>
 
@@ -1381,6 +1780,28 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 </div>
 
 <div id="stock-popup" class="stock-popup"></div>
+<div id="compare-fab-group" class="compare-fab-group" hidden>
+  <button id="compare-clear-btn" class="compare-fab-clear" type="button" onclick="clearCompareSelection()">비교 초기화</button>
+  <button id="compare-open-btn" class="compare-fab-open" type="button" onclick="openCompareView()" disabled>비교 (0)</button>
+</div>
+<!-- ── 공유 카드 모달 ──────────────────────────────────────── -->
+<div id="share-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;" onclick="if(event.target===this)closeShareModal()">
+  <div style="background:var(--card);border-radius:16px;padding:24px;max-width:660px;width:95%;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-modal);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="font-size:16px;font-weight:700;">공유 카드 미리보기</h3>
+      <div style="display:flex;gap:8px;">
+        <button onclick="downloadShareCard()" style="height:34px;padding:0 16px;background:#3182F6;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">다운로드</button>
+        <button onclick="copyShareCard()" style="height:34px;padding:0 16px;background:#00C073;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">복사</button>
+        <button onclick="closeShareModal()" style="height:34px;padding:0 12px;background:var(--surface-subtle);color:var(--text-secondary);border:none;border-radius:10px;font-size:13px;cursor:pointer;">닫기</button>
+      </div>
+    </div>
+    <div id="share-card-preview" style="text-align:center;"></div>
+  </div>
+</div>
+<!-- 오프스크린 카드 렌더링 영역 -->
+<div id="share-card-render" style="position:fixed;left:-9999px;top:0;z-index:-1;"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

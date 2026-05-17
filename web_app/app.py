@@ -26,8 +26,6 @@ if _BASE not in sys.path:
     sys.path.insert(0, _BASE)
 
 from flask import Flask, request, jsonify, render_template
-from engine_adapter import ScanAdapter
-from one_liner import annotate as annotate_one_liners
 from config_manager import (
     SETTINGS_SCHEMA, load_config, save_config,
     apply_to_environ, get_masked, get_connection_status,
@@ -94,10 +92,20 @@ def _build_yf_candidates(ticker: str, market: str) -> list[str]:
     return [c for c in candidates if c and not (c in seen or seen.add(c))]
 
 
-def _make_adapter() -> ScanAdapter:
+def _get_scan_adapter_cls():
+    from engine_adapter import ScanAdapter
+    return ScanAdapter
+
+
+def _annotate_one_liners(results: list):
+    from one_liner import annotate
+    return annotate(results)
+
+
+def _make_adapter():
     market   = request.args.get("market",   "US")
     strategy = request.args.get("strategy", "BALANCED")
-    return ScanAdapter(market=market, strategy=strategy)
+    return _get_scan_adapter_cls()(market=market, strategy=strategy)
 
 
 def _get_config_int(name: str, default: int, minimum: int | None = None, maximum: int | None = None) -> int:
@@ -475,7 +483,7 @@ def api_scan():
             logging.warning("history annotate/save failed: %s", he)
         # 촌철살인 한줄평 추가
         try:
-            results = annotate_one_liners(results)
+            results = _annotate_one_liners(results)
         except Exception as oe:
             logging.warning("one_liner annotate failed: %s", oe)
         # AgentQuant 융합 (상위 N개)
@@ -499,7 +507,7 @@ def api_ticker(ticker: str):
         if result is None:
             return jsonify({"error": "해당 티커의 데이터를 찾을 수 없습니다."}), 404
         try:
-            result = annotate_one_liners([result])[0]
+            result = _annotate_one_liners([result])[0]
         except Exception as oe:
             logging.warning("one_liner annotate (ticker) failed: %s", oe)
         # AgentQuant 진입 점수 융합 (가중치 0.6 기존 / 0.4 AQ)
@@ -541,7 +549,7 @@ def api_ai_comment(ticker: str):
         return jsonify(cached)
 
     try:
-        adapter = ScanAdapter(market=market, strategy=strategy)
+        adapter = _get_scan_adapter_cls()(market=market, strategy=strategy)
         result = adapter.analyze_ticker(ticker)
         if result is None:
             return jsonify({"error": "종목 데이터를 찾을 수 없습니다."}), 404

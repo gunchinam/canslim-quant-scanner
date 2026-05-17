@@ -46,6 +46,19 @@ app = Flask(
     static_folder="static",
 )
 
+
+def _render_deployment() -> bool:
+    return bool((os.environ.get("RENDER") or "").strip())
+
+
+def _swing_scanner_enabled() -> bool:
+    raw = (os.environ.get("ENABLE_SWING_SCANNER") or "").strip().lower()
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return not _render_deployment()
+
 _AI_COMMENT_TTL_SEC = 3600
 _ai_comment_cache: dict[tuple[str, str, str], dict[str, object]] = {}
 _ai_comment_cache_lock = threading.Lock()
@@ -297,6 +310,16 @@ def _cors(response):
 @app.route("/")
 def index():
     return render_template("scanner.html")
+
+
+@app.route("/healthz")
+def healthz():
+    return jsonify({
+        "ok": True,
+        "service": "canslim-quant-scanner",
+        "render": _render_deployment(),
+        "swing_scanner_enabled": _swing_scanner_enabled(),
+    })
 
 
 @app.route("/detail/<ticker>")
@@ -1011,6 +1034,9 @@ def _is_swing_scan_window() -> bool:
 def _start_swing_scanner():
     """SWING-MOM 스캔 알리미를 백그라운드 서브프로세스로 실행."""
     global _swing_proc
+    if not _swing_scanner_enabled():
+        logging.info("SWING-MOM scanner disabled in this deployment")
+        return
     script = os.path.join(_BASE, "swing_scan", "scripts", "swing_mom_scan_alert.py")
     if not os.path.exists(script):
         logging.warning("swing_mom_scan_alert.py 미존재 — 스캔 알리미 비활성")
@@ -1078,6 +1104,8 @@ def api_swing_scanner_status():
 
 @app.route("/api/swing-scanner/start", methods=["POST"])
 def api_swing_scanner_start():
+    if not _swing_scanner_enabled():
+        return jsonify({"ok": False, "error": "disabled_in_this_deployment"}), 403
     _start_swing_scanner()
     return jsonify({"ok": True})
 

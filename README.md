@@ -228,3 +228,4 @@ python backtest/score_variants_test.py
 - On Render, create a new Blueprint or Web Service from this repository.
 - Set any real API credentials in the Render dashboard as environment variables. Do not commit them.
 - The `/settings` page writes to local `config.json`, which is not persistent across Render redeploys or instance restarts. Use Render environment variables for production settings.
+- The background SWING scanner is disabled by default on Render. Set `ENABLE_SWING_SCANNER=true` only if you intentionally want that behavior in a suitable environment.

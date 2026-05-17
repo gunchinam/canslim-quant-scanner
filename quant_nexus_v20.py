@@ -3587,13 +3587,19 @@ class QuantNexusApp:
                     continue
                 except Exception as _e:
                     logging.warning("[yf] history failed %s: %s", ticker, _e)
-                    return None
+                    time.sleep(1.5 * (_attempt + 1))
+                    continue
             if hist is None:
                 # 마지막 시도로 1y 폴백
                 try:
                     hist = stock.history(period="1y")
                 except Exception:
-                    return None
+                    hist = None
+            if hist is None:
+                try:
+                    hist = stock.history(period="6mo")
+                except Exception:
+                    hist = None
             if hist is None or hist.empty or len(hist) < 30:
                 return None
 
@@ -8880,7 +8886,7 @@ class QuantNexusApp:
                 "AI Platform & Cloud":["ADBE","AI","AMZN","BBAI","BOX","CFLT","CRM","DDOG",
                                        "DOCN","ESTC","GOOGL","GTLB","HUBS","IBM","INTU",
                                        "MDB","MNDY","MSFT","NOW","NTNX","ORCL","PATH","PLTR",
-                                       "RBRK","SMAR","SNOW","SOUN","TEAM","TEM","WDAY"],
+                                       "RBRK","SNOW","SOUN","TEAM","TEM","WDAY"],
 
                 # AI 인프라·데이터센터
                 "AI Infrastructure":  ["AMT","ANET","APLD","CLSK","CLS","COHR","CORZ","CRDO","CRWV",
@@ -8895,7 +8901,7 @@ class QuantNexusApp:
                 # SaaS·소프트웨어 고성장
                 "SaaS & Software":    ["ADBE","APP","BILL","CRM","DOCU","DUOL","GLOB","GTLB",
                                        "HUBS","JAMF","MGNI","MNDY","NOW","PCTY","RAMP",
-                                       "SHOP","SMAR","TWLO","TTD","VEEV","ZM"],
+                                       "SHOP","TWLO","TTD","VEEV","ZM"],
             },
 
             # ── 2. AI 반도체 ──────────────────────────────────────────────

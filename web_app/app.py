@@ -10,6 +10,7 @@ import os
 import io
 import base64
 import json
+import html
 import logging
 import subprocess
 import threading
@@ -25,7 +26,7 @@ _BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _BASE not in sys.path:
     sys.path.insert(0, _BASE)
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, Response
 from config_manager import (
     SETTINGS_SCHEMA, load_config, save_config,
     apply_to_environ, get_masked, get_connection_status,
@@ -100,6 +101,15 @@ def _get_scan_adapter_cls():
 def _annotate_one_liners(results: list):
     from one_liner import annotate
     return annotate(results)
+
+
+def _render_static_template(name: str, replacements: dict[str, str] | None = None) -> Response:
+    path = os.path.join(os.path.dirname(__file__), "templates", name)
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+    for src, dst in (replacements or {}).items():
+        content = content.replace(src, dst)
+    return Response(content, mimetype="text/html; charset=utf-8")
 
 
 def _make_adapter():
@@ -317,7 +327,7 @@ def _cors(response):
 
 @app.route("/")
 def index():
-    return render_template("scanner.html")
+    return _render_static_template("scanner.html")
 
 
 @app.route("/healthz")
@@ -332,7 +342,10 @@ def healthz():
 
 @app.route("/detail/<ticker>")
 def detail(ticker: str):
-    return render_template("detail.html", ticker=ticker)
+    safe_ticker = html.escape(ticker, quote=True)
+    return _render_static_template("detail.html", {
+        "{{ ticker }}": safe_ticker,
+    })
 
 
 @app.route("/compare")
@@ -340,12 +353,17 @@ def compare_page():
     raw = request.args.get("tickers", "")
     tickers = [tk.strip() for tk in raw.split(",") if tk.strip()][:4]
     market = (request.args.get("market") or "US").upper()
-    return render_template("compare.html", tickers=tickers, market=market)
+    return _render_static_template("compare.html", {
+        "{{ tickers|tojson }}": json.dumps(tickers, ensure_ascii=False),
+        "{{ market|tojson }}": json.dumps(market, ensure_ascii=False),
+    })
 
 
 @app.route("/settings")
 def settings_page():
-    return render_template("settings.html", schema=SETTINGS_SCHEMA)
+    return _render_static_template("settings.html", {
+        "{{ schema | tojson }}": json.dumps(SETTINGS_SCHEMA, ensure_ascii=False),
+    })
 
 
 # ── 설정 API ─────────────────────────────────────────────────────────

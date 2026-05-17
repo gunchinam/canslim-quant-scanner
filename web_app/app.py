@@ -1096,4 +1096,11 @@ if __name__ == "__main__":
     # debug 모드 리로더에 의한 중복 실행 방지
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
         _start_swing_scanner()
-    app.run(debug=True, port=5000, host="0.0.0.0")
+    debug = (os.environ.get("FLASK_DEBUG") or "0").strip().lower() in ("1", "true", "yes")
+    host = (os.environ.get("FLASK_HOST") or "0.0.0.0").strip() or "0.0.0.0"
+    port_raw = (os.environ.get("PORT") or os.environ.get("FLASK_PORT") or "5000").strip()
+    try:
+        port = int(port_raw)
+    except ValueError:
+        port = 5000
+    app.run(debug=debug, port=port, host=host)

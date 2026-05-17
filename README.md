@@ -219,3 +219,12 @@ python backtest/score_variants_test.py
 - 윌리엄 오닐, *How to Make Money in Stocks* (CAN SLIM 원전)
 - Fama & French, *Common risk factors in the returns on stocks and bonds* (1993)
 - Carhart, *On Persistence in Mutual Fund Performance* (1997)
+
+---
+
+## Render Deployment
+
+- This repo includes `render.yaml` for a Render web service and uses `gunicorn --bind 0.0.0.0:$PORT wsgi:app`.
+- On Render, create a new Blueprint or Web Service from this repository.
+- Set any real API credentials in the Render dashboard as environment variables. Do not commit them.
+- The `/settings` page writes to local `config.json`, which is not persistent across Render redeploys or instance restarts. Use Render environment variables for production settings.

@@ -519,6 +519,22 @@ def api_ticker(ticker: str):
                 result["_YF_Available"] = True
             except Exception as ye:
                 logging.debug("yfinance sentiment failed for %s: %s", ticker, ye)
+            # Finnhub 데이터 (내부자 거래, 애널리스트 추천 변화, 실적 서프라이즈)
+            try:
+                from finnhub_api import get_sentiment_data, is_available as fh_ok
+                if fh_ok():
+                    fh = get_sentiment_data(ticker)
+                    if fh.get("available"):
+                        result["_FH_InsiderNet"] = fh["insider_net_shares"]
+                        result["_FH_InsiderCount"] = fh["insider_tx_count"]
+                        result["_FH_RecBuy"] = fh["rec_strong_buy"] + fh["rec_buy"]
+                        result["_FH_RecSell"] = fh["rec_sell"]
+                        result["_FH_RecChange"] = fh["rec_change"]
+                        result["_FH_EarnSurprise"] = fh["earnings_surprise_pct"]
+                        result["_FH_EarnStreak"] = fh["earnings_beat_streak"]
+                        result["_FH_Available"] = True
+            except Exception as fe:
+                logging.debug("Finnhub sentiment failed for %s: %s", ticker, fe)
         try:
             result = _annotate_one_liners([result])[0]
         except Exception as oe:

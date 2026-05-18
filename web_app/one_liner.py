@@ -107,6 +107,25 @@ def _data_tag(d: dict, bucket: str) -> str:
         pass
     # NEUTRAL: 태그 없음
 
+    # Finnhub 센티먼트 태그 (US 종목)
+    if d.get("_FH_Available"):
+        earn_surp = _num(d.get("_FH_EarnSurprise"))
+        earn_streak = int(d.get("_FH_EarnStreak") or 0)
+        rec_change = d.get("_FH_RecChange", "")
+        insider_net = int(d.get("_FH_InsiderNet") or 0)
+        if abs(earn_surp) >= 1:
+            p.append(f"실적 {earn_surp:+.1f}%")
+        if earn_streak >= 3:
+            p.append(f"연속비트 {earn_streak}Q")
+        if rec_change == "upgrade":
+            p.append("추천상향")
+        elif rec_change == "downgrade":
+            p.append("추천하향")
+        if insider_net > 0:
+            p.append("내부자매수")
+        elif insider_net < -10000:
+            p.append("내부자매도")
+
     # yfinance 센티먼트 태그 (US 종목)
     if d.get("_YF_Available"):
         short_pct = _num(d.get("_YF_ShortPctFloat"))
@@ -1343,6 +1362,56 @@ _METRIC_PHRASES: dict[tuple[str, str], list[str]] = {
         "현재가가 목표가를 넘어선 상태라 추가 상승 여력이 제한적임",
         "애널리스트 목표가를 이미 돌파했으면 차익실현 구간일 수 있음",
     ],
+    # ── Finnhub: 내부자 거래 ──
+    ("MOMENTUM_LEADER", "insider_buy"): [
+        "내부자가 직접 사고 있는 상승 추세는 가장 강한 확신 시그널임",
+        "CEO/임원이 자기 돈으로 사는 건 실적에 자신 있다는 뜻임",
+    ],
+    ("TRUE_VALUE", "insider_buy"): [
+        "내부자 매수가 나오는 저평가 종목은 리레이팅 전조일 수 있음",
+        "경영진이 직접 줍줍하면 밸류 재발견 시점이 가까운 거임",
+    ],
+    ("FALLING_KNIFE", "insider_sell"): [
+        "내부자까지 매도하는 종목은 펀더멘탈 우려가 있다는 시그널임",
+        "임원들이 팔고 나가면 반등을 기대하기 어려운 구간임",
+    ],
+    ("NEUTRAL", "insider_sell"): [
+        "내부자 매도가 나오고 있어서 방향 잡힐 때 주의 필요함",
+    ],
+    # ── Finnhub: 애널리스트 추천 변화 ──
+    ("MOMENTUM_LEADER", "analyst_upgrade"): [
+        "애널리스트 업그레이드 나오면서 모멘텀에 명분이 더해진 거임",
+        "추천 상향이 나오는 상승 추세는 기관 매수를 끌어올 수 있음",
+    ],
+    ("TRUE_VALUE", "analyst_upgrade"): [
+        "애널리스트 업그레이드가 나오면 저평가 해소의 트리거가 될 수 있음",
+    ],
+    ("FALLING_KNIFE", "analyst_downgrade"): [
+        "애널리스트 다운그레이드까지 나오면 바닥이 더 아래일 수 있음",
+        "추천 하향은 기관 매도를 유발할 수 있어서 낙폭 확대 주의임",
+    ],
+    ("NEUTRAL", "analyst_downgrade"): [
+        "애널리스트 다운그레이드 나왔으니 하방 리스크 체크해야 됨",
+    ],
+    # ── Finnhub: 실적 서프라이즈 ──
+    ("MOMENTUM_LEADER", "earnings_beat"): [
+        "실적 서프라이즈까지 나오면 추세의 펀더멘탈 뒷받침이 확인된 거임",
+        "어닝 비트 + 모멘텀이면 기관 목표가 상향 나올 가능성 높음",
+    ],
+    ("TRUE_VALUE", "earnings_beat"): [
+        "실적이 예상치를 넘었는데 주가가 안 따라갔으면 기회일 수 있음",
+    ],
+    ("FALLING_KNIFE", "earnings_miss"): [
+        "실적까지 미스 나오면 하락의 근거가 펀더멘탈에 있는 거임",
+        "어닝 미스에 낙폭까지 크면 반등보다 추가 하락 확률이 높음",
+    ],
+    ("EARNINGS_BEAT", "earnings_streak"): [
+        "4분기 연속 어닝 비트면 실적으로 증명하는 진짜 성장주임",
+        "연속 서프라이즈는 시장이 아직 이 종목의 성장력을 과소평가한 거임",
+    ],
+    ("MOMENTUM_LEADER", "earnings_streak"): [
+        "4분기 연속 어닝 비트에 모멘텀까지 살아 있으면 추세 믿어도 됨",
+    ],
     # ── KIS 수급: 외인 순매수 ──
     ("MOMENTUM_LEADER", "foreign_buy"): [
         "외인이 사고 있는 상태에서 모멘텀까지 살아 있으면 추세 신뢰도 높음",
@@ -1479,6 +1548,31 @@ def _metric_tags(d: dict) -> list[str]:
             tags.append("big_upside")
         elif target_gap <= -15:
             tags.append("below_target")
+
+    # Finnhub 데이터 (US 종목)
+    if d.get("_FH_Available"):
+        insider_net = int(d.get("_FH_InsiderNet") or 0)
+        rec_change = d.get("_FH_RecChange", "")
+        earn_surp = _num(d.get("_FH_EarnSurprise"))
+        earn_streak = int(d.get("_FH_EarnStreak") or 0)
+        # 내부자 순매수/순매도 (유의미한 규모)
+        if insider_net > 0:
+            tags.append("insider_buy")
+        elif insider_net < -10000:
+            tags.append("insider_sell")
+        # 애널리스트 추천 변화
+        if rec_change == "upgrade":
+            tags.append("analyst_upgrade")
+        elif rec_change == "downgrade":
+            tags.append("analyst_downgrade")
+        # 실적 서프라이즈
+        if earn_surp >= 5:
+            tags.append("earnings_beat")
+        elif earn_surp <= -5:
+            tags.append("earnings_miss")
+        # 연속 서프라이즈
+        if earn_streak >= 4:
+            tags.append("earnings_streak")
 
     # KIS 투자자 매매동향 (KR 종목만)
     if d.get("_KIS_Available"):

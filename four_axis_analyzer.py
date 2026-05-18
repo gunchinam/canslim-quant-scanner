@@ -15,6 +15,26 @@ from haiku_lines import pick_haiku
 
 
 # ───────── 보조 지표 ──────────────────────────────────────────────
+def _ols_slope(x) -> float:
+    """유한값만으로 1차 회귀 기울기를 직접 계산.
+
+    np.polyfit/lstsq는 윈도우에 NaN·inf·퇴화 입력이 들어오면
+    LAPACK(DGER) "illegal value" 예외로 차트 전체를 죽인다.
+    여기서는 LAPACK을 거치지 않고 닫힌형 OLS로 안전하게 산출한다.
+    """
+    arr = np.asarray(x, dtype=float)
+    mask = np.isfinite(arr)
+    if mask.sum() < 2:
+        return np.nan
+    t = np.arange(arr.size, dtype=float)[mask]
+    y = arr[mask]
+    t -= t.mean()
+    denom = float((t * t).sum())
+    if denom <= 0.0:
+        return np.nan
+    return float((t * (y - y.mean())).sum() / denom)
+
+
 def _ema(s: pd.Series, span: int) -> pd.Series:
     return s.ewm(span=span, adjust=False).mean()
 
@@ -135,9 +155,8 @@ class FourAxisAnalyzer:
         h["OBV"]    = _obv(h["Close"], h["Volume"])
         h["VWAP20"] = _vwap_rolling(h["High"], h["Low"], h["Close"], h["Volume"], 20)
         # OBV 단기 기울기 (20일 회귀)
-        h["OBV_SLOPE"] = h["OBV"].rolling(20).apply(
-            lambda x: np.polyfit(np.arange(len(x)), x, 1)[0] if len(x)==20 else np.nan,
-            raw=True
+        h["OBV_SLOPE"] = h["OBV"].rolling(20, min_periods=2).apply(
+            _ols_slope, raw=True
         )
 
     # ---------- 2) 추세 ------------------------------------------

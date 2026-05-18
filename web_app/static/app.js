@@ -1117,6 +1117,7 @@ async function openDetail(ticker) {
   const panel   = document.getElementById('detail-panel');
   if (!overlay || !panel) { location.href = `/detail/${encodeURIComponent(ticker)}?market=${currentMarket}&strategy=${currentStrategy}`; return; }
 
+  const seq = ++_detailSeq;
   _clearPanelDetail();
   overlay.classList.add('visible');
   panel.classList.add('open');
@@ -1128,22 +1129,24 @@ async function openDetail(ticker) {
 
   // 4축 차트 + 종목 상세 + AQ 시그널을 모두 병렬로 요청
   loadDpFourAxis(ticker);
-  _loadAqSignal(ticker);
+  _loadAqSignal(ticker, seq);
 
   try {
     const p   = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
     const res = await fetch(`/api/ticker/${encodeURIComponent(ticker)}?${p}`);
+    if (seq !== _detailSeq) return; // 종목 전환됨 — stale 응답 무시
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     _populatePanelDetail(data, /* skipFourAxis */ true);
   } catch (e) {
+    if (seq !== _detailSeq) return;
     console.error('openDetail 실패:', e);
     if (!cached) setText('dp-name', '데이터를 불러올 수 없습니다');
   }
 }
 
-async function _loadAqSignal(ticker) {
+async function _loadAqSignal(ticker, seq) {
   const aqRow = document.getElementById('dp-aq-row');
   if (!aqRow) return;
   // 로딩 표시
@@ -1156,6 +1159,7 @@ async function _loadAqSignal(ticker) {
   if (rEl) rEl.innerHTML = '';
   try {
     const res = await fetch(`/api/aq_signal/${encodeURIComponent(ticker)}?market=${currentMarket}`);
+    if (seq != null && seq !== _detailSeq) return; // 종목 전환됨
     const aq = await res.json();
     if (!aq.ok) { aqRow.style.display = 'none'; return; }
     if (vEl) {
@@ -1292,7 +1296,7 @@ function _populatePanelDetail(d, skipFourAxis) {
   }
 
   // 4-axis 미니 지표
-  const eps = d._EPSGrowth != null ? (d._EPSGrowth * 100).toFixed(1) + '%' : '—';
+  const eps = d._EPSGrowth != null && d._EPSGrowth !== 0 ? (d._EPSGrowth * 100).toFixed(1) + '%' : '—';
   const roe = d._ROE       != null ? (d._ROE       * 100).toFixed(1) + '%' : '—';
   const mom = d.Mom12M     != null ? (d.Mom12M     * 100).toFixed(1) + '%' : '—';
   const rsr = d.RSRating != null ? Math.round(d.RSRating).toString() : '—';
@@ -1513,6 +1517,7 @@ function _fmtCap(v) {
   return String(v);
 }
 
+let _detailSeq = 0;           // openDetail / _loadAqSignal stale-guard
 let _dpFourAxisLoadedFor = null;
 let _dpFourAxisLoadingFor = null;
 let _dpFourAxisReqSeq = 0;

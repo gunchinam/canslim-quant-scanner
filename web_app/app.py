@@ -455,6 +455,7 @@ def api_settings_delete():
     """?? ???."""
     try:
         save_config({})
+        apply_to_environ({})
         return jsonify({"ok": True})
     except Exception as e:
         logging.exception("api_settings_delete")

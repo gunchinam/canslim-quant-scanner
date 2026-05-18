@@ -264,14 +264,20 @@ def run(
     except (ZeroDivisionError, ValueError):
         ev_ebitda_fair = 0.0
 
-    # --- Weighted midpoint ---
+    # --- Weighted midpoint (0인 방법은 제외하고 가중치 재분배) ---
     try:
-        weighted_mid: float = (
-            dcf_base * 0.50
-            + per_fair * 0.20
-            + pbr_fair * 0.15
-            + ev_ebitda_fair * 0.15
-        )
+        _methods = [
+            (dcf_base, 0.50),
+            (per_fair, 0.20),
+            (pbr_fair, 0.15),
+            (ev_ebitda_fair, 0.15),
+        ]
+        _active = [(v, w) for v, w in _methods if v > 0]
+        if _active:
+            _total_w = sum(w for _, w in _active)
+            weighted_mid = sum(v * (w / _total_w) for v, w in _active)
+        else:
+            weighted_mid = 0.0
     except (ZeroDivisionError, ValueError):
         weighted_mid = 0.0
 

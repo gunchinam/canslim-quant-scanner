@@ -107,6 +107,19 @@ def _data_tag(d: dict, bucket: str) -> str:
         pass
     # NEUTRAL: 태그 없음
 
+    # KIS 수급 태그 (KR 종목만)
+    if d.get("_KIS_Available"):
+        frgn = int(d.get("_KIS_Foreign") or 0)
+        inst = int(d.get("_KIS_Institution") or 0)
+        def _fmt_qty(v: int) -> str:
+            if abs(v) >= 10000:
+                return f"{v / 10000:+.1f}만주"
+            return f"{v:+,}주"
+        if abs(frgn) >= 1000:
+            p.append(f"외인 {_fmt_qty(frgn)}")
+        if abs(inst) >= 1000:
+            p.append(f"기관 {_fmt_qty(inst)}")
+
     return "(" + " · ".join(p) + ")" if p else ""
 
 
@@ -1261,6 +1274,64 @@ _METRIC_PHRASES: dict[tuple[str, str], list[str]] = {
         "영업이익률 보면 업종 내에서 수익성 끝판왕임",
         "이 정도 마진이면 매출 조금만 늘어도 이익 폭발함",
     ],
+    # ── KIS 수급: 외인 순매수 ──
+    ("MOMENTUM_LEADER", "foreign_buy"): [
+        "외인이 사고 있는 상태에서 모멘텀까지 살아 있으면 추세 신뢰도 높음",
+        "외인 순매수 들어오는 중이라 수급이 추세를 뒷받침하고 있음",
+        "외인 매수세 붙은 상승 추세는 쉽게 안 꺾이는 거임",
+    ],
+    ("TRUE_VALUE", "foreign_buy"): [
+        "외인이 줍줍하고 있다는 건 밸류 재발견 중이란 의미임",
+        "저평가 구간에서 외인 순매수 유입은 긍정적 시그널임",
+        "외인이 이 가격대에서 담고 있으면 뭔가 알고 있는 거임",
+    ],
+    ("NEUTRAL", "foreign_buy"): [
+        "방향은 안 잡혔는데 외인이 조용히 모으고 있는 종목임",
+        "횡보 중인데 외인 순매수 꾸준하면 방향 나올 때 위쪽일 확률 높음",
+    ],
+    ("OVERSOLD", "foreign_buy"): [
+        "과매도 구간에서 외인이 받고 있으면 바닥 근처일 수 있음",
+        "외인 순매수가 반등의 선행 지표가 되는 경우 많음",
+    ],
+    # ── KIS 수급: 외인 순매도 ──
+    ("MOMENTUM_LEADER", "foreign_sell"): [
+        "모멘텀은 좋은데 외인이 빠지고 있어서 수급 주의 필요함",
+        "외인 매도세가 나오면 상승 추세 지속 여부 점검해야 됨",
+    ],
+    ("NEUTRAL", "foreign_sell"): [
+        "외인이 빠지고 있는 횡보 종목은 하방 리스크 더 큰 거임",
+        "수급이 빠지는 중이라 방향 잡힐 때 아래쪽 확률 높음",
+    ],
+    ("FALLING_KNIFE", "foreign_sell"): [
+        "외인까지 던지고 있으면 수급 바닥이 아직 안 나온 거임",
+        "외인 순매도에 낙폭까지 크면 반등 기대하기 어려운 구간임",
+    ],
+    # ── KIS 수급: 기관 순매수 ──
+    ("MOMENTUM_LEADER", "inst_buy"): [
+        "기관이 같이 태우고 있는 상승 추세라 힘 빠지기 어려움",
+        "기관 순매수 + 모멘텀이면 펀드 편입 물량일 가능성 높음",
+    ],
+    ("TRUE_VALUE", "inst_buy"): [
+        "기관이 저평가 구간에서 담고 있으면 리레이팅 기대할 만함",
+        "기관 순매수는 기본적 분석 근거가 있다는 뜻임",
+    ],
+    ("OVERSOLD", "inst_buy"): [
+        "과매도인데 기관이 받고 있으면 기술적 반등 확률 높아짐",
+        "기관 매수세가 들어오면 매도 압력 소진 신호일 수 있음",
+    ],
+    ("NEUTRAL", "inst_buy"): [
+        "횡보 중인데 기관이 조용히 모으고 있는 종목임",
+        "기관 순매수 꾸준하면 이벤트 대기 중일 가능성 있음",
+    ],
+    # ── KIS 수급: 기관 순매도 ──
+    ("MOMENTUM_LEADER", "inst_sell"): [
+        "기관이 차익실현 나오는 중이라 추세 피로도 체크해야 됨",
+        "상승 중인데 기관이 빠지면 마지막 구간일 수 있음",
+    ],
+    ("FALLING_KNIFE", "inst_sell"): [
+        "기관까지 손절하는 종목은 바닥이 더 밑에 있을 수 있음",
+        "기관 순매도가 가속되면 투매 구간 진입한 거임",
+    ],
 }
 
 
@@ -1314,6 +1385,20 @@ def _metric_tags(d: dict) -> list[str]:
     # 마진
     if op_pct >= 25:
         tags.append("high_margin")
+
+    # KIS 투자자 매매동향 (KR 종목만)
+    if d.get("_KIS_Available"):
+        frgn = int(d.get("_KIS_Foreign") or 0)
+        inst = int(d.get("_KIS_Institution") or 0)
+        # 의미 있는 순매수/순매도 (절대값 1000주 이상)
+        if frgn >= 1000:
+            tags.append("foreign_buy")
+        elif frgn <= -1000:
+            tags.append("foreign_sell")
+        if inst >= 1000:
+            tags.append("inst_buy")
+        elif inst <= -1000:
+            tags.append("inst_sell")
 
     return tags
 

@@ -482,6 +482,18 @@ def api_ticker(ticker: str):
                         result["Name"] = fixed
                 except Exception:
                     pass
+            # KIS 투자자 매매동향 (외인/기관 순매수)
+            try:
+                from kis_api import get_investor_trend, is_available as kis_ok
+                if kis_ok():
+                    inv = get_investor_trend(code6)
+                    if inv.get("available"):
+                        result["_KIS_Foreign"] = inv["foreign"]
+                        result["_KIS_Institution"] = inv["institution"]
+                        result["_KIS_Program"] = inv["program"]
+                        result["_KIS_Available"] = True
+            except Exception as ke:
+                logging.debug("KIS investor trend failed for %s: %s", ticker, ke)
         try:
             result = _annotate_one_liners([result])[0]
         except Exception as oe:

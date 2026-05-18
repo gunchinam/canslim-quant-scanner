@@ -738,42 +738,127 @@ function setStatHTML(id, html) {
 
 // ── 검색 (클라이언트 필터) ───────────────────────────────────────────────
 
+let _searchTimer = null;
+let _searchSelectedIdx = -1;
+
+function _createSuggestBox(inp) {
+  let box = document.getElementById('search-suggest');
+  if (box) return box;
+  box = document.createElement('div');
+  box.id = 'search-suggest';
+  box.style.cssText = 'position:absolute;left:0;right:0;top:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:999;max-height:260px;overflow-y:auto;display:none;';
+  inp.parentElement.style.position = 'relative';
+  inp.parentElement.appendChild(box);
+  return box;
+}
+
+function _hideSuggest() {
+  const box = document.getElementById('search-suggest');
+  if (box) box.style.display = 'none';
+  _searchSelectedIdx = -1;
+}
+
+function _selectSuggestion(ticker) {
+  const inp = document.getElementById('search-input');
+  if (inp) inp.value = ticker;
+  _hideSuggest();
+  _lookupTicker(ticker);
+}
+
+async function _lookupTicker(ticker) {
+  setStockListMsg(`'${esc(ticker)}' 조회 중…`);
+  try {
+    const p = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
+    const res = await fetch(`/api/ticker/${encodeURIComponent(ticker)}?${p}`);
+    if (!res.ok) {
+      setStockListMsg(`'${esc(ticker)}' 종목을 찾을 수 없습니다.`);
+      return;
+    }
+    const data = await res.json();
+    if (!data || data.error || !data.Ticker) {
+      setStockListMsg(`'${esc(ticker)}' 종목을 찾을 수 없습니다.`);
+      return;
+    }
+    allStocks = [data];
+    renderStockTable(_applySearchFilter(allStocks));
+  } catch (err) {
+    console.error('search lookup failed:', err);
+    setStockListMsg('검색 실패. 서버 상태를 확인하세요.');
+  }
+}
+
+async function _fetchSuggestions(q, box) {
+  try {
+    const p = new URLSearchParams({ q, market: currentMarket });
+    const res = await fetch(`/api/search?${p}`);
+    const hits = await res.json();
+    if (!hits || !hits.length) { box.style.display = 'none'; return; }
+    box.innerHTML = hits.map((h, i) =>
+      `<div class="search-suggest-item" data-ticker="${esc(h.ticker)}" data-idx="${i}"
+        style="padding:8px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);font-size:13px;"
+        onmousedown="_selectSuggestion('${esc(h.ticker)}')"
+        onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+        <span style="font-weight:600;color:var(--text-primary);">${esc(h.ticker)}</span>
+        <span style="color:var(--text-tertiary);font-size:11px;max-width:60%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(h.name)}</span>
+      </div>`
+    ).join('');
+    box.style.display = 'block';
+    _searchSelectedIdx = -1;
+  } catch (_) {
+    box.style.display = 'none';
+  }
+}
+
+function _navigateSuggest(box, dir) {
+  const items = box.querySelectorAll('.search-suggest-item');
+  if (!items.length) return;
+  items.forEach(el => el.style.background = '');
+  _searchSelectedIdx = Math.max(-1, Math.min(items.length - 1, _searchSelectedIdx + dir));
+  if (_searchSelectedIdx >= 0) {
+    items[_searchSelectedIdx].style.background = 'var(--bg-secondary)';
+    items[_searchSelectedIdx].scrollIntoView({ block: 'nearest' });
+  }
+}
+
 function initSearch() {
   const inp = document.getElementById('search-input');
   if (!inp) return;
 
-  inp.setAttribute('placeholder', '티커 입력 후 Enter (예: AAPL, 005930)');
+  inp.setAttribute('placeholder', '종목명 또는 티커 검색 (예: RF, 삼성, AAPL)');
+  const box = _createSuggestBox(inp);
 
   inp.addEventListener('input', () => {
-    if (!allStocks.length) return;
-    renderStockTable(_applySearchFilter(allStocks));
+    const q = inp.value.trim();
+    // 스캔 결과 내 필터
+    if (allStocks.length) renderStockTable(_applySearchFilter(allStocks));
+    // 자동완성 제안
+    clearTimeout(_searchTimer);
+    if (q.length < 1) { _hideSuggest(); return; }
+    _searchTimer = setTimeout(() => _fetchSuggestions(q, box), 250);
   });
 
   inp.addEventListener('keydown', async (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); _navigateSuggest(box, 1); return; }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); _navigateSuggest(box, -1); return; }
+    if (e.key === 'Escape')    { _hideSuggest(); return; }
     if (e.key !== 'Enter') return;
+    e.preventDefault();
+    // 선택된 제안이 있으면 그걸 사용
+    const items = box.querySelectorAll('.search-suggest-item');
+    if (_searchSelectedIdx >= 0 && items[_searchSelectedIdx]) {
+      const tk = items[_searchSelectedIdx].dataset.ticker;
+      inp.value = tk;
+      _hideSuggest();
+      _lookupTicker(tk);
+      return;
+    }
+    _hideSuggest();
     const raw = inp.value.trim();
     if (!raw) return;
-    const ticker = raw.toUpperCase();
-    setStockListMsg(`'${esc(ticker)}' 조회 중…`);
-    try {
-      const p = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
-      const res = await fetch(`/api/ticker/${encodeURIComponent(ticker)}?${p}`);
-      if (!res.ok) {
-        setStockListMsg(`'${esc(ticker)}' 종목을 찾을 수 없습니다. (HTTP ${res.status})`);
-        return;
-      }
-      const data = await res.json();
-      if (!data || data.error || !data.Ticker) {
-        setStockListMsg(`'${esc(ticker)}' 종목을 찾을 수 없습니다.`);
-        return;
-      }
-      allStocks = [data];
-      renderStockTable(_applySearchFilter(allStocks));
-    } catch (err) {
-      console.error('search lookup failed:', err);
-      setStockListMsg('검색 실패. 서버 상태를 확인하세요.');
-    }
+    _lookupTicker(raw.toUpperCase());
   });
+
+  inp.addEventListener('blur', () => setTimeout(_hideSuggest, 200));
 }
 
 // ── 디테일 페이지 ────────────────────────────────────────────────────────

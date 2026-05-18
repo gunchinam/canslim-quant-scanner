@@ -232,6 +232,10 @@ def healthz():
 
 @app.route("/detail/<ticker>")
 def detail(ticker: str):
+    import re as _re
+    ticker = _re.sub(r"[^A-Za-z0-9.\-]", "", ticker)
+    if not ticker:
+        return "Invalid ticker", 400
     safe_ticker = html.escape(ticker, quote=True)
     return _render_static_template("detail.html", {
         "{{ ticker }}": safe_ticker,
@@ -414,6 +418,35 @@ def api_scan():
     except Exception as e:
         logging.exception("api_scan")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/search")
+def api_search():
+    """GET /api/search?q=rf&market=KR → [{ticker, name}, ...] 이름/티커 부분매칭."""
+    q = (request.args.get("q") or "").strip().lower()
+    market = (request.args.get("market") or "US").upper()
+    if not q or len(q) < 1:
+        return jsonify([])
+    hits = []
+    try:
+        from quant_nexus_v20 import QuantNexusApp
+        if market == "KR":
+            for tk, nm in QuantNexusApp.KR_NAMES.items():
+                code = tk.split(".")[0]
+                if q in nm.lower() or q in tk.lower() or q in code.lower():
+                    hits.append({"ticker": tk, "name": nm})
+        else:
+            try:
+                from us_company_info import US_COMPANY_INFO
+            except Exception:
+                US_COMPANY_INFO = {}
+            for tk, desc in US_COMPANY_INFO.items():
+                if q in tk.lower() or q in desc.lower():
+                    hits.append({"ticker": tk, "name": desc})
+    except Exception as e:
+        logging.warning("api_search failed: %s", e)
+    hits.sort(key=lambda h: (not h["ticker"].lower().startswith(q), not h["name"].lower().startswith(q), h["name"]))
+    return jsonify(hits[:15])
 
 
 @app.route("/api/ticker/<ticker>")

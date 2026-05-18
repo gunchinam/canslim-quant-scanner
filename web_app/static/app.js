@@ -980,7 +980,7 @@ function _breakdownItemHtml(item) {
       else if (/[⛔📉🚫]/.test(line)) st = 'fail';
       else if (/⚠/.test(line)) st = 'warn';
       const bm = line.match(/^\[([^\]]+)\]\s*(.*)/);
-      const lm = line.match(/^([CANSLI])\S*\s+(.*)/);
+      const lm = line.match(/^([CANSLIM])\S*\s+(.*)/);
       const em = line.match(/^[⛔⭐]\s*(.*)/);
       if (bm) { aux.push({b: bm[1].replace(/[^\w]/g,''), t: bm[2], st}); }
       else if (lm) { main.push({b: lm[1], t: lm[2], st}); }
@@ -1029,7 +1029,7 @@ function _breakdownItemHtml(item) {
     </div>
     <svg class="cs-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
   </div>
-  <div class="cs-score-big ${sc}">${fmt(score, 1)}</div>
+  <div class="cs-score-big ${sc}">${score > 0 ? fmt(score, 1) : '<span style="font-size:11px;color:var(--text-tertiary);">데이터 부족</span>'}</div>
   <div class="cs-bar-wrap"><div class="cs-bar-fill ${sc}" style="width:${barW}%"></div></div>
   ${briefDesc ? `<div class="cs-desc-brief">${esc(_trKo(briefDesc))}</div>` : ''}
 </div>`;
@@ -1383,6 +1383,22 @@ const _KO_MAP = {
   'INFLOW': '유입', 'OUTFLOW': '유출', 'NONE': '없음',
 };
 
+const _ORB_NR7_KO = {
+  'ORB_BREAKOUT': '돌파', 'ORB_READY': '준비', 'ORB_WEAK': '약세 돌파',
+  'ORB_WATCH': '관찰', 'NR7_BREAKOUT': '압축 돌파', 'NR7_READY': '압축 준비',
+  'NR7_WATCH': '압축 관찰',
+};
+function _orbNr7Label(sig) {
+  if (!sig || sig === 'NONE' || sig === '-' || sig === 'NEUTRAL') return '—';
+  return _ORB_NR7_KO[sig] || _trKo(sig);
+}
+function _orbNr7Color(sig) {
+  if (!sig || sig === 'NONE' || sig === '-' || sig === 'NEUTRAL') return null;
+  if (sig.includes('BREAKOUT')) return 'var(--success)';
+  if (sig.includes('READY')) return 'var(--brand)';
+  return null;
+}
+
 function _trKo(str) {
   if (!str) return str;
   let s = String(str);
@@ -1443,8 +1459,8 @@ function _renderTechTab(d) {
     ['3M 수익률',  d._Mom3M != null ? (d._Mom3M >= 0 ? '+' : '') + fmt(d._Mom3M,1)+'%' : '—',
      '3개월간 주가 등락 — 단기 추세 확인', d._Mom3M > 0 ? 'var(--success)' : 'var(--destructive)'],
     ['거래량 비율',volRaw,  '1↑ 평소보다 활발 · 2↑ 기관 참여 가능성',        d.VolRatio > 1.5 ? 'var(--success)' : null],
-    ['ORB 신호',   _trKo(d.ORBSignal  || '—'), '시초가 범위 돌파 시 매수 신호',     null],
-    ['NR7 압축',   _trKo(d.NR7Signal  || '—'), '변동폭 수축 후 큰 움직임 대비',     null],
+    ['ORB 신호',   _orbNr7Label(d.ORBSignal), '시초가 범위 돌파 시 매수 신호',     _orbNr7Color(d.ORBSignal)],
+    ['NR7 압축',   _orbNr7Label(d.NR7Signal), '변동폭 수축 후 큰 움직임 대비',     _orbNr7Color(d.NR7Signal)],
     ['볼린저밴드', _trKo(d.BBSignal   || '—'), '하단 반등=매수 기회 · 상단=과열 주의', null],
     ['확신도',     _trKo(d.Conviction || '—'), '높음=팩터 방향 일치 · 낮음=신호 혼재', null],
   ];
@@ -1468,7 +1484,7 @@ function _renderFinanceTab(d) {
   }
 
   const roeRaw = d._ROE ? fmt(d._ROE * 100, 1) + '%' + _roeLbl(d._ROE) : '—';
-  const epsRaw = d._EPSGrowth != null ? (d._EPSGrowth >= 0 ? '+' : '') + fmt(d._EPSGrowth*100,1)+'%' + _epsLbl(d._EPSGrowth) : '—';
+  const epsRaw = (d._EPSGrowth != null && d._EPSGrowth !== 0) ? (d._EPSGrowth >= 0 ? '+' : '') + fmt(d._EPSGrowth*100,1)+'%' + _epsLbl(d._EPSGrowth) : '—';
   const perLbl = d._PER ? (d._PER < 15 ? ' · 저평가 가능' : d._PER > 40 ? ' · 고평가 주의' : '') : '';
   const pbrLbl = d._PBR ? (d._PBR < 1 ? ' · 자산 대비 저평가' : d._PBR > 5 ? ' · 고평가' : '') : '';
   const dbtLbl = d._DebtRatio ? (d._DebtRatio > 200 ? ' · 위험' : d._DebtRatio > 100 ? ' · 주의' : ' · 안정') : '';
@@ -1482,8 +1498,8 @@ function _renderFinanceTab(d) {
     ['영업이익률',d._OperatingMargin ? fmt(d._OperatingMargin*100,1)+'%' + omLbl : '—', '매출 대비 영업이익 · 20%↑ 우수',  null],
     ['부채비율',  d._DebtRatio ? fmt(d._DebtRatio, 1)+'%' + dbtLbl : '—', '100%↓ 양호 · 200%↑ 위험', d._DebtRatio > 150 ? 'var(--destructive)' : d._DebtRatio < 50 ? 'var(--success)' : null],
     ['시가총액',  d._MarketCap ? _fmtCap(d._MarketCap) : '—',          '기업 규모 — 클수록 안정적',         null],
-    ['밸류 팩터', d.ValueScore   != null ? fmt(d.ValueScore, 1) + '점' : '—', '가치·저평가 매력도 — 양수=저평가', null],
-    ['퀄리티 팩터',d.QualityScore!= null ? fmt(d.QualityScore,1) + '점': '—', '수익성·안정성 종합 — 높을수록 우량',    null],
+    ['밸류 팩터', d.ValueScore   ? fmt(d.ValueScore, 1) + '점' : '—', '가치·저평가 매력도 — 양수=저평가', d.ValueScore > 10 ? 'var(--success)' : d.ValueScore < -5 ? 'var(--destructive)' : null],
+    ['퀄리티 팩터',d.QualityScore ? fmt(d.QualityScore,1) + '점': '—', '수익성·안정성 종합 — 높을수록 우량', d.QualityScore > 10 ? 'var(--success)' : null],
   ];
 
   el.innerHTML = rows.map(([l, v, s, c]) => _indicatorRowHtml(l, v, s, c)).join('');

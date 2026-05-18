@@ -494,6 +494,31 @@ def api_ticker(ticker: str):
                         result["_KIS_Available"] = True
             except Exception as ke:
                 logging.debug("KIS investor trend failed for %s: %s", ticker, ke)
+        else:
+            # US 종목: yfinance 수급/센티먼트 데이터
+            try:
+                import yfinance as yf
+                yf_info = yf.Ticker(ticker).info
+                short_pct = yf_info.get("shortPercentOfFloat")
+                inst_pct = yf_info.get("heldPercentInstitutions")
+                rec_mean = yf_info.get("recommendationMean")
+                target_mean = yf_info.get("targetMeanPrice")
+                cur_price = yf_info.get("currentPrice")
+                n_analysts = yf_info.get("numberOfAnalystOpinions")
+                if short_pct is not None:
+                    result["_YF_ShortPctFloat"] = round(short_pct * 100, 2)
+                if inst_pct is not None:
+                    result["_YF_InstPct"] = round(inst_pct * 100, 1)
+                if rec_mean is not None and n_analysts:
+                    result["_YF_RecMean"] = round(rec_mean, 2)
+                    result["_YF_RecKey"] = yf_info.get("recommendationKey", "")
+                    result["_YF_NumAnalysts"] = int(n_analysts)
+                if target_mean and cur_price and cur_price > 0:
+                    gap_pct = (target_mean - cur_price) / cur_price * 100
+                    result["_YF_TargetGapPct"] = round(gap_pct, 1)
+                result["_YF_Available"] = True
+            except Exception as ye:
+                logging.debug("yfinance sentiment failed for %s: %s", ticker, ye)
         try:
             result = _annotate_one_liners([result])[0]
         except Exception as oe:

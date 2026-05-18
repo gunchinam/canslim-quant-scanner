@@ -107,6 +107,23 @@ def _data_tag(d: dict, bucket: str) -> str:
         pass
     # NEUTRAL: 태그 없음
 
+    # yfinance 센티먼트 태그 (US 종목)
+    if d.get("_YF_Available"):
+        short_pct = _num(d.get("_YF_ShortPctFloat"))
+        inst_pct = _num(d.get("_YF_InstPct"))
+        rec_key = d.get("_YF_RecKey", "")
+        n_analysts = int(_num(d.get("_YF_NumAnalysts")))
+        target_gap = _num(d.get("_YF_TargetGapPct"))
+        if short_pct >= 2:
+            p.append(f"숏 {short_pct:.1f}%")
+        if inst_pct > 0:
+            p.append(f"기관 {inst_pct:.0f}%")
+        if rec_key and n_analysts:
+            _rec_kr = {"strong_buy": "적극매수", "buy": "매수", "hold": "보유", "sell": "매도", "strong_sell": "적극매도"}
+            p.append(f"{_rec_kr.get(rec_key, rec_key)} ({n_analysts}명)")
+        if abs(target_gap) >= 5:
+            p.append(f"목표가 {target_gap:+.0f}%")
+
     # KIS 수급 태그 (KR 종목만)
     if d.get("_KIS_Available"):
         frgn = int(d.get("_KIS_Foreign") or 0)
@@ -1274,6 +1291,58 @@ _METRIC_PHRASES: dict[tuple[str, str], list[str]] = {
         "영업이익률 보면 업종 내에서 수익성 끝판왕임",
         "이 정도 마진이면 매출 조금만 늘어도 이익 폭발함",
     ],
+    # ── US: 공매도 비율 높음 ──
+    ("MOMENTUM_LEADER", "high_short"): [
+        "공매도 비율 높은데 주가가 올라가면 숏스퀴즈 나올 수 있음",
+        "숏 포지션 쌓인 상태에서 모멘텀 살아있으면 숏커버 랠리 가능성 있음",
+    ],
+    ("FALLING_KNIFE", "high_short"): [
+        "공매도 비율까지 높으면 시장이 추가 하락을 베팅하고 있는 거임",
+        "숏 포지션이 이 수준이면 반등해도 매도 물량 계속 나올 수 있음",
+    ],
+    ("NEUTRAL", "high_short"): [
+        "공매도 비율이 높아서 시장 참여자들이 하방을 보고 있는 종목임",
+        "숏 비율이 이 정도면 뭔가 부정적 시각이 깔려 있는 거임",
+    ],
+    # ── US: 기관 보유율 ──
+    ("MOMENTUM_LEADER", "high_inst"): [
+        "기관 보유율이 압도적이라 큰손들이 밀고 있는 상승 추세임",
+        "기관 비중이 이 정도면 펀드 벤치마크 종목이라 쉽게 안 빠짐",
+    ],
+    ("TRUE_VALUE", "high_inst"): [
+        "기관 보유율 높은 저평가 종목은 안전마진이 두터운 거임",
+        "기관이 이만큼 들고 있으면 펀더멘탈은 검증된 거임",
+    ],
+    ("NEUTRAL", "low_inst"): [
+        "기관 보유율이 낮아서 시장의 관심 밖에 있는 종목임",
+        "기관이 안 들고 있으면 유동성 리스크도 같이 생각해야 됨",
+    ],
+    # ── US: 애널리스트 컨센서스 ──
+    ("MOMENTUM_LEADER", "strong_consensus"): [
+        "애널리스트 컨센서스가 강력 매수라 모멘텀에 명분까지 있는 거임",
+        "월가 애널리스트들이 일치단결 매수 의견이면 추세 신뢰도 높음",
+    ],
+    ("TRUE_VALUE", "strong_consensus"): [
+        "애널리스트들이 매수 의견인데 주가가 안 따라갔으면 기회일 수 있음",
+        "컨센서스 매수인 저평가 종목은 리레이팅 트리거만 기다리는 거임",
+    ],
+    ("FALLING_KNIFE", "weak_consensus"): [
+        "애널리스트 의견도 부정적이면 반등 근거가 약한 거임",
+        "월가 컨센서스까지 매도 쪽이면 펀더멘탈 훼손을 의심해야 됨",
+    ],
+    # ── US: 목표가 괴리 ──
+    ("TRUE_VALUE", "big_upside"): [
+        "목표가 대비 괴리가 크면 시장이 아직 가치를 반영 못한 거임",
+        "애널리스트 목표가까지 업사이드가 크면 재평가 여력 충분함",
+    ],
+    ("NEUTRAL", "big_upside"): [
+        "목표가 대비 업사이드가 큰데 아직 방향이 안 나온 종목임",
+        "괴리율만 보면 매력적인데 모멘텀이 안 붙어서 대기 중인 거임",
+    ],
+    ("OVERBOUGHT", "below_target"): [
+        "현재가가 목표가를 넘어선 상태라 추가 상승 여력이 제한적임",
+        "애널리스트 목표가를 이미 돌파했으면 차익실현 구간일 수 있음",
+    ],
     # ── KIS 수급: 외인 순매수 ──
     ("MOMENTUM_LEADER", "foreign_buy"): [
         "외인이 사고 있는 상태에서 모멘텀까지 살아 있으면 추세 신뢰도 높음",
@@ -1385,6 +1454,31 @@ def _metric_tags(d: dict) -> list[str]:
     # 마진
     if op_pct >= 25:
         tags.append("high_margin")
+
+    # yfinance 수급/센티먼트 (US 종목)
+    if d.get("_YF_Available"):
+        short_pct = _num(d.get("_YF_ShortPctFloat"))
+        inst_pct = _num(d.get("_YF_InstPct"))
+        rec_mean = _num(d.get("_YF_RecMean"))
+        target_gap = _num(d.get("_YF_TargetGapPct"))
+        # 공매도 비율 높음 (5% 이상)
+        if short_pct >= 5:
+            tags.append("high_short")
+        # 기관 보유율 (80% 이상 = 기관 선호, 20% 미만 = 기관 외면)
+        if inst_pct >= 80:
+            tags.append("high_inst")
+        elif 0 < inst_pct < 20:
+            tags.append("low_inst")
+        # 애널리스트 컨센서스 (1=strong buy ~ 5=sell)
+        if 0 < rec_mean <= 1.5:
+            tags.append("strong_consensus")
+        elif rec_mean >= 3.5:
+            tags.append("weak_consensus")
+        # 목표가 괴리율
+        if target_gap >= 30:
+            tags.append("big_upside")
+        elif target_gap <= -15:
+            tags.append("below_target")
 
     # KIS 투자자 매매동향 (KR 종목만)
     if d.get("_KIS_Available"):

@@ -14,6 +14,17 @@ analyze_ticker() 결과 dict를 받아 상황별 한줄평 1개를 반환한다.
 """
 from __future__ import annotations
 import hashlib
+import os
+import time
+
+# 한줄평 회전 주기(초). 같은 종목이라도 이 주기마다 다른 문구로 순환한다.
+# 기본 900초(15분): 짧은 재폴링엔 안 흔들리고, 시간이 지나면 새 문구.
+_ROTATE_SECONDS = max(1, int(os.environ.get("ONELINER_ROTATE_SECONDS", "900")))
+
+
+def _rotation_salt() -> int:
+    """현재 시각을 회전 주기로 양자화한 값. 같은 윈도우 내에선 고정."""
+    return int(time.time() // _ROTATE_SECONDS)
 
 _POSITIVE_BUCKETS = {
     "TRUE_VALUE", "EXPENSIVE_JUSTIFIED", "MOMENTUM_LEADER", "BREAKOUT",
@@ -2897,11 +2908,15 @@ def get_one_liner(d: dict) -> str:
     bucket = _bucket(d)
     phrases = _PHRASES.get(bucket) or _PHRASES["NEUTRAL"]
     ticker = (d.get("Ticker") or "").upper()
-    # 시드에 점수/모멘텀/RSI 양자화값을 섞어 같은 버킷이라도 종목·조건별로 분산
+    # 시드에 점수/모멘텀/RSI 양자화값 + 회전 솔트를 섞어
+    # 같은 버킷이라도 종목·조건별로 분산하고, 시간이 지나면 다른 문구로 순환.
     s_q  = int(_num(d.get("TotalScore")) // 5)
     m_q  = int(_num(d.get("Mom12M")) // 5)
     r_q  = int(_num(d.get("RSI"), 50) // 5)
-    seed = hashlib.md5(f"{ticker}|{bucket}|{s_q}|{m_q}|{r_q}".encode("utf-8")).hexdigest()
+    rot  = _rotation_salt()
+    seed = hashlib.md5(
+        f"{ticker}|{bucket}|{s_q}|{m_q}|{r_q}|{rot}".encode("utf-8")
+    ).hexdigest()
     idx = int(seed, 16) % len(phrases)
     return phrases[idx]
 
@@ -2913,21 +2928,30 @@ def _friendly_one_liner(d: dict) -> str:
     s_q = int(_num(d.get("TotalScore")) // 5)
     m_q = int(_num(d.get("Mom12M")) // 5)
     r_q = int(_num(d.get("RSI"), 50) // 5)
-    seed = hashlib.md5(f"{ticker}|{bucket}|{s_q}|{m_q}|{r_q}".encode("utf-8")).hexdigest()
+    rot = _rotation_salt()
+    seed = hashlib.md5(
+        f"{ticker}|{bucket}|{s_q}|{m_q}|{r_q}|{rot}".encode("utf-8")
+    ).hexdigest()
     h = int(seed, 16)
 
-    # 1) 수치 기반 조건부 문구 우선 선택
+    # 1) 수치 기반 조건부 문구(데이터 검증됨)
     tags = _metric_tags(d)
     cond_pool = []
     for tag in tags:
         cond_pool.extend(_METRIC_PHRASES.get((bucket, tag), []))
+    cond_pool = list(dict.fromkeys(cond_pool))  # 중복 제거(태그 겹침 대비)
 
-    # 데이터 검증된 조건부 문구 + 일반 문구를 합쳐서 선택 → 다양성 확보.
-    # 조건부 문구는 가중치를 둬 실데이터 기반 멘트가 묻히지 않게 한다.
-    # (일반 풀은 무단정 톤이라 어떤 종목에 붙어도 데이터와 충돌하지 않음)
     phrases = _PHRASES.get(bucket) or _PHRASES["NEUTRAL"]
-    pool = cond_pool * 2 + list(phrases)
-    return _strip_period(pool[h % len(pool)])
+
+    # 메트릭 풀은 보통 1~3개로 작아서 cond_pool*2 식으로 섞으면
+    # 같은 태그 종목들이 같은 소수 문구로 쏠린다(다양성 저하).
+    # → 독립 해시 슬라이스로 (a) 메트릭/일반 결정과 (b) 풀 내 인덱스를
+    #   분리(decorrelate)해서 1800+개 일반 풀을 끝까지 활용한다.
+    #   메트릭 문구는 데이터 근거가 있으니 약 40% 비중으로 노출.
+    use_metric = bool(cond_pool) and (h % 100) < 40
+    chosen = cond_pool if use_metric else phrases
+    idx = (h // 128) % len(chosen)
+    return _strip_period(chosen[idx])
 
 
 def community_one_liner_variant_count() -> int:

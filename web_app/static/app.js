@@ -2790,7 +2790,7 @@ async function captureDetail() {
 
   // ── 1) 모든 탭 컨텐츠 사전 로드 (라이브 DOM에 데이터 채워둠) ──
   try {
-    if (currentMarket === 'KR' && typeof loadDpDartNews === 'function') {
+    if (typeof loadDpDartNews === 'function') {
       await loadDpDartNews(ticker);
     }
   } catch (_) { /* 로드 실패해도 캡쳐 진행 */ }
@@ -2853,6 +2853,8 @@ async function captureDetail() {
     { suffix: 'finance',  label: '재무 지표' },
     { suffix: 'dartnews', label: '공시·뉴스',
       visibleOnly: () => currentMarket === 'KR' },
+    { suffix: 'usinsight', label: 'US 인사이트',
+      visibleOnly: () => currentMarket !== 'KR' },
   ];
   for (const t of tabMeta) {
     const pane = clone.querySelector('#__cap_dp-tab-' + t.suffix);

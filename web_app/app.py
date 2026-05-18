@@ -27,6 +27,7 @@ if _BASE not in sys.path:
     sys.path.insert(0, _BASE)
 
 from flask import Flask, request, jsonify, render_template, Response
+from chat import socketio
 from config_manager import (
     SETTINGS_SCHEMA, load_config, save_config,
     apply_to_environ, get_masked, get_connection_status,
@@ -61,7 +62,7 @@ _consensus_cache: dict[str, dict] = {}
 _consensus_cache_lock = threading.Lock()
 
 # ── 티커 상세 응답 캐시 (드로어 재오픈 시 즉시 응답) ──
-_TICKER_DETAIL_TTL_SEC = 1800  # 30분
+_TICKER_DETAIL_TTL_SEC = 300  # 5분
 _ticker_detail_cache: dict[str, dict] = {}
 _ticker_detail_cache_lock = threading.Lock()
 
@@ -460,7 +461,12 @@ def api_ticker(ticker: str):
     with _ticker_detail_cache_lock:
         _td_cached = _ticker_detail_cache.get(_td_key)
         if _td_cached and (_td_now - _td_cached.get("_ts", 0)) < _TICKER_DETAIL_TTL_SEC:
-            return jsonify(_td_cached["data"])
+            # 한줄평은 항상 최신 로직으로 재생성 (캐시는 raw 데이터만 재사용)
+            try:
+                fresh = _annotate_one_liners([_td_cached["data"]])[0]
+            except Exception:
+                fresh = _td_cached["data"]
+            return jsonify(fresh)
     try:
         adapter = _make_adapter()
         result  = adapter.analyze_ticker(ticker, prefer_cache=True)
@@ -1063,4 +1069,5 @@ if __name__ == "__main__":
         port = int(port_raw)
     except ValueError:
         port = 5000
-    app.run(debug=debug, port=port, host=host)
+    socketio.init_app(app)
+    socketio.run(app, debug=debug, port=port, host=host, allow_unsafe_werkzeug=True)

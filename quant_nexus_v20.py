@@ -4147,21 +4147,16 @@ class QuantNexusApp:
                 #     최근 목표가 평균. US 인사이트의 'Analyst Recommendations'와
                 #     동일 출처라 두 화면의 기준이 일치한다.
                 try:
-                    ud = stock.upgrades_downgrades
-                    if (ud is not None and len(ud) > 0
-                            and "currentPriceTarget" in ud.columns):
-                        # head() = 최신 우선 (app.py US 인사이트와 동일 가정)
-                        pts = [
-                            float(v)
-                            for v in ud["currentPriceTarget"].head(12).tolist()
-                            if v is not None and not pd.isna(v) and float(v) > 0
-                        ]
-                        if pts:
-                            broker_target = sum(pts) / len(pts)
-                            broker_target_count = len(pts)
-                            broker_target_source = (
-                                f"애널리스트 투자의견 평균 (최근 {broker_target_count}건)"
-                            )
+                    import analyst_consensus as _ac
+                    _cons = _ac.summarize_upgrades_downgrades(
+                        stock.upgrades_downgrades)
+                    if _cons["mean_target"] > 0:
+                        broker_target = _cons["mean_target"]
+                        broker_target_count = _cons["target_count"]
+                        broker_target_source = (
+                            f"애널리스트 투자의견 평균 "
+                            f"(증권사 {broker_target_count}곳, 최근 의견 기준)"
+                        )
                 except Exception as _e:
                     logging.debug(
                         f"[US broker_target] {ticker} upgrades_downgrades 실패: {_e}")

@@ -1009,21 +1009,15 @@ def api_us_insight(ticker: str):
                         holders[k] = None
         result["holders"] = holders
 
-        # 3) 애널리스트 추천 이력 (upgrades_downgrades)
+        # 3) 애널리스트 추천 이력 — 증권사 목표가와 동일 출처(단일 진실원천).
+        #    analyst_consensus 가 증권사당 1건·최근성 정렬한 집합을 돌려주므로
+        #    여기 리스트와 헤드라인 '증권사 목표가 평균'이 항상 일치한다.
         try:
-            ud = yf.Ticker(ticker).upgrades_downgrades
-            if ud is not None and len(ud) > 0:
-                rec_list = []
-                for _, row in ud.head(8).iterrows():
-                    rec_list.append({
-                        "firm": str(row.get("Firm", "")),
-                        "grade": str(row.get("ToGrade", "")),
-                        "from_grade": str(row.get("FromGrade", "")),
-                        "action": str(row.get("Action", "")),
-                        "target": row.get("currentPriceTarget"),
-                        "prior_target": row.get("priorPriceTarget"),
-                    })
-                result["recommendations"] = rec_list
+            import analyst_consensus
+            _cons = analyst_consensus.summarize_upgrades_downgrades(
+                yf.Ticker(ticker).upgrades_downgrades)
+            if _cons["rows"]:
+                result["recommendations"] = _cons["rows"]
         except Exception:
             pass
     except Exception as e:

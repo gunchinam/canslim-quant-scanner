@@ -4067,6 +4067,23 @@ class QuantNexusApp:
                 except Exception as _e:
                     logging.debug(f"[KIS] {ticker} 가격 보완 실패: {_e}")
 
+            # ── KR 밸류 팩터 보강 ─────────────────────────────────────
+            # yfinance 는 .KS/.KQ 의 priceToBook·trailingPE 를 거의 항상
+            # None 으로 준다. 그 결과 fama_french 의 value_score 가 0 으로
+            # 고정돼 '밸류 팩터'가 집계되지 않았다. 네이버 PER/PBR 을
+            # fama_french 호출 '전에' info 에 주입해 집계를 복원한다.
+            if _is_kr_t:
+                try:
+                    if not info.get("trailingPE") or not info.get("priceToBook"):
+                        from naver_finance import get_quote as _nq
+                        _q = _nq(ticker.split(".")[0])
+                        if _q.get("per") and not info.get("trailingPE"):
+                            info["trailingPE"] = float(_q["per"])
+                        if _q.get("pbr") and not info.get("priceToBook"):
+                            info["priceToBook"] = float(_q["pbr"])
+                except Exception as _e:
+                    logging.debug(f"[KR value] {ticker} PER/PBR 보강 실패: {_e}")
+
             # ════════════════════════════════════════════════════════════
             # STEP 1 — 19개 전략 계산
             # ════════════════════════════════════════════════════════════

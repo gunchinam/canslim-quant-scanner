@@ -136,11 +136,12 @@ def get_quote(ticker: str) -> dict[str, Any]:
         if total_oku > 0:
             out["market_cap_oku"] = total_oku
 
-    # PER / PBR — "per_table" 영역
-    m = re.search(r'PER[^<]*</em>.*?<em[^>]*>([^<]+)</em>', html, re.S)
+    # PER / PBR — 우측 투자정보 박스가 렌더한 <em id="_per">42.81</em>.
+    # (구 regex는 <em>…</em> 인접 가정이 깨져 항상 None을 반환했다.)
+    m = re.search(r'<em id="_per">\s*([\d.,\-]+)\s*</em>', html)
     if m:
         out["per"] = _to_float(m.group(1))
-    m = re.search(r'PBR[^<]*</em>.*?<em[^>]*>([^<]+)</em>', html, re.S)
+    m = re.search(r'<em id="_pbr">\s*([\d.,\-]+)\s*</em>', html)
     if m:
         out["pbr"] = _to_float(m.group(1))
 

@@ -130,6 +130,36 @@ def get_ttm_financials(code: str) -> Dict[str, Any]:
                 break
         eps_ttm = _sum("EPS")  # EPS 는 원/주, 단위 환산 없음
 
+        # ── EPS 성장률 (CAN SLIM C 원칙용) ────────────────────────
+        # 연간 프록시: 최근 4분기 EPS 합 vs 직전 4분기 EPS 합
+        # 분기 YoY  : 최신 분기 EPS vs 4분기 전(전년 동기) EPS
+        # 분모가 0/음수면 성장률 정의 불가 → None (호출부에서 '미존재' 처리)
+        eps_growth = None
+        eps_qoq_growth = None
+        try:
+            eps_cols: Dict[str, Any] = {}
+            for r in rows:
+                if "EPS" in str(r.get("title", "")):
+                    eps_cols = r.get("columns", {}) or {}
+                    break
+            all_keys = [t.get("key") for t in titles]
+
+            def _eps(k: Optional[str]) -> float:
+                return _to_float((eps_cols.get(k) or {}).get("value"))
+
+            if len(all_keys) >= 8:
+                ttm_now  = sum(_eps(k) for k in all_keys[-4:])
+                ttm_prev = sum(_eps(k) for k in all_keys[-8:-4])
+                if ttm_prev > 1e-9:
+                    eps_growth = (ttm_now - ttm_prev) / ttm_prev
+            if len(all_keys) >= 5:
+                q_now = _eps(all_keys[-1])
+                q_yoy = _eps(all_keys[-5])
+                if q_yoy > 1e-9:
+                    eps_qoq_growth = (q_now - q_yoy) / q_yoy
+        except Exception:
+            pass
+
         # stock 항목: 최신 actual 분기에서 추출 (컨센서스는 보통 '-')
         latest_actual_key = None
         for t in reversed(titles):
@@ -153,6 +183,8 @@ def get_ttm_financials(code: str) -> Dict[str, Any]:
             "net_income":        net_inc,
             "ebitda":            op_inc,  # 보수적: D&A 미합산
             "eps":               eps_ttm,
+            "eps_growth":        eps_growth,      # 연간 EPS 성장률 (None=미존재)
+            "eps_qoq_growth":    eps_qoq_growth,  # 분기 YoY EPS 성장률
             "bps":               bps,
             "roe":               roe,
             "debt_ratio":        debt,

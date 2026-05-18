@@ -1863,20 +1863,45 @@ class WallStreetQuantStrategies:
             "eps_acceleration": False,
             "accel_quarters":   0,       # 연속 가속 분기 수
             "fail_safe_eps":    False,   # EPS < 0 → Ceiling 트리거
+            "eps_src":          "",      # EPS 성장률 출처 (디버그/표시용)
+            "data_missing":     False,   # True → 모든 소스 부재 (진짜 데이터 부족)
         }
         try:
-            eg = safe_get(info.get("earningsGrowth"), None)
-            rg = safe_get(info.get("revenueGrowth"),  0.0)
+            rg = safe_get(info.get("revenueGrowth"), 0.0)
 
-            # eg None → 데이터 미존재 (기본값 유지, 페널티 없음)
+            # ── [C] 분기 EPS 성장률 소스 폴백 체인 ──────────────────
+            # yfinance info 의 earningsGrowth(연간)는 KR·ADR·소형주에서
+            # 누락이 잦다. C 원칙은 본래 '분기 실적'이므로 아래 우선순위로
+            # 실데이터를 끌어와 '데이터 부족' 오표기를 차단한다.
+            #   1) earningsGrowth          (연간 EPS — 기존 동작 보존)
+            #   2) earningsQuarterlyGrowth (분기 YoY 순이익 — C 원칙 정통)
+            #   3) forwardEps vs trailingEps 파생 성장률
+            #   4) revenueGrowth 보수적 프록시 (0.6× 할인)
+            eg  = safe_get(info.get("earningsGrowth"), None)
+            src = "annual_eps"
             if eg is None:
-                result["rev_growth"] = rg
-                # 매출 성장만으로 부분 평가
-                if rg > 0.20: result["score"] = 5; result["trend"] = "REVENUE_ONLY"
+                eg = safe_get(info.get("earningsQuarterlyGrowth"), None)
+                src = "quarterly_eps"
+            if eg is None:
+                fe = safe_get(info.get("forwardEps"),  None)
+                te = safe_get(info.get("trailingEps"), None)
+                if fe is not None and te is not None and abs(te) > 1e-9:
+                    eg  = (fe - te) / abs(te)
+                    src = "forward_vs_trailing_eps"
+            if eg is None and rg not in (None, 0.0):
+                # 매출 성장만 확보 — 순이익 레버리지 보수 추정(0.6×)
+                eg  = rg * 0.6
+                src = "revenue_proxy"
+
+            result["rev_growth"] = rg
+
+            # 모든 소스 부재 → 진짜 데이터 부족 (페널티 없음)
+            if eg is None:
+                result["data_missing"] = True
                 return result
 
             result["eps_growth"] = eg
-            result["rev_growth"] = rg
+            result["eps_src"]    = src
 
             # Fail-Safe 트리거
             if eg < 0:
@@ -3848,7 +3873,8 @@ class QuantNexusApp:
             dd     = self.engine.drawdown_risk(hist)
             vol_a  = self.engine.volume_anomaly(hist)
             rs     = self.engine.relative_strength(hist)
-            earn   = self.engine.earnings_momentum(info)
+            # earnings_momentum 은 KR 재무 보강(Naver/KIS) 이후 호출한다.
+            # (raw yfinance info 는 KR earningsGrowth 누락이 잦아 '데이터 부족' 오표기)
             target_source = ""
             broker_target = 0.0  # 증권사 컨센서스 목표가 (KR: 네이버, US: yfinance)
             broker_target_source = ""  # 컨센서스 출처 라벨
@@ -3887,6 +3913,11 @@ class QuantNexusApp:
                         info["freeCashflow"] = fin["operating_income"]
                     if fin.get("ebitda"):
                         info["ebitda"] = fin["ebitda"]
+                    # CAN SLIM [C] 용 EPS 성장률 — Naver 분기 실데이터 주입
+                    if fin.get("eps_growth") is not None:
+                        info["earningsGrowth"] = fin["eps_growth"]
+                    if fin.get("eps_qoq_growth") is not None:
+                        info["earningsQuarterlyGrowth"] = fin["eps_qoq_growth"]
                     src_tag = fin.get("source", "?")
                     target_source = f"DCF ({src_tag} {fin.get('fiscal_period','')})"
                 else:
@@ -3920,6 +3951,9 @@ class QuantNexusApp:
                             broker_target_source = "Yahoo Finance Analyst Mean"
                 except Exception:
                     pass
+            # KR 재무 보강(Naver/KIS)·US targetMeanPrice 반영이 끝난
+            # info 로 실적 모멘텀 산출 → KR EPS 성장률 '데이터 부족' 해소
+            earn   = self.engine.earnings_momentum(info)
             _sector_for_nomura = self._nomura_sector_hint(ticker, info)
             pt     = self.engine.price_target(info, cur, sector=_sector_for_nomura)
             if pt.get("target", 0) > 0 and not target_source:
@@ -4364,7 +4398,9 @@ class QuantNexusApp:
             breakdown = [
                 # ── CAN SLIM 7원칙 ───────────────────────────────────
                 ("[C] EPS 가속도 (Current QE)",
-                 round(earn["c_score"], 1),
+                 None if earn.get("data_missing") else round(earn["c_score"], 1),
+                 "실적 데이터가 아직 공개되지 않았어요. (분기 보고 전이거나 공시 미반영)"
+                 if earn.get("data_missing") else
                  f"지난 분기 순이익이 {earn['eps_growth']:+.0%} 변동했어요. "
                  f"{'연속 성장 중이에요' if earn.get('eps_acceleration') else '성장 추세예요' if earn.get('trend') == 'up' else '주춤하고 있어요'}."),
 

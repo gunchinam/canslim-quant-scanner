@@ -1061,6 +1061,9 @@ def api_us_insight(ticker: str):
     return jsonify(result)
 
 
+# SocketIO 초기화 (gunicorn / 직접 실행 모두 대응)
+socketio.init_app(app)
+
 if __name__ == "__main__":
     debug = (os.environ.get("FLASK_DEBUG") or "0").strip().lower() in ("1", "true", "yes")
     host = (os.environ.get("FLASK_HOST") or "0.0.0.0").strip() or "0.0.0.0"
@@ -1069,5 +1072,4 @@ if __name__ == "__main__":
         port = int(port_raw)
     except ValueError:
         port = 5000
-    socketio.init_app(app)
     socketio.run(app, debug=debug, port=port, host=host, allow_unsafe_werkzeug=True)

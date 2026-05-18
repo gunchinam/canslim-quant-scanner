@@ -3,7 +3,7 @@
 import hashlib, os, random, sqlite3, time, threading
 from flask_socketio import SocketIO, emit
 
-socketio = SocketIO(cors_allowed_origins="*", async_mode="threading")
+socketio = SocketIO(cors_allowed_origins="*")  # async_mode 자동감지: gevent(서버) / threading(로컬)
 
 _DB_PATH = os.path.join(os.path.dirname(__file__), "..", "chat.db")
 _db_lock = threading.Lock()

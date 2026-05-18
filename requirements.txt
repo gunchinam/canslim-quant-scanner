@@ -2,7 +2,11 @@
 # install: pip install -r requirements.txt
 
 flask>=3.0
+flask-socketio>=5.3
+simple-websocket>=1.0
 gunicorn>=22.0
+gevent>=24.0
+gevent-websocket>=0.10
 
 numpy>=1.24
 pandas>=2.0
@@ -11,6 +15,7 @@ pyarrow>=14.0
 
 requests>=2.31
 python-dotenv>=1.0
+finnhub-python>=2.4
 
 matplotlib>=3.7
 Pillow>=10.0

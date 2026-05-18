@@ -100,11 +100,11 @@ def _data_tag(d: dict, bucket: str) -> str:
         if per > 0: p.append(f"PER {per:.0f}배")
         if roe: p.append(f"ROE {roe:.0f}%")
     elif bucket == "SECTOR_LEADER":
-        if score: p.append(f"점수 {score:.0f}")
+        pass
     elif bucket == "STRONG_BUY":
-        if score: p.append(f"점수 {score:.0f}")
+        pass
     elif bucket == "AVOID":
-        if score: p.append(f"점수 {score:.0f}")
+        pass
     # NEUTRAL: 태그 없음
 
     return "(" + " · ".join(p) + ")" if p else ""

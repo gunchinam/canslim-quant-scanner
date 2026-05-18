@@ -68,41 +68,41 @@ def _data_tag(d: dict, bucket: str) -> str:
 
     p = []
     if bucket == "TRUE_VALUE":
-        if per > 0: p.append(f"PER {per:.0f}배")
-        if roe: p.append(f"ROE {roe:.0f}%")
-        if eps_g: p.append(f"EPS {eps_g:+.0f}%")
+        if per > 0: p.append(f"주가수익비율 {per:.0f}배")
+        if roe: p.append(f"자본수익률 {roe:.0f}%")
+        if eps_g: p.append(f"이익성장 {eps_g:+.0f}%")
     elif bucket == "VALUE_TRAP":
-        if per > 0: p.append(f"PER {per:.0f}배")
-        if roe: p.append(f"ROE {roe:.0f}%")
+        if per > 0: p.append(f"주가수익비율 {per:.0f}배")
+        if roe: p.append(f"자본수익률 {roe:.0f}%")
     elif bucket == "EARNINGS_BEAT":
-        if eps_g: p.append(f"EPS {eps_g:+.0f}%")
-        if op_pct > 0: p.append(f"OPM {op_pct:.0f}%")
+        if eps_g: p.append(f"이익성장 {eps_g:+.0f}%")
+        if op_pct > 0: p.append(f"영업이익률 {op_pct:.0f}%")
     elif bucket in ("BUBBLE", "EXPENSIVE_JUSTIFIED"):
-        if per > 0: p.append(f"PER {per:.0f}배")
-        if eps_g: p.append(f"EPS {eps_g:+.0f}%")
+        if per > 0: p.append(f"주가수익비율 {per:.0f}배")
+        if eps_g: p.append(f"이익성장 {eps_g:+.0f}%")
     elif bucket == "STORY_STOCK":
-        if per > 0: p.append(f"PER {per:.0f}배")
-        elif per < 0: p.append("PER 적자")
-        if mom12: p.append(f"12M {mom12:+.0f}%")
+        if per > 0: p.append(f"주가수익비율 {per:.0f}배")
+        elif per < 0: p.append("적자기업")
+        if mom12: p.append(f"1년수익률 {mom12:+.0f}%")
     elif bucket == "OVERBOUGHT":
-        p.append(f"RSI {rsi:.0f}")
+        p.append(f"과열지수 {rsi:.0f}")
     elif bucket == "OVERSOLD":
-        p.append(f"RSI {rsi:.0f}")
-        if roe: p.append(f"ROE {roe:.0f}%")
+        p.append(f"과매도지수 {rsi:.0f}")
+        if roe: p.append(f"자본수익률 {roe:.0f}%")
     elif bucket in ("MOMENTUM_LEADER", "BREAKOUT"):
-        if mom12: p.append(f"12M {mom12:+.0f}%")
-        if rsi: p.append(f"RSI {rsi:.0f}")
+        if mom12: p.append(f"1년수익률 {mom12:+.0f}%")
+        if rsi: p.append(f"모멘텀지수 {rsi:.0f}")
     elif bucket == "FALLING_KNIFE":
-        if dd_pct: p.append(f"낙폭 {dd_pct:.0f}%")
-        if mom3: p.append(f"3M {mom3:+.0f}%")
+        if dd_pct: p.append(f"고점대비 {dd_pct:.0f}%")
+        if mom3: p.append(f"3개월 {mom3:+.0f}%")
     elif bucket == "SLEEPING_GIANT":
-        if roe: p.append(f"ROE {roe:.0f}%")
+        if roe: p.append(f"자본수익률 {roe:.0f}%")
     elif bucket == "CASH_COW":
-        if op_pct > 0: p.append(f"OPM {op_pct:.0f}%")
-        if roe: p.append(f"ROE {roe:.0f}%")
+        if op_pct > 0: p.append(f"영업이익률 {op_pct:.0f}%")
+        if roe: p.append(f"자본수익률 {roe:.0f}%")
     elif bucket == "DEFENSIVE":
-        if per > 0: p.append(f"PER {per:.0f}배")
-        if roe: p.append(f"ROE {roe:.0f}%")
+        if per > 0: p.append(f"주가수익비율 {per:.0f}배")
+        if roe: p.append(f"자본수익률 {roe:.0f}%")
     elif bucket == "SECTOR_LEADER":
         pass
     elif bucket == "STRONG_BUY":
@@ -118,17 +118,17 @@ def _data_tag(d: dict, bucket: str) -> str:
         rec_change = d.get("_FH_RecChange", "")
         insider_net = int(d.get("_FH_InsiderNet") or 0)
         if abs(earn_surp) >= 1:
-            p.append(f"실적 {earn_surp:+.1f}%")
+            p.append(f"실적서프라이즈 {earn_surp:+.1f}%")
         if earn_streak >= 3:
-            p.append(f"연속비트 {earn_streak}Q")
+            p.append(f"실적연속상회 {earn_streak}분기")
         if rec_change == "upgrade":
-            p.append("추천상향")
+            p.append("애널리스트 상향")
         elif rec_change == "downgrade":
-            p.append("추천하향")
+            p.append("애널리스트 하향")
         if insider_net > 0:
-            p.append("내부자매수")
+            p.append("내부자 매수")
         elif insider_net < -10000:
-            p.append("내부자매도")
+            p.append("내부자 매도")
 
     # yfinance 센티먼트 태그 (US 종목)
     if d.get("_YF_Available"):
@@ -138,14 +138,14 @@ def _data_tag(d: dict, bucket: str) -> str:
         n_analysts = int(_num(d.get("_YF_NumAnalysts")))
         target_gap = _num(d.get("_YF_TargetGapPct"))
         if short_pct >= 2:
-            p.append(f"숏 {short_pct:.1f}%")
+            p.append(f"공매도 {short_pct:.1f}%")
         if inst_pct > 0:
-            p.append(f"기관 {inst_pct:.0f}%")
+            p.append(f"기관보유 {inst_pct:.0f}%")
         if rec_key and n_analysts:
             _rec_kr = {"strong_buy": "적극매수", "buy": "매수", "hold": "보유", "sell": "매도", "strong_sell": "적극매도"}
-            p.append(f"{_rec_kr.get(rec_key, rec_key)} ({n_analysts}명)")
+            p.append(f"컨센서스 {_rec_kr.get(rec_key, rec_key)}({n_analysts}명)")
         if abs(target_gap) >= 5:
-            p.append(f"목표가 {target_gap:+.0f}%")
+            p.append(f"목표가괴리 {target_gap:+.0f}%")
 
     # KIS 수급 태그 (KR 종목만)
     if d.get("_KIS_Available"):
@@ -156,11 +156,11 @@ def _data_tag(d: dict, bucket: str) -> str:
                 return f"{v / 10000:+.1f}만주"
             return f"{v:+,}주"
         if abs(frgn) >= 1000:
-            p.append(f"외인 {_fmt_qty(frgn)}")
+            p.append(f"외국인 {_fmt_qty(frgn)}")
         if abs(inst) >= 1000:
             p.append(f"기관 {_fmt_qty(inst)}")
 
-    return "(" + " · ".join(p) + ")" if p else ""
+    return " · ".join(p) if p else ""
 
 
 def _stylize_one_liner(base: str, d: dict, bucket: str) -> str:

@@ -1149,6 +1149,28 @@ td.score-col {
 .dn-filing-title a { color: var(--brand); text-decoration: none; cursor: pointer; }
 .dn-filing-title a:hover { color: var(--info); text-decoration: underline; }
 .dn-empty { padding: 24px; text-align: center; color: var(--text-tertiary); font-size: 13px; }
+
+/* US Insight styles (drawer) */
+.us-metric-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.us-metric-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow-card); }
+.us-metric-label { font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.3px; }
+.us-metric-value { font-size: 22px; font-weight: 700; color: var(--text-primary); margin-top: 4px; line-height: 1; }
+.us-metric-sub { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+.us-earnings-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow-card); display: flex; align-items: center; gap: 14px; }
+.us-earnings-chip { font-size: 13px; font-weight: 700; padding: 6px 14px; border-radius: 100px; white-space: nowrap; flex-shrink: 0; }
+.us-earnings-info { flex: 1; }
+.us-earnings-date { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.us-earnings-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.us-rec-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.us-rec-item:last-child { border-bottom: none; }
+.us-rec-action { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 100px; white-space: nowrap; flex-shrink: 0; text-transform: uppercase; }
+.us-rec-action.upgrade { background: rgba(52,199,89,0.12); color: var(--success); }
+.us-rec-action.downgrade { background: rgba(255,59,48,0.12); color: var(--destructive); }
+.us-rec-action.init { background: var(--brand-tint); color: var(--brand); }
+.us-rec-action.reiterated { background: var(--surface-subtle); color: var(--text-tertiary); }
+.us-rec-firm { font-size: 13px; color: var(--text-primary); font-weight: 500; flex: 1; }
+.us-rec-grade { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+
 /* 계산 과정 팝업 (바텀시트) */
 .cp-overlay {
   display: none; position: fixed; inset: 0; z-index: 9999;
@@ -1550,7 +1572,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
               <th class="right sortable" data-sort="Price">현재가 <span class="sort-arrow"></span></th>
               <th class="right sortable" data-sort="DayChg">등락 <span class="sort-arrow"></span></th>
               <th class="right sortable" data-sort="RSI">RSI <span class="sort-arrow"></span></th>
-              <th class="right sortable" data-sort="TargetUpside" title="현재 점수 계산에 사용되는 메인 목표가 대비 상승여력 — 기본은 노무라식 목표가, 없으면 DCF 폴백">메인 목표가↑ <span class="sort-arrow"></span></th>
+              <th class="right sortable" data-sort="TargetUpside" title="현재 점수 계산에 사용되는 메인 목표가 대비 상승여력 — 기본은 섹터 밸류에이션, 없으면 DCF 폴백">메인 목표가↑ <span class="sort-arrow"></span></th>
               <th class="right sortable" data-sort="BrokerTarget" title="증권사 컨센서스 목표가 — KR: 네이버 증권 국내 증권사 평균 / US: Yahoo Finance Analyst Mean Target">증권사 목표가 <span class="sort-arrow"></span></th>
               <th class="reason-col">핵심 이유</th>
             </tr>
@@ -1758,6 +1780,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           <button class="dp-tab-btn" data-tab="tech" onclick="switchDpTab('tech')">기술 지표</button>
           <button class="dp-tab-btn" data-tab="finance" onclick="switchDpTab('finance')">재무 지표</button>
           <button class="dp-tab-btn" data-tab="dartnews" id="dp-btn-dartnews" onclick="switchDpTab('dartnews')" style="display:none;">공시·뉴스</button>
+          <button class="dp-tab-btn" data-tab="usinsight" id="dp-btn-usinsight" onclick="switchDpTab('usinsight')" style="display:none;">US 인사이트</button>
         </nav>
         <div class="dp-tab-panel active" id="dp-tab-canslim">
           <div id="dp-breakdown-list"></div>
@@ -1770,6 +1793,9 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         </div>
         <div class="dp-tab-panel" id="dp-tab-dartnews">
           <div id="dp-dartnews-content" style="padding:16px;"></div>
+        </div>
+        <div class="dp-tab-panel" id="dp-tab-usinsight">
+          <div id="dp-usinsight-content" style="padding:16px;display:flex;flex-direction:column;gap:12px;"></div>
         </div>
       </div>
     </div>

@@ -585,7 +585,7 @@ function renderStockRow(stock, rank) {
   const chgClass   = dayChg > 0 ? 'chg-up' : dayChg < 0 ? 'chg-down' : 'chg-flat';
   const chgSign    = dayChg > 0 ? '+' : '';
   const rsi        = stock.RSI != null ? fmt(stock.RSI, 1) : '—';
-  const targetLabel = stock.NomuraUsed ? '노무라식 메인 목표가' : 'DCF 메인 목표가';
+  const targetLabel = stock.NomuraUsed ? '섹터 밸류에이션 목표가' : 'DCF 메인 목표가';
   const upsidePct  = stock.TargetUpside != null
     ? (stock.TargetUpside >= 0 ? '+' : '') + fmt(stock.TargetUpside * 100, 1) + '%'
     : '—';
@@ -770,7 +770,7 @@ function populateDetail(d) {
   setText('detail-broker-target', d.BrokerTarget ? fmtPrice(d.BrokerTarget) : '컨센서스 없음');
   setText('detail-nomura-target', d.NomuraTarget ? fmtPrice(d.NomuraTarget) : '—');
 
-  // 노무라식 목표가 상승여력 + 방식
+  // 섹터 밸류에이션 목표가 상승여력 + 방식
   const _detNomUp = document.getElementById('detail-nomura-upside');
   if (_detNomUp) {
     if (d.NomuraTarget && d.Price) {
@@ -1256,7 +1256,7 @@ function _populatePanelDetail(d, skipFourAxis) {
   const tgtSrcEl = document.getElementById('dp-target-src');
   if (tgtSrcEl) {
     if (d.TargetPrice && d.TargetSource) {
-      const method = d.NomuraUsed ? '노무라식 메인' : 'DCF 메인';
+      const method = d.NomuraUsed ? '섹터 밸류에이션' : 'DCF 메인';
       tgtSrcEl.textContent = method;
       tgtSrcEl.title = `메인 목표가 방식: ${method} · 출처: ${d.TargetSource}`;
     } else {

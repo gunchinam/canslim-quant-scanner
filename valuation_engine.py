@@ -330,80 +330,17 @@ def run(
 # 참고: SK하이닉스 사례 - BPS 668,186원 × 3.5배 = 약 2,340,000원
 
 _CYCLICAL_SECTORS  = {"반도체", "디스플레이", "철강", "조선", "화학", "정유", "해운", "자동차"}
-_FINANCIAL_SECTORS = {"은행", "보험", "증권", "지주"}
+_FINANCIAL_SECTORS = {"은행", "보험", "증권", "지주", "금융"}
 _STABLE_SECTORS    = {"소비재", "통신", "유틸리티", "건설", "유통", "음식료", "방산"}
 _GROWTH_SECTORS    = {"바이오", "제약", "플랫폼", "게임", "엔터", "인터넷", "AI인프라"}
 
-# 노무라 섹터별 톤 보정 계수 — 2026년 5월 기준 실제 리서치 톤 반영.
-# 1.0 = 중립. >1.0 = 노무라가 강세, <1.0 = 약세.
-#
-# 2026 톤 핵심 근거:
-#   - KOSPI 상반기 타겟 7,500~8,000 (반도체 슈퍼사이클·밸류업·AI 인프라)
-#   - 한국 시장 overweight, 2026 EPS +129%, 2027 +25% 전망
-#   - 메모리 슈퍼사이클 2027까지 지속 (SEC 16만, 하이닉스 88만→234만 상향)
-#   - AI 인프라·HBM·물리 AI 밸류체인 재평가
-#   - 자동차 underweight (일본 동일, 한국도 상대적으로 약세)
-#   - 조선: 2022 신조 피크론 (HD현대중공업 다운그레이드)
-#   - 철강·화학: 중국 공급과잉 지속
-#   - 방산: stable performance, 중립~소폭 강세
-#   - 건설/부동산: BOK 금리 동결, 부동산 우려 유지
-_NOMURA_SECTOR_BIAS: dict[str, float] = {
-    # 강세 (overweight)
-    "반도체":     1.20,   # 메모리 슈퍼사이클 (2026 톤 상향)
-    "AI인프라":   1.15,   # AI 밸류체인 재평가
-    "플랫폼":     1.10,   # IT overweight 일관성
-    "방산":       1.05,   # stable performance
-    "인터넷":     1.05,
-    # 중립
-    "통신":       1.00,
-    "엔터":       1.00,
-    "증권":       1.00,
-    "은행":       1.00,   # 밸류업 수혜 / BOK 금리 동결
-    "소비재":     0.95,
-    "유통":       0.95,
-    "음식료":     0.95,
-    "보험":       0.95,
-    "디스플레이": 0.95,
-    "게임":       0.95,
-    "유틸리티":   0.90,
-    "지주":       0.90,   # 지주사 디스카운트
-    "바이오":     0.90,
-    "제약":       0.90,
-    # 약세 (underweight)
-    "자동차":     0.85,   # 노무라 일관 underweight
-    "화학":       0.85,   # 중국 공급과잉
-    "정유":       0.85,
-    "건설":       0.80,   # 부동산 우려
-    "철강":       0.80,   # 중국 공급과잉
-    "해운":       0.80,
-    "조선":       0.70,   # 신조 발주 2022 피크론 (2026 추가 강화)
-}
+# 섹터별 보정 계수 — 모두 중립(1.0).
+# 섹터 라우팅(밸류에이션 방식 분기)은 유지하되, 주관적 bias는 적용하지 않음.
+_NOMURA_SECTOR_BIAS: dict[str, float] = {}
 
 
 def _nomura_bias(sector: str) -> float:
-    """노무라 톤 보정 계수. 모르는 섹터는 1.0(중립).
-
-    정확 일치 우선, 없으면 부분일치(예: "🔧 반도체 / 메모리" → "반도체").
-    """
-    s = (sector or "").strip()
-    if not s:
-        return 1.0
-    if s in _NOMURA_SECTOR_BIAS:
-        return float(_NOMURA_SECTOR_BIAS[s])
-    for key, val in _NOMURA_SECTOR_BIAS.items():
-        if key in s:
-            return float(val)
-    s_u = s.upper()
-    if _contains_any(s_u, ("AI GPU", "HBM", "SEMICON", "SEMICONDUCTOR", "MEMORY", "FABLESS")):
-        return 1.20
-    if "장비" in s or _contains_any(s_u, _EQUIPMENT_SECTOR_ALIASES):
-        return 1.08
-    if _contains_any(s_u, ("PLATFORM", "CLOUD", "SAAS", "SOFTWARE", "INTERNET", "AI", "DATA")):
-        return 1.15
-    if _contains_any(s_u, ("BANK", "FINANCE", "FINTECH", "INSURANCE", "EXCHANGE", "PAYMENT", "BROKER")):
-        return 1.00
-    if _contains_any(s_u, ("BIOTECH", "PHARMA", "HEALTH", "MEDICAL")):
-        return 0.90
+    """섹터 보정 계수. 현재 모든 섹터 중립(1.0)."""
     return 1.0
 
 

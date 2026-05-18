@@ -476,9 +476,7 @@ async function runScan() {
     allStocks    = Array.isArray(stocks) ? stocks : [];
     const visibleTickers = new Set(allStocks.map(s => s.Ticker));
     _compareSet = new Set([..._compareSet].filter(ticker => visibleTickers.has(ticker)));
-    renderSectorHeatmap(allStocks);
-    updateCompareActions();
-    renderStockTable(_applySearchFilter(allStocks));
+    _refreshFilteredView();
   } catch (e) {
     console.error('runScan 실패:', e);
     setStockListMsg('스캔 실패. 서버 상태를 확인하세요.');
@@ -510,9 +508,22 @@ function _applyQuickFilter(stocks) {
   }
 }
 
-// 필터/정렬을 다시 적용해 테이블 갱신
+// 표가 실제로 보여주는 것과 동일한 필터 결과(검색 → 퀵필터 → 원라이너 버킷)
+function _scopedStocks() {
+  let scoped = _applySearchFilter(allStocks);
+  scoped = _applyQuickFilter(scoped);
+  if (_oneLinerFilter) {
+    scoped = scoped.filter(s => (s.OneLinerTag || '') === _oneLinerFilter);
+  }
+  return scoped;
+}
+
+// 필터/정렬을 다시 적용해 히트맵+테이블을 일관되게 갱신
 function _refreshFilteredView() {
   updateCompareActions();
+  // 히트맵은 표와 동일한 필터 범위를 따라야 함 (전체로 새지 않게)
+  renderSectorHeatmap(_scopedStocks());
+  // 테이블은 검색만 적용해 넘기면 내부에서 퀵필터/원라이너를 재적용 (멱등)
   renderStockTable(_applySearchFilter(allStocks));
 }
 
@@ -780,7 +791,7 @@ async function _lookupTicker(ticker) {
       return;
     }
     allStocks = [data];
-    renderStockTable(_applySearchFilter(allStocks));
+    _refreshFilteredView();
   } catch (err) {
     console.error('search lookup failed:', err);
     setStockListMsg('검색 실패. 서버 상태를 확인하세요.');
@@ -830,7 +841,7 @@ function initSearch() {
   inp.addEventListener('input', () => {
     const q = inp.value.trim();
     // 스캔 결과 내 필터
-    if (allStocks.length) renderStockTable(_applySearchFilter(allStocks));
+    if (allStocks.length) _refreshFilteredView();
     // 자동완성 제안
     clearTimeout(_searchTimer);
     if (q.length < 1) { _hideSuggest(); return; }
@@ -952,7 +963,7 @@ function populateDetail(d) {
       if (shortSrc.includes('네이버')) shortSrc = '네이버증권 컨센서스';
       else if (shortSrc.includes('Yahoo')) {
         shortSrc = 'Yahoo Finance';
-        if (d.BrokerAnalystCount) shortSrc += ` (${d.BrokerAnalystCount}명)`;
+        if (d.BrokerAnalystCount) shortSrc += ` (목표가 제시 애널리스트 ${d.BrokerAnalystCount}명)`;
       }
       _detBrkSrc.textContent = shortSrc;
       _detBrkSrc.title = d.BrokerTargetSource;  // 풀 텍스트는 툴팁
@@ -1160,7 +1171,7 @@ function _breakdownItemHtml(item) {
     </div>
     <svg class="cs-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
   </div>
-  <div class="cs-score-big ${sc}">${score > 0 ? fmt(score, 1) : '<span style="font-size:11px;color:var(--text-tertiary);">데이터 부족</span>'}</div>
+  <div class="cs-score-big ${sc}">${(typeof score === 'number' && isFinite(score)) ? fmt(score, 1) : '<span style="font-size:11px;color:var(--text-tertiary);">데이터 부족</span>'}</div>
   <div class="cs-bar-wrap"><div class="cs-bar-fill ${sc}" style="width:${barW}%"></div></div>
   ${briefDesc ? `<div class="cs-desc-brief">${esc(_trKo(briefDesc))}</div>` : ''}
 </div>`;
@@ -1379,7 +1390,7 @@ function _populatePanelDetail(d, skipFourAxis) {
       if (shortSrc.includes('네이버')) shortSrc = '네이버증권 컨센서스';
       else if (shortSrc.includes('Yahoo')) {
         shortSrc = 'Yahoo Finance';
-        if (d.BrokerAnalystCount) shortSrc += ` (${d.BrokerAnalystCount}명)`;
+        if (d.BrokerAnalystCount) shortSrc += ` (목표가 제시 애널리스트 ${d.BrokerAnalystCount}명)`;
       }
       brkSrcEl.textContent = shortSrc;
       brkSrcEl.title = d.BrokerTargetSource;
@@ -2280,8 +2291,8 @@ function _renderUSInsight(container, data) {
     html += `<div class="dn-filing-card">
       <div class="dn-filing-header">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-        Analyst Recommendations
-        <span style="margin-left:auto;font-size:11px;color:var(--text-tertiary);font-weight:400;">${recs.length}건</span>
+        애널리스트 투자의견 변경 이력
+        <span style="margin-left:auto;font-size:11px;color:var(--text-tertiary);font-weight:400;">최근 ${recs.length}건</span>
       </div>`;
     for (const rec of recs) {
       const action = (rec.action || '').toLowerCase();

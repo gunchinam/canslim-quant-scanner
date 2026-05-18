@@ -101,11 +101,19 @@ from kr_company_info import KR_COMPANY_INFO as _KR_COMPANY_INFO
 # 할인율이 적용돼 주가가 결정된다. 아래는 직접 보유 "상장 자회사" 지분만
 # 큐레이션한 것(비상장·간접지분은 보수적으로 제외 → NAV가 보수적으로 산출됨).
 #
-# stakes: [(자회사 6자리코드, 지분율 decimal), ...]
-# buyback_yield: 배당 외 자사주 매입/소각에 의한 추가 주주환원율(decimal).
-#                배당수익률은 런타임 info에서 합산되므로 여기엔 넣지 않는다.
+# 필수 키
+#   stakes: [(자회사 6자리코드, 지분율 decimal), ...]
+#   buyback_yield: 배당 외 자사주 매입/소각에 의한 추가 주주환원율(decimal).
+#                  배당수익률은 런타임 info에서 합산되므로 여기엔 넣지 않는다.
+# 선택 키 (정밀화 요소 — 미입력 시 보수적 기본값)
+#   unlisted_oku: 비상장·간접지분 추정가치(억원). NAV에 가산. 미입력=0이라
+#                 NAV가 하한으로 잡혀 저평가 신호가 둔감해진다. 큰 비상장
+#                 자산 보유처(㈜SK의 SK실트론·SK E&S 등)에 한해 입력.
+#   discount: {"base": 0.55, "min": 0.30} 종목별 목표 할인율 오버라이드.
+#             지배구조 리스크·복층지주 구조가 큰 곳(예: 한진칼)은 base를
+#             크게, 적극 주주환원처는 작게. 미입력 시 엔진 기본(0.50/0.25).
 #
-# ⚠ 지분율은 근사치이며 분기보고서 기준으로 주기적 갱신 필요.
+# ⚠ 지분율·추정가치는 근사치이며 분기보고서 기준으로 주기적 갱신 필요.
 HOLDCO_HOLDINGS: dict[str, dict] = {
     "402340": {  # SK스퀘어 — SK ICT 투자지주
         "stakes": [("000660", 0.2007)],          # SK하이닉스
@@ -2093,10 +2101,19 @@ class WallStreetQuantStrategies:
             _is_holdco = _hnav_ps > 0.0
             if _is_holdco:
                 try:
+                    # 종목별 목표 할인율 오버라이드(있으면) → 엔진 kwargs
+                    _hd = info.get("_holdco_discount") or {}
+                    _disc_kw = {}
+                    if isinstance(_hd, dict):
+                        if _hd.get("base") is not None:
+                            _disc_kw["base_discount"] = float(_hd["base"])
+                        if _hd.get("min") is not None:
+                            _disc_kw["min_discount"] = float(_hd["min"])
                     hr = valuation_engine.holdco_nav_target_price(
                         nav_ps=_hnav_ps,
                         current_price=cur_price,
                         shareholder_yield=float(info.get("_holdco_shyield") or 0.0),
+                        **_disc_kw,
                     )
                     h_tp = float(hr.get("target_price") or 0.0)
                     result["nomura_target"] = h_tp
@@ -3400,8 +3417,14 @@ class QuantNexusApp:
     def _compute_holdco_nav(self, ticker: str, info: dict) -> dict | None:
         """투자지주사면 보유 상장지분 시가 기반 주당 NAV·주주환원율 산출.
 
-        Returns ``{"nav_ps", "shareholder_yield", "sub_count"}`` 또는 None.
-        비상장·간접지분은 제외 → NAV는 보수적(실제 NAV의 하한)으로 산출됨.
+        Returns ``{"nav_ps", "shareholder_yield", "sub_count",
+        "unlisted_oku", "discount"}`` 또는 None.
+
+        상장 자회사 지분이 NAV의 골격이고, 거기에 종목별 선택 요소가 더해진다:
+          • unlisted_oku: 비상장·간접지분 추정가치(억원). 미입력 시 0 → NAV는
+            보수적(실제 NAV의 하한)으로 산출돼 저평가 신호가 둔감해진다.
+          • discount: {"base":..,"min":..} 종목별 목표 할인율 오버라이드.
+            지배구조 리스크가 큰 곳은 base를 크게, 적극 주주환원처는 작게.
         """
         code = str(ticker or "").split(".")[0]
         spec = HOLDCO_HOLDINGS.get(code)
@@ -3418,6 +3441,14 @@ class QuantNexusApp:
                 n_ok += 1
         if nav_oku <= 0 or n_ok == 0:
             return None
+
+        # 비상장·간접지분 추정가치(억원). 큐레이션된 종목만, 기본 0(보수적).
+        try:
+            unlisted_oku = float(spec.get("unlisted_oku", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            unlisted_oku = 0.0
+        if unlisted_oku > 0:
+            nav_oku += unlisted_oku
 
         # 지주사 순현금(억원): info 의 totalCash − totalDebt. 누락 시 0.
         try:
@@ -3444,7 +3475,16 @@ class QuantNexusApp:
             div_y = 0.0
         sh_yield = div_y + float(spec.get("buyback_yield", 0.0) or 0.0)
 
-        return {"nav_ps": nav_ps, "shareholder_yield": sh_yield, "sub_count": n_ok}
+        # 종목별 목표 할인율 오버라이드(선택). 미입력 시 엔진 기본값 사용.
+        disc = spec.get("discount") if isinstance(spec.get("discount"), dict) else None
+
+        return {
+            "nav_ps": nav_ps,
+            "shareholder_yield": sh_yield,
+            "sub_count": n_ok,
+            "unlisted_oku": unlisted_oku,
+            "discount": disc,
+        }
 
     def _nomura_sector_hint(self, ticker: str, info: dict) -> str:
         """
@@ -4150,6 +4190,9 @@ class QuantNexusApp:
                     info["_holdco_nav_ps"] = _hnav["nav_ps"]
                     info["_holdco_shyield"] = _hnav["shareholder_yield"]
                     info["_holdco_subs"] = _hnav["sub_count"]
+                    info["_holdco_unlisted"] = _hnav.get("unlisted_oku") or 0.0
+                    if _hnav.get("discount"):
+                        info["_holdco_discount"] = _hnav["discount"]
             except Exception as e:
                 logging.debug(f"[Holdco] nav compute {ticker}: {e}")
             pt     = self.engine.price_target(info, cur, sector=_sector_for_nomura)

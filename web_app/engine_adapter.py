@@ -1,4 +1,4 @@
-"""
+﻿"""
 engine_adapter.py — quant_nexus_v20.py 엔진을 tkinter 없이 사용하는 어댑터
 Flask 웹앱이 이 클래스를 통해 스캔 기능을 호출한다.
 """
@@ -42,6 +42,7 @@ class ScanAdapter:
             "scanned": 0, "strong_buy": 0, "buy": 0, "hold": 0, "sell": 0,
         }
         self._naver_target_cache: dict        = {}
+        self._naver_target_meta:  dict        = {}
         self._naver_fund_cache:   dict        = {}
         self._committee_cache:    OrderedDict = OrderedDict()
         self._committee_cache_max              = 1000
@@ -94,6 +95,14 @@ class ScanAdapter:
         """네이버 재무 캐시 저장 — 원본 엔진 메서드 위임."""
         _qn.QuantNexusApp._save_naver_fund_cache(self)
 
+
+    def _nomura_sector_hint(self, ticker: str, info: dict) -> str:
+        """Forward QuantNexusApp's sector routing helper onto the adapter instance."""
+        return _qn.QuantNexusApp._nomura_sector_hint(self, ticker, info)
+
+    def _resolve_display_name(self, ticker: str, current_name: str = "") -> str:
+        """Forward QuantNexusApp's display name resolver onto the adapter instance."""
+        return _qn.QuantNexusApp._resolve_display_name(self, ticker, current_name)
     # ── 공개 API ─────────────────────────────────────────────────────────
 
     def get_sectors(self) -> dict[str, list[str]]:
@@ -117,16 +126,25 @@ class ScanAdapter:
             result[translated_cat] = [sub_kr.get(s, s) for s in subsectors.keys()]
         return result
 
-    def analyze_ticker(self, ticker: str) -> dict | None:
-        """단일 종목 분석 — QuantNexusApp.analyze_ticker 직접 위임."""
+    def analyze_ticker(self, ticker: str, *, prefer_cache: bool = False, cache_only: bool = False) -> dict | None:
+        """단일 종목 분석 — 캐시 우선/캐시 전용 모드를 지원한다."""
+        if prefer_cache:
+            cached = self.cache.get(f"{ticker}__{self._scan_strategy}", max_age_minutes=60 * 24 * 7)
+            if cached:
+                return cached
+            if cache_only:
+                return None
         return _qn.QuantNexusApp._analyze_ticker(self, ticker)
 
-    def scan_sector(self, sector: str, *, max_workers: int = 8) -> list[dict]:
+    def scan_sector(self, sector: str, *, max_workers: int = 8, prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
         """특정 섹터 종목을 병렬 분석 후 TotalScore 내림차순 반환."""
         tickers = self._sectors.get(sector, [])
         results: list[dict] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
-            futures = {ex.submit(self.analyze_ticker, t): t for t in tickers}
+            futures = {
+                ex.submit(self.analyze_ticker, t, prefer_cache=prefer_cache, cache_only=cache_only): t
+                for t in tickers
+            }
             for fut in concurrent.futures.as_completed(futures):
                 try:
                     r = fut.result()
@@ -138,7 +156,7 @@ class ScanAdapter:
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         return results
 
-    def scan_all(self, *, max_workers: int = 8) -> list[dict]:
+    def scan_all(self, *, max_workers: int = 8, prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
         """전체 섹터 종목을 병렬 분석 (중복 ticker 제거) 후 TotalScore 내림차순 반환."""
         ticker_sector: dict[str, str] = {}
         for sector, tickers in self._sectors.items():
@@ -149,7 +167,7 @@ class ScanAdapter:
         results: list[dict] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
             futures = {
-                ex.submit(self.analyze_ticker, t): (t, s)
+                ex.submit(self.analyze_ticker, t, prefer_cache=prefer_cache, cache_only=cache_only): (t, s)
                 for t, s in ticker_sector.items()
             }
             for fut in concurrent.futures.as_completed(futures):

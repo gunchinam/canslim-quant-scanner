@@ -1222,7 +1222,10 @@ def _num(v, default=0.0):
     try:
         if v is None:
             return default
-        return float(v)
+        f = float(v)
+        if f != f:  # NaN check
+            return default
+        return f
     except (TypeError, ValueError):
         return default
 
@@ -1687,6 +1690,9 @@ def _bucket(d: dict) -> str:
         return "VALUE_TRAP"
     if op_pct >= 25 and roe >= 18 and eps_g < 15:
         return "CASH_COW"
+    # 극단 모멘텀 (12M 100%+) — 위 펀더 버킷에 안 걸린 경우
+    if mom12 >= 100:
+        return "STORY_STOCK"
 
     # 추세성 — 위 모든 펀더 버킷 이후
     if entry in ("STRONG", "GREEN") and near_h and mom12 >= 30:

@@ -13,7 +13,24 @@ import logging
 import threading
 
 logger = logging.getLogger(__name__)
-_pykrx_logger = logging.getLogger("pykrx")
+
+
+class _PykrxNoiseFilter(logging.Filter):
+    """pykrx의 comm/util.py가 root 로거로 호출하는 깨진
+    ``logging.info(args, kwargs)`` 레코드를 차단한다.
+
+    pykrx 내부 버그: 포맷 인자 불일치로 ``record.getMessage()``가
+    TypeError를 던져 매 호출마다 '--- Logging error ---' 스택을 토해낸다.
+    이름 없는 root 로거로 찍히므로 ``getLogger("pykrx").setLevel()``로는
+    못 막는다 → root 로거에 pathname 기준 필터를 건다.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        pathname = (getattr(record, "pathname", "") or "").replace("\\", "/")
+        return "/pykrx/" not in pathname
+
+
+logging.getLogger().addFilter(_PykrxNoiseFilter())
 
 _cache: dict[str, str] = {}
 _loaded = False
@@ -74,10 +91,11 @@ def _load_fdr() -> bool:
 
 
 def _load_pykrx() -> bool:
-    """pykrx로 KOSPI/KOSDAQ 전종목 이름 로드. 성공 시 True 반환."""
-    prev_level = _pykrx_logger.level
+    """pykrx로 KOSPI/KOSDAQ 전종목 이름 로드. 성공 시 True 반환.
+
+    pykrx의 root 로거 스팸은 모듈 로드 시 설치한 _PykrxNoiseFilter가 차단.
+    """
     try:
-        _pykrx_logger.setLevel(logging.CRITICAL)
         from pykrx import stock as krx
         count = 0
         for market in ("KOSPI", "KOSDAQ"):
@@ -97,8 +115,6 @@ def _load_pykrx() -> bool:
     except Exception as e:
         logger.debug("[stock_names] pykrx 로드 실패: %s", e)
         return False
-    finally:
-        _pykrx_logger.setLevel(prev_level)
 
 
 def _load_all() -> None:

@@ -50,13 +50,6 @@ def _render_deployment() -> bool:
     return bool((os.environ.get("RENDER") or "").strip())
 
 
-def _swing_scanner_enabled() -> bool:
-    raw = (os.environ.get("ENABLE_SWING_SCANNER") or "").strip().lower()
-    if raw in ("1", "true", "yes", "on"):
-        return True
-    if raw in ("0", "false", "no", "off"):
-        return False
-    return not _render_deployment()
 
 _AI_COMMENT_TTL_SEC = 3600
 _ai_comment_cache: dict[tuple[str, str, str], dict[str, object]] = {}
@@ -70,6 +63,11 @@ _four_axis_cache_lock = threading.Lock()
 _CONSENSUS_TTL_SEC = 900  # 15분
 _consensus_cache: dict[str, dict] = {}
 _consensus_cache_lock = threading.Lock()
+
+# ── 티커 상세 응답 캐시 (드로어 재오픈 시 즉시 응답) ──
+_TICKER_DETAIL_TTL_SEC = 1800  # 30분
+_ticker_detail_cache: dict[str, dict] = {}
+_ticker_detail_cache_lock = threading.Lock()
 
 _scan_refresh_lock = threading.Lock()
 _scan_refresh_inflight: set[tuple[str, str, str]] = set()
@@ -391,7 +389,6 @@ def healthz():
         "ok": True,
         "service": "canslim-quant-scanner",
         "render": _render_deployment(),
-        "swing_scanner_enabled": _swing_scanner_enabled(),
     })
 
 
@@ -583,10 +580,19 @@ def api_scan():
 @app.route("/api/ticker/<ticker>")
 def api_ticker(ticker: str):
     """GET /api/ticker/AAPL?market=US&strategy=BALANCED → {Ticker, TotalScore, ...}"""
+    market_arg = (request.args.get("market") or "US").upper()
+    strategy_arg = request.args.get("strategy", "BALANCED")
+    # ── 응답 캐시 조회 (동일 종목 재오픈 시 즉시 반환) ──
+    _td_key = f"{ticker}:{market_arg}:{strategy_arg}"
+    _td_now = int(time.time())
+    with _ticker_detail_cache_lock:
+        _td_cached = _ticker_detail_cache.get(_td_key)
+        if _td_cached and (_td_now - _td_cached.get("_ts", 0)) < _TICKER_DETAIL_TTL_SEC:
+            return jsonify(_td_cached["data"])
     try:
         adapter = _make_adapter()
-        result  = adapter.analyze_ticker(ticker)
-        market = (request.args.get("market") or "US").upper()
+        result  = adapter.analyze_ticker(ticker, prefer_cache=True)
+        market = market_arg
         if result is None:
             return jsonify({"error": "해당 티커의 데이터를 찾을 수 없습니다."}), 404
         if market == "KR":
@@ -608,31 +614,37 @@ def api_ticker(ticker: str):
             result = _annotate_one_liners([result])[0]
         except Exception as oe:
             logging.warning("one_liner annotate (ticker) failed: %s", oe)
-        # AgentQuant 진입 점수 융합 (가중치 0.6 기존 / 0.4 AQ)
-        try:
-            from agentquant_signal import get_regime_signal
-            aq = get_regime_signal(ticker, market=market)
-            if aq and aq.get("stock"):
-                aq_score = float(aq["stock"].get("score") or 0)
-                base = result.get("EntryScore")
-                base_f = float(base) if base is not None else None
-                if base_f is not None:
-                    fused = round(0.6 * base_f + 0.4 * aq_score, 1)
-                else:
-                    fused = round(aq_score, 1)
-                result["EntryScore_engine"] = base_f
-                result["EntryScore_aq"] = aq_score
-                result["EntryScore"] = fused
-                result["AQ_Verdict"] = aq["stock"].get("verdict_kr")
-                result["AQ_VerdictCode"] = aq["stock"].get("verdict")
-                result["AQ_Regime"] = aq.get("market", {}).get("label")
-                result["AQ_Reasons"] = aq["stock"].get("reasons", [])[:4]
-        except Exception as aqe:
-            logging.warning("agentquant fuse failed for %s: %s", ticker, aqe)
+        # AQ 융합은 /api/aq_signal/<ticker> 로 분리 (드로어 lazy-load)
+        # ── 응답 캐시 저장 ──
+        with _ticker_detail_cache_lock:
+            _ticker_detail_cache[_td_key] = {"_ts": int(time.time()), "data": result}
         return jsonify(result)
     except Exception as e:
         logging.exception("api_ticker")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/aq_signal/<ticker>")
+def api_aq_signal(ticker: str):
+    """GET /api/aq_signal/AAPL?market=US → AgentQuant 진입 타이밍 (lazy-load)."""
+    market = (request.args.get("market") or "US").upper()
+    try:
+        from agentquant_signal import get_regime_signal
+        aq = get_regime_signal(ticker, market=market)
+        if not aq or not aq.get("stock"):
+            return jsonify({"ok": False})
+        stock = aq["stock"]
+        return jsonify({
+            "ok": True,
+            "EntryScore_aq": float(stock.get("score") or 0),
+            "AQ_Verdict": stock.get("verdict_kr"),
+            "AQ_VerdictCode": stock.get("verdict"),
+            "AQ_Regime": aq.get("market", {}).get("label"),
+            "AQ_Reasons": stock.get("reasons", [])[:4],
+        })
+    except Exception as e:
+        logging.warning("api_aq_signal failed for %s: %s", ticker, e)
+        return jsonify({"ok": False, "error": str(e)})
 
 
 @app.route("/api/ai_comment/<ticker>")
@@ -929,6 +941,15 @@ def api_dart_news(ticker: str):
     except Exception as e:
         logging.warning("dart-news filings: %s", e)
 
+    # 1-b) 실적 서프라이즈 (yfinance 경유)
+    try:
+        import event_calendar
+        history = event_calendar.earnings_history(ticker, limit=4)
+        if history:
+            result["earnings_history"] = history
+    except Exception as e:
+        logging.warning("dart-news earnings_history: %s", e)
+
     # 2) Naver News 감성분석 — 종목명으로 검색
     try:
         import naver_news
@@ -1111,6 +1132,11 @@ def api_us_insight(ticker: str):
                 "chip_text": chip["text"], "chip_fg": chip["fg"],
                 "chip_bg": chip["bg"], "chip_show": chip["show"],
             }
+        # 과거 실적 서프라이즈 히스토리
+        history = event_calendar.earnings_history(ticker, limit=4)
+        if history:
+            result["earnings_available"] = True
+            result["earnings_history"] = history
     except Exception as e:
         logging.warning("us-insight earnings: %s", e)
 
@@ -1126,137 +1152,7 @@ def api_us_insight(ticker: str):
     return jsonify(result)
 
 
-# ── SWING-MOM 스캔 알리미 백그라운드 프로세스 ──────────────────────────
-_swing_proc: subprocess.Popen | None = None
-_swing_lock = threading.Lock()
-
-
-_SWING_PID_FILE = os.path.join(_BASE, ".swing_scanner.pid")
-
-
-def _kill_orphan_scanner():
-    """이전 실행에서 남은 고아 프로세스 정리."""
-    if not os.path.exists(_SWING_PID_FILE):
-        return
-    try:
-        with open(_SWING_PID_FILE) as f:
-            old_pid = int(f.read().strip())
-        # 프로세스가 살아있으면 종료
-        import signal
-        os.kill(old_pid, signal.SIGTERM)
-        logging.info("고아 스캔 프로세스 종료 (PID %d)", old_pid)
-    except (ProcessLookupError, ValueError, OSError):
-        pass  # 이미 죽었거나 유효하지 않은 PID
-    try:
-        os.remove(_SWING_PID_FILE)
-    except OSError:
-        pass
-
-
-def _is_swing_scan_window() -> bool:
-    """스캔 알리미를 가동할 수 있는 시간/요일 여부.
-    한국 평일 09:00~15:30 만 True. 그 외에는 텔레그램 스팸 방지를 위해 미가동."""
-    from datetime import datetime as _dt
-    now = _dt.now()
-    if now.weekday() >= 5:
-        return False
-    hhmm = now.strftime("%H:%M")
-    return "09:00" <= hhmm < "15:30"
-
-
-def _start_swing_scanner():
-    """SWING-MOM 스캔 알리미를 백그라운드 서브프로세스로 실행."""
-    global _swing_proc
-    if not _swing_scanner_enabled():
-        logging.info("SWING-MOM scanner disabled in this deployment")
-        return
-    script = os.path.join(_BASE, "swing_scan", "scripts", "swing_mom_scan_alert.py")
-    if not os.path.exists(script):
-        logging.warning("swing_mom_scan_alert.py 미존재 — 스캔 알리미 비활성")
-        return
-    if not _is_swing_scan_window():
-        logging.info("스캔 윈도우 외 — swing scanner 부팅 스킵 (텔레그램 스팸 방지)")
-        # stale PID 파일은 정리
-        try:
-            if os.path.exists(_SWING_PID_FILE):
-                os.remove(_SWING_PID_FILE)
-        except OSError:
-            pass
-        return
-    with _swing_lock:
-        if _swing_proc and _swing_proc.poll() is None:
-            return  # 이미 실행 중
-        _kill_orphan_scanner()
-        try:
-            _swing_log = os.path.join(_BASE, "swing_scan", "logs")
-            os.makedirs(_swing_log, exist_ok=True)
-            _log_f = open(os.path.join(_swing_log, "scan_alert_bg.log"), "a", encoding="utf-8")
-            _env = os.environ.copy()
-            _env["NO_COLOR"] = "1"          # Python 3.14 argparse 컬러 충돌 방지
-            _env["PYTHONIOENCODING"] = "utf-8"
-            _swing_proc = subprocess.Popen(
-                [sys.executable, script],
-                cwd=_BASE,
-                stdout=_log_f,
-                stderr=_log_f,
-                env=_env,
-            )
-            # PID 파일 기록
-            with open(_SWING_PID_FILE, "w") as f:
-                f.write(str(_swing_proc.pid))
-            logging.info("SWING-MOM 스캔 알리미 시작 (PID %d)", _swing_proc.pid)
-        except Exception as e:
-            logging.warning("SWING-MOM 스캔 알리미 실행 실패: %s", e)
-
-
-def _stop_swing_scanner():
-    """백그라운드 스캔 프로세스 종료."""
-    global _swing_proc
-    with _swing_lock:
-        if _swing_proc and _swing_proc.poll() is None:
-            _swing_proc.terminate()
-            try:
-                _swing_proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                _swing_proc.kill()
-            logging.info("SWING-MOM 스캔 알리미 종료")
-            _swing_proc = None
-        try:
-            os.remove(_SWING_PID_FILE)
-        except OSError:
-            pass
-
-
-@app.route("/api/swing-scanner", methods=["GET"])
-def api_swing_scanner_status():
-    """SWING-MOM 스캔 알리미 상태 조회."""
-    with _swing_lock:
-        running = _swing_proc is not None and _swing_proc.poll() is None
-    return jsonify({"running": running, "pid": _swing_proc.pid if running else None})
-
-
-@app.route("/api/swing-scanner/start", methods=["POST"])
-def api_swing_scanner_start():
-    if not _swing_scanner_enabled():
-        return jsonify({"ok": False, "error": "disabled_in_this_deployment"}), 403
-    _start_swing_scanner()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/swing-scanner/stop", methods=["POST"])
-def api_swing_scanner_stop():
-    _stop_swing_scanner()
-    return jsonify({"ok": True})
-
-
-import atexit
-atexit.register(_stop_swing_scanner)
-
-
 if __name__ == "__main__":
-    # debug 모드 리로더에 의한 중복 실행 방지
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
-        _start_swing_scanner()
     debug = (os.environ.get("FLASK_DEBUG") or "0").strip().lower() in ("1", "true", "yes")
     host = (os.environ.get("FLASK_HOST") or "0.0.0.0").strip() or "0.0.0.0"
     port_raw = (os.environ.get("PORT") or os.environ.get("FLASK_PORT") or "5000").strip()

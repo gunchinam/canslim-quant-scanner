@@ -30,6 +30,77 @@ NEGATIVE_KO = {
     "리콜", "조사", "압수수색",
 }
 
+# ── 주식/사업 관련성 판별 키워드 ──
+_RELEVANCE_KW = {
+    # 주가/시세
+    "주가", "주식", "시세", "종가", "시가총액", "거래량", "코스피", "코스닥",
+    "상장", "상한가", "하한가", "공매도", "신용", "대차",
+    # 재무/실적
+    "매출", "영업이익", "순이익", "실적", "분기", "반기", "연간", "결산",
+    "흑자", "적자", "배당", "EPS", "PER", "PBR", "ROE",
+    # 투자/증권
+    "투자", "증권", "애널리스트", "목표가", "컨센서스", "리포트", "전망",
+    "매수", "매도", "중립", "비중확대", "비중축소", "편입", "편출",
+    # 사업/경영
+    "사업", "수주", "계약", "인수", "합병", "M&A", "MOU", "제휴",
+    "신제품", "출시", "개발", "특허", "승인", "허가", "FDA",
+    "공시", "공급", "납품", "수출", "생산", "공장", "설비", "증설",
+    # 경영진/지배구조
+    "대표이사", "CEO", "이사회", "주주", "유상증자", "무상증자", "자사주",
+    "경영권", "지분", "대주주",
+    # 산업/정책
+    "산업", "업종", "테마", "정책", "규제", "관세", "금리", "환율",
+}
+_IRRELEVANT_KW = {
+    "맛집", "카페", "여행", "골프", "야구", "축구", "농구", "배구",
+    "드라마", "영화", "예능", "아이돌", "콘서트", "팬미팅", "화보",
+    "연애", "결혼", "이혼", "열애", "패션", "뷰티", "다이어트",
+    "날씨", "요리", "레시피", "부고", "장례",
+}
+
+
+_LEAD_BRACKET_RE = re.compile(r"^[\[\(【〔\[]*[^\]\)】〕\]]*[\]\)】〕\]]\s*")
+
+
+_DATE_PREFIX_RE = re.compile(
+    r"^(?:올해|내년|올|금년|작년|상반기|하반기|연초|연말"
+    r"|[0-9]{1,4}년|[0-9]{1,2}월|[0-9]{1,2}일"
+    r"|[1-4]분기|[0-9]+[QqHh]|오늘|어제|이번주|지난주|지난해"
+    r"|\")\s*"
+)
+
+
+def _is_subject(title: str, query: str) -> bool:
+    """제목에서 종목명이 주어(주체)인지 판별. 다른 회사 기사에 끼어든 경우 제외."""
+    # [속보], (종합), 【단독】 등 앞쪽 태그 제거
+    clean = _LEAD_BRACKET_RE.sub("", title).strip()
+    # 날짜/시기 접두사 제거 (반복 적용: "2025년 2분기 삼성전자..." 등)
+    for _ in range(3):
+        m = _DATE_PREFIX_RE.match(clean)
+        if not m:
+            break
+        clean = clean[m.end():]
+    # 제목이 종목명으로 시작해야 주체로 판단
+    return clean.startswith(query)
+
+
+def _is_relevant(title: str, desc: str, query: str) -> bool:
+    """뉴스가 해당 종목의 주식/사업과 관련 있는지 판별."""
+    text = f"{title} {desc}"
+    # 종목명이 제목의 주어 위치에 없으면 제외 (다른 회사 기사 차단)
+    if not _is_subject(title, query):
+        return False
+    # 무관한 키워드가 있으면 제외
+    if any(kw in text for kw in _IRRELEVANT_KW):
+        return False
+    # 주식/사업 키워드가 하나라도 있으면 관련
+    if any(kw in text for kw in _RELEVANCE_KW):
+        return True
+    # 감성 키워드(호재/악재 등)가 있으면 관련
+    if any(kw in text for kw in POSITIVE_KO) or any(kw in text for kw in NEGATIVE_KO):
+        return True
+    return False
+
 
 def _load_env() -> tuple[str, str]:
     cid = os.environ.get("NAVER_CLIENT_ID", "").strip()
@@ -136,8 +207,10 @@ def _classify(s: float) -> str:
 
 
 def summarize(query: str, *, limit: int = 20) -> dict:
-    """검색어로 네이버 뉴스 요약 + 감성 분석."""
-    items = search_news(query, display=limit)
+    """검색어로 네이버 뉴스 요약 + 감성 분석 (관련성 필터 적용)."""
+    # 관련성 필터 후 충분한 기사를 확보하기 위해 넉넉하게 가져옴
+    raw = search_news(query, display=min(limit * 3, 100))
+    items = [it for it in raw if _is_relevant(it["title"], it["description"], query)]
     if not items:
         return {
             "query": query,

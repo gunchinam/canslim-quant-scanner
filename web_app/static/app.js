@@ -1862,15 +1862,18 @@ function _renderDartNews(container, data) {
       const icon = beat ? '✓' : miss ? '✗' : '—';
       const iconColor = beat ? 'var(--success)' : miss ? 'var(--destructive)' : 'var(--text-tertiary)';
       const bgColor = beat ? 'rgba(52,199,89,0.06)' : miss ? 'rgba(255,59,48,0.06)' : '';
-      const surpText = q.surprise_pct != null ? `${q.surprise_pct >= 0 ? '+' : ''}${q.surprise_pct}%` : '';
+      const surpText = q.surprise_pct != null ? `컨센 대비 ${q.surprise_pct >= 0 ? '+' : ''}${q.surprise_pct}%` : '';
       const surpColor = q.surprise_pct != null ? (q.surprise_pct >= 0 ? 'var(--success)' : 'var(--destructive)') : 'var(--text-tertiary)';
+      const yoyText = q.yoy_pct != null ? `YoY ${q.yoy_pct >= 0 ? '+' : ''}${q.yoy_pct}%` : '';
+      const yoyColor = q.yoy_pct != null ? (q.yoy_pct >= 0 ? 'var(--success)' : 'var(--destructive)') : 'var(--text-tertiary)';
       html += `<div style="padding:12px 10px;text-align:center;border-right:1px solid var(--border);background:${bgColor};">
         <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px;">${esc(q.date || '')}</div>
         <div style="font-size:20px;font-weight:800;color:${iconColor};margin-bottom:4px;">${icon}</div>
-        <div style="font-size:13px;font-weight:700;color:${surpColor};margin-bottom:4px;">${surpText || '—'}</div>
+        <div style="font-size:12px;font-weight:700;color:${surpColor};margin-bottom:2px;">${surpText || '—'}</div>
+        ${yoyText ? `<div style="font-size:11px;font-weight:600;color:${yoyColor};margin-bottom:4px;">${yoyText}</div>` : ''}
         <div style="font-size:11px;color:var(--text-secondary);">
-          ${q.actual != null ? `<div>실적 ₩${q.actual.toLocaleString()}</div>` : ''}
-          ${q.estimate != null ? `<div style="color:var(--text-tertiary)">예상 ₩${q.estimate.toLocaleString()}</div>` : ''}
+          ${q.actual != null ? `<div>EPS ${q.actual.toLocaleString()}원</div>` : ''}
+          ${q.estimate != null ? `<div style="color:var(--text-tertiary)">추정 ${q.estimate.toLocaleString()}원</div>` : ''}
         </div>
       </div>`;
     }
@@ -1958,15 +1961,18 @@ function _renderUSInsight(container, data) {
       const icon = beat ? '✓' : miss ? '✗' : '—';
       const iconColor = beat ? 'var(--success)' : miss ? 'var(--destructive)' : 'var(--text-tertiary)';
       const bgColor = beat ? 'rgba(52,199,89,0.06)' : miss ? 'rgba(255,59,48,0.06)' : '';
-      const surpText = q.surprise_pct != null ? `${q.surprise_pct >= 0 ? '+' : ''}${q.surprise_pct}%` : '';
+      const surpText = q.surprise_pct != null ? `vs Est ${q.surprise_pct >= 0 ? '+' : ''}${q.surprise_pct}%` : '';
       const surpColor = q.surprise_pct != null ? (q.surprise_pct >= 0 ? 'var(--success)' : 'var(--destructive)') : 'var(--text-tertiary)';
+      const yoyText = q.yoy_pct != null ? `YoY ${q.yoy_pct >= 0 ? '+' : ''}${q.yoy_pct}%` : '';
+      const yoyColor = q.yoy_pct != null ? (q.yoy_pct >= 0 ? 'var(--success)' : 'var(--destructive)') : 'var(--text-tertiary)';
       html += `<div style="padding:12px 10px;text-align:center;border-right:1px solid var(--border);background:${bgColor};">
         <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px;">${esc(q.date || '')}</div>
         <div style="font-size:20px;font-weight:800;color:${iconColor};margin-bottom:4px;">${icon}</div>
-        <div style="font-size:13px;font-weight:700;color:${surpColor};margin-bottom:4px;">${surpText || '—'}</div>
+        <div style="font-size:12px;font-weight:700;color:${surpColor};margin-bottom:2px;">${surpText || '—'}</div>
+        ${yoyText ? `<div style="font-size:11px;font-weight:600;color:${yoyColor};margin-bottom:4px;">${yoyText}</div>` : ''}
         <div style="font-size:11px;color:var(--text-secondary);">
-          ${q.actual != null ? `<div>실적 $${q.actual}</div>` : ''}
-          ${q.estimate != null ? `<div style="color:var(--text-tertiary)">예상 $${q.estimate}</div>` : ''}
+          ${q.actual != null ? `<div>EPS $${q.actual}</div>` : ''}
+          ${q.estimate != null ? `<div style="color:var(--text-tertiary)">Est $${q.estimate}</div>` : ''}
         </div>
       </div>`;
     }

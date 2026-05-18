@@ -1157,23 +1157,23 @@ html, body {
           .entry-card.green  { border-left-color:#16A34A; }
           .entry-card.yellow { border-left-color:#F59E0B; }
           .entry-card.red    { border-left-color:#DC2626; }
-          .entry-bar { position:relative; height:8px; background:var(--bg-tertiary); border-radius:6px; overflow:hidden; margin-top:4px; }
+          .entry-bar { position:relative; height:8px; background:var(--bg-tertiary); border-radius:6px; overflow:hidden; margin-top:6px; }
           .entry-bar-fill { position:absolute; left:0; top:0; height:100%; background:linear-gradient(90deg,#DC2626 0%,#F59E0B 50%,#16A34A 100%); border-radius:6px; transition:width .3s; }
-          .entry-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:12px; font-size:12px; }
-          .entry-grid .lbl { color:var(--text-tertiary); font-size:11px; margin-bottom:2px; display:block; }
-          .entry-grid .val { font-weight:700; color:var(--text-primary); font-size:13px; }
-          .entry-meta { display:flex; gap:14px; flex-wrap:wrap; margin-top:8px; font-size:11px; color:var(--text-secondary); }
+          .entry-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:12px; font-size:13px; }
+          .entry-grid .lbl { color:var(--text-tertiary); font-size:12px; margin-bottom:2px; display:block; }
+          .entry-grid .val { font-weight:700; color:var(--text-primary); font-size:14px; }
+          .entry-meta { display:flex; flex-direction:column; gap:5px; margin-top:10px; font-size:12px; color:var(--text-secondary); }
         </style>
-        <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;margin-bottom:6px;">📈 지금 사기 좋은 타이밍인가? <span style="font-weight:400;">— RSI·BB·MACD·이동평균·레짐 종합</span></div>
+        <div style="font-size:12px;color:var(--text-tertiary);font-weight:600;margin-bottom:8px;">📈 지금 사기 좋은 타이밍인가? <span style="font-weight:400;">— RSI·BB·MACD·이동평균·레짐 종합</span></div>
         <div style="display:flex; align-items:center; justify-content:space-between;">
           <div style="display:flex; align-items:center; gap:8px;">
-            <span id="dp-entry-icon" style="font-size:18px;">⚪</span>
-            <span id="dp-entry-phrase" style="font-size:13px; font-weight:700; color:var(--text-primary);">진입 타이밍</span>
+            <span id="dp-entry-icon" style="font-size:22px;">⚪</span>
+            <span id="dp-entry-phrase" style="font-size:15px; font-weight:700; color:var(--text-primary);">진입 타이밍</span>
           </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span style="font-size:11px; color:var(--text-tertiary);">진입점수</span>
-            <span id="dp-entry-score" style="font-size:16px; font-weight:800; color:var(--text-primary);">—</span>
-            <span style="font-size:11px; color:var(--text-tertiary);">/ 100</span>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="font-size:12px; color:var(--text-tertiary);">진입점수</span>
+            <span id="dp-entry-score" style="font-size:22px; font-weight:800; color:var(--text-primary);">—</span>
+            <span style="font-size:12px; color:var(--text-tertiary);">/ 100</span>
           </div>
         </div>
         <div class="entry-bar"><div id="dp-entry-bar-fill" class="entry-bar-fill" style="width:0%;"></div></div>
@@ -1182,25 +1182,25 @@ html, body {
           <div>
             <span class="lbl">진입가 (풀백)</span>
             <span class="val" id="dp-entry-px-entry">—</span>
-            <span id="dp-entry-discount" style="font-size:10px; color:var(--brand); font-weight:700; margin-left:2px;"></span>
+            <span id="dp-entry-discount" style="font-size:11px; color:var(--brand); font-weight:700; margin-left:2px;"></span>
           </div>
           <div>
             <span class="lbl">손절</span>
             <span class="val" id="dp-entry-px-stop" style="color:var(--destructive);">—</span>
           </div>
           <div>
-            <span class="lbl">목표가1 <span style="font-size:9px;color:var(--text-tertiary);">(T1)</span></span>
+            <span class="lbl">목표가1 <span style="font-size:10px;color:var(--text-tertiary);">(T1)</span></span>
             <span class="val" id="dp-entry-px-t1" style="color:var(--success);">—</span>
           </div>
           <div>
-            <span class="lbl">목표가2 <span style="font-size:9px;color:var(--text-tertiary);">(T2)</span></span>
+            <span class="lbl">목표가2 <span style="font-size:10px;color:var(--text-tertiary);">(T2)</span></span>
             <span class="val" id="dp-entry-px-t2" style="color:var(--success);">—</span>
           </div>
         </div>
 
         <div class="entry-meta">
           <span id="dp-entry-type" style="font-weight:700;"></span>
-          <span id="dp-entry-rr"></span>
+          <span id="dp-entry-rr" style="font-weight:600;"></span>
           <span id="dp-entry-stop-method"></span>
           <span id="dp-entry-current" style="color:var(--text-tertiary);"></span>
         </div>

@@ -81,6 +81,71 @@ def build_dday_chip(dday: Optional[int]) -> Dict[str, str]:
     return {"text": "", "fg": "#888", "bg": "#EEEEEE", "show": False}
 
 
+def earnings_history(ticker: str, limit: int = 4) -> list[dict]:
+    """최근 N분기 실적 서프라이즈 (actual vs estimate + YoY).
+
+    Returns:
+        [{"date": "2024-01-25", "actual": 2.18, "estimate": 2.10,
+          "surprise_pct": 3.8, "beat": True, "yoy_pct": 12.5}, ...]
+    """
+    try:
+        import yfinance as yf
+        import pandas as pd
+    except Exception:
+        return []
+
+    try:
+        tk = yf.Ticker(ticker)
+        ed = tk.earnings_dates
+        if ed is None or len(ed) == 0:
+            return []
+
+        today = dt.datetime.now(dt.timezone.utc).date()
+        # YoY 계산 위해 최대 limit+4 분기 수집
+        all_results = []
+        for idx, row in ed.iterrows():
+            d = idx.date() if hasattr(idx, "date") else idx
+            if isinstance(d, str):
+                d = dt.date.fromisoformat(d[:10])
+            if d > today:
+                continue
+            actual = row.get("Reported EPS")
+            estimate = row.get("EPS Estimate")
+            surprise = row.get("Surprise(%)")
+            if pd.isna(actual) if hasattr(pd, "isna") else (actual is None):
+                continue
+            actual = float(actual)
+            est = float(estimate) if not (pd.isna(estimate) if hasattr(pd, "isna") else (estimate is None)) else None
+            surp = float(surprise) if not (pd.isna(surprise) if hasattr(pd, "isna") else (surprise is None)) else None
+            if surp is None and est and est != 0:
+                surp = ((actual - est) / abs(est)) * 100
+            all_results.append({
+                "date": d.isoformat(),
+                "actual": round(actual, 3),
+                "estimate": round(est, 3) if est is not None else None,
+                "surprise_pct": round(surp, 1) if surp is not None else None,
+                "beat": actual > est if est is not None else None,
+            })
+            if len(all_results) >= limit + 4:
+                break
+
+        # YoY 계산: 각 분기에 대해 ~1년 전 동일 분기 찾기
+        for i, r in enumerate(all_results[:limit]):
+            r_date = dt.date.fromisoformat(r["date"])
+            yoy = None
+            for older in all_results[i + 1:]:
+                o_date = dt.date.fromisoformat(older["date"])
+                diff_days = (r_date - o_date).days
+                if 330 <= diff_days <= 400 and older["actual"] != 0:
+                    yoy = ((r["actual"] - older["actual"]) / abs(older["actual"])) * 100
+                    break
+            r["yoy_pct"] = round(yoy, 1) if yoy is not None else None
+
+        return all_results[:limit]
+    except Exception:
+        return []
+
+
 if __name__ == "__main__":
     chip0 = build_dday_chip(0)
     chip3 = build_dday_chip(3)

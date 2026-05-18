@@ -176,18 +176,8 @@ function _renderEntryCard(d) {
       smEl.textContent = '—';
     }
   }
-  // 핵심 태그 (EntryPhrase의 태그들)
-  const tagsEl = document.getElementById('dp-entry-tags');
-  if (tagsEl) {
-    const phrases = plan.score_breakdown ? Object.values(plan.score_breakdown).map(v => v.tag).filter(Boolean) : [];
-    tagsEl.innerHTML = phrases.map(t => {
-      const isNeg = t.includes('과') || t.includes('주의') || t.includes('약세');
-      const bg = isNeg ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)';
-      const col = isNeg ? 'var(--destructive)' : 'var(--success)';
-      return `<span style="padding:2px 8px;border-radius:100px;font-size:11px;font-weight:600;background:${bg};color:${col};">${esc(t)}</span>`;
-    }).join('');
-  }
   // 점수 분해 바 차트
+  // (칩 dp-entry-tags 제거: score_breakdown 파생값이라 아래 breakdown 차트와 100% 중복)
   const bdEl = document.getElementById('dp-entry-breakdown');
   if (bdEl) {
     const bd = plan.score_breakdown || {};
@@ -690,7 +680,6 @@ function renderStockRow(stock, rank) {
   <td class="right">${fmtPrice(stock.Price)}</td>
   <td class="right ${chgClass}">${chgSign}${chgPct}%</td>
   <td class="right">${rsi}</td>
-  <td class="right" title="${stock.TargetSource ? '출처: ' + esc(stock.TargetSource) + (stock.TargetPrice ? ' · ' + targetLabel + ' ' + fmtPrice(stock.TargetPrice) : '') : '메인 목표가 없음'}">${upside}</td>
   <td class="right" title="${stock.BrokerTargetSource ? esc(stock.BrokerTargetSource) : '증권사 컨센서스 없음'}">${stock.BrokerTarget ? (() => { const bUp = stock.Price ? ((stock.BrokerTarget - stock.Price) / stock.Price) * 100 : null; return `<div class="target-price">${fmtPrice(stock.BrokerTarget)}</div><div class="target-upside" style="color:${bUp != null && bUp >= 0 ? 'var(--success)' : 'var(--destructive)'}">${bUp != null ? (bUp >= 0 ? '+' : '') + fmt(bUp, 1) + '%' : ''}</div>`; })() : '<div class="target-empty">컨센서스 없음</div>'}</td>
   <td class="reason-cell">${reasonHtml}</td>
 </tr>`;
@@ -1921,14 +1910,28 @@ async function loadDpFourAxis(ticker) {
 
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     set('dp-fa-phase', d.phase || '');
-    const _stars = d.signal_stars || 0;
+    // ── 별점 = V5.1 진입 점수 파생 (단일 소스) ──────────────────────
+    // 별점과 '진입 타이밍' 점수가 같은 화면에서 모순되지 않도록,
+    // 4축 signal_stars 대신 스캔 레코드의 EntryScore(0~100)에서 직접
+    // 환산한다. 밴드는 V5.1 상태(STRONG≥50 / NEUTRAL 30~49 /
+    // AVOID<30)와 정렬 → 별점·점수·문구가 항상 같은 방향.
+    const _rec = _stockMap[ticker];
+    const _es  = (_rec && _rec.EntryScore != null) ? Number(_rec.EntryScore) : null;
+    let _stars;
+    if (_es == null || Number.isNaN(_es)) {
+      _stars = d.signal_stars || 0;            // EntryScore 없으면 4축 폴백
+    } else if (_es >= 70) _stars = 5;
+    else if (_es >= 50) _stars = 4;
+    else if (_es >= 40) _stars = 3;
+    else if (_es >= 30) _stars = 2;
+    else _stars = 1;
     set('dp-fa-stars', '★'.repeat(_stars) + '☆'.repeat(5 - _stars));
     const _starMeaningTbl = {
-      5: '지금 진입 타이밍 매우 좋음',
-      4: '진입 타이밍 양호',
+      5: '진입 타이밍 매우 좋음',
+      4: '진입 강함',
       3: '관망 — 신호 혼재',
       2: '진입 보류 권장',
-      1: '진입 회피',
+      1: '진입 부적합',
       0: '데이터 부족',
     };
     set('dp-fa-stars-meaning', _starMeaningTbl[_stars] ? `· ${_starMeaningTbl[_stars]}` : '');

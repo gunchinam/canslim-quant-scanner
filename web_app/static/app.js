@@ -888,7 +888,7 @@ function populateDetail(d) {
   const ol = document.getElementById('detail-oneliner');
   if (ol) {
     if (d.OneLiner) {
-      ol.textContent = d.OneLiner;
+      ol.innerHTML = esc(d.OneLiner) + (d.OneLinerData ? `<span class="oneliner-data">${esc(d.OneLinerData)}</span>` : '');
       ol.setAttribute('data-tag', d.OneLinerTag || '');
       ol.style.display = '';
     } else {
@@ -1465,11 +1465,11 @@ function _populatePanelDetail(d, skipFourAxis) {
   const haikuEl = document.getElementById('dp-fa-haiku');
   if (haikuEl) {
     if (d.OneLiner) {
-      haikuEl.textContent = d.OneLiner;
+      haikuEl.innerHTML = esc(d.OneLiner) + (d.OneLinerData ? `<span class="oneliner-data">${esc(d.OneLinerData)}</span>` : '');
       haikuEl.setAttribute('data-tag', d.OneLinerTag || '');
       haikuEl.style.display = '';
     } else {
-      haikuEl.textContent = '';
+      haikuEl.innerHTML = '';
       haikuEl.removeAttribute('data-tag');
       haikuEl.style.display = 'none';
     }
@@ -2725,7 +2725,7 @@ async function loadComparePage(tickers) {
             ${_compareMetricRow('ROE', roe)}
             ${_compareMetricRow('EntryStatus', entry)}
           </div>
-          <div class="compare-oneliner">${esc(detail.OneLiner || '요약 코멘트 없음')}</div>
+          <div class="compare-oneliner">${esc(detail.OneLiner || '요약 코멘트 없음')}${detail.OneLinerData ? `<span class="oneliner-data">${esc(detail.OneLinerData)}</span>` : ''}</div>
         </div>
       `;
     } catch (err) {

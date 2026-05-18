@@ -1752,13 +1752,11 @@ def _friendly_one_liner(d: dict) -> str:
     for tag in tags:
         cond_pool.extend(_METRIC_PHRASES.get((bucket, tag), []))
     if cond_pool:
-        base = cond_pool[h % len(cond_pool)]
-        return _stylize_one_liner(base, d, bucket)
+        return _strip_period(cond_pool[h % len(cond_pool)])
 
     # 2) fallback: 기존 일반 문구 풀
     phrases = _PHRASES.get(bucket) or _PHRASES["NEUTRAL"]
-    base = phrases[h % len(phrases)]
-    return _stylize_one_liner(base, d, bucket)
+    return _strip_period(phrases[h % len(phrases)])
 
 
 def community_one_liner_variant_count() -> int:
@@ -1766,14 +1764,17 @@ def community_one_liner_variant_count() -> int:
 
 
 def annotate(results: list[dict]) -> list[dict]:
-    """리스트에 OneLiner / OneLinerTag 필드를 추가해 반환."""
+    """리스트에 OneLiner / OneLinerTag / OneLinerData 필드를 추가해 반환."""
     for r in results:
         try:
-            r["OneLinerTag"] = _bucket(r)
+            bucket = _bucket(r)
+            r["OneLinerTag"] = bucket
             r["OneLiner"] = _friendly_one_liner(r)
+            r["OneLinerData"] = _data_tag(r, bucket)
         except Exception:
             r.setdefault("OneLiner", "")
             r.setdefault("OneLinerTag", "NEUTRAL")
+            r.setdefault("OneLinerData", "")
     return results
 
 

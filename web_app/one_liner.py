@@ -61,6 +61,10 @@ def _data_tag(d: dict, bucket: str) -> str:
 
     dd_pct = dd * 100 if -1 <= dd <= 0 else dd
     op_pct = op_mgn * 100 if 0 <= op_mgn <= 1 else op_mgn
+    # Mom12M·_ROE·_EPSGrowth는 quant_nexus에서 비율로 전달 (0.18=18%) → 퍼센트
+    roe   = roe * 100
+    mom12 = mom12 * 100
+    eps_g = eps_g * 100
 
     p = []
     if bucket == "TRUE_VALUE":
@@ -1486,6 +1490,10 @@ def _metric_tags(d: dict) -> list[str]:
     eps_g = _num(d.get("_EPSGrowth"))
     op_mgn = _num(d.get("_OperatingMargin"))
     op_pct = op_mgn * 100 if 0 <= op_mgn <= 1 else op_mgn
+    # Mom12M·_ROE·_EPSGrowth는 quant_nexus에서 비율로 전달 (0.18=18%) → 퍼센트
+    roe   = roe * 100
+    mom12 = mom12 * 100
+    eps_g = eps_g * 100
 
     # 변동성: |Mom3M| 또는 |Drawdown|으로 판단
     vol = max(abs(mom3), abs(dd_pct))
@@ -1611,6 +1619,10 @@ def _bucket(d: dict) -> str:
     dd_pct = dd * 100 if -1 <= dd <= 0 else dd
     # operatingMargins는 yfinance가 비율(0.25)로 반환
     op_pct = op_mgn * 100 if 0 <= op_mgn <= 1 else op_mgn
+    # Mom12M·_ROE·_EPSGrowth는 quant_nexus에서 비율로 전달 (0.18=18%) → 퍼센트
+    roe   = roe * 100
+    mom12 = mom12 * 100
+    eps_g = eps_g * 100
 
     # ── 우선순위 순서 (위에서 아래로 first-match) ──
     # 진입 타이밍을 먼저 반영해 한줄평과 진입 카드의 톤을 맞춘다.

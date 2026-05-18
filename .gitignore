@@ -23,6 +23,7 @@ naver_target_cache.pkl
 web_app/snapshots/
 
 # === 캐시 ===
+.yfinance-cache/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -55,6 +56,11 @@ NH_*.txt
 나무증권_*.md
 kkirikkiri-report-*.md
 scalping_backtest_trades.csv
+
+# === 임시 도구/외부 벤더 ===
+tools/
+vendor/
+.swing_scanner.pid
 
 # === Claude/AI 도구 부속 ===
 .claude/

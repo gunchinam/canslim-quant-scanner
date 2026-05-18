@@ -21,7 +21,6 @@ let _selectedStocks = new Set(); // 공유 카드용 선택 종목
 let _currentResults = [];   // search/view basis
 let _oneLinerFilter = null; // OneLinerTag filter
 let _compareSet = new Set();
-let _aiCommentReqSeq = 0;
 
 // ── 클라이언트 API 캐시 (sessionStorage) ──────────────────────────────
 const _clientCache = {
@@ -137,9 +136,9 @@ function _renderEntryCard(d) {
   setText('dp-entry-px-stop',  plan.stop  != null ? fmtPrice(plan.stop)  : '—');
   setText('dp-entry-px-t1',    plan.t1    != null ? fmtPrice(plan.t1)    : '—');
   setText('dp-entry-px-t2',    plan.t2    != null ? fmtPrice(plan.t2)    : '—');
-  // V5.1 신규 필드
   setText('dp-entry-type', plan.entry_type || '—');
   setText('dp-entry-current', plan.current != null ? fmtPrice(plan.current) : '—');
+  // 할인율 표시
   const discEl = document.getElementById('dp-entry-discount');
   if (discEl) {
     const dv = plan.entry_discount;
@@ -148,46 +147,93 @@ function _renderEntryCard(d) {
       discEl.textContent = `${sign}${Math.abs(dv).toFixed(2)}%`;
       discEl.style.color = dv > 0 ? 'var(--success)' : dv < 0 ? 'var(--destructive)' : 'var(--muted)';
     } else {
-      discEl.textContent = '—';
+      discEl.textContent = '';
     }
   }
-  // R:R 비율 표시 (rr=조정후, rr_now=현재가 기준)
+  // R:R 비율 (NaN/Infinity 방어)
   const rrEl = document.getElementById('dp-entry-rr');
-  if (rrEl && plan.rr != null) {
+  if (rrEl) {
     const rr = plan.rr;
-    const rrNow = plan.rr_now;
-    const nowTxt = (rrNow != null && Math.abs(rrNow - rr) > 0.05) ? ` (현재가 ${rrNow.toFixed(1)})` : '';
-    rrEl.textContent = `R:R ${rr.toFixed(1)}:1${nowTxt}`;
-    rrEl.style.color = rr >= 3 ? 'var(--success)' : rr >= 2 ? 'var(--brand)' : 'var(--destructive)';
+    if (rr != null && Number.isFinite(rr) && rr > 0) {
+      const rrNow = plan.rr_now;
+      const nowTxt = (rrNow != null && Number.isFinite(rrNow) && Math.abs(rrNow - rr) > 0.05) ? ` (현재 ${rrNow.toFixed(1)})` : '';
+      rrEl.textContent = `R:R ${rr.toFixed(1)}:1${nowTxt}`;
+      rrEl.style.color = rr >= 3 ? 'var(--success)' : rr >= 2 ? 'var(--brand)' : 'var(--destructive)';
+    } else {
+      rrEl.textContent = '산출 불가';
+      rrEl.style.color = 'var(--text-tertiary)';
+    }
   }
-  // 손절 방법 + 승률 표시
+  // 손절 방법 + 승률
   const smEl = document.getElementById('dp-entry-stop-method');
-  if (smEl && plan.stop_method) {
-    const methodKo = {'지지선': '지지선 기반', 'SWING_LOW': '스윙 저점 기반', 'ATR': 'ATR 기반'}[plan.stop_method] || plan.stop_method;
-    const wrText = plan.win_rate != null && plan.win_rate > 0 ? ` · 과거 승률 ${plan.win_rate.toFixed(0)}%` : '';
-    smEl.innerHTML = methodKo + (wrText ? `<span style="color:${plan.win_rate >= 60 ? 'var(--success)' : plan.win_rate >= 40 ? 'var(--brand)' : 'var(--destructive)'};font-weight:700;">${wrText}</span>` : '');
+  if (smEl) {
+    if (plan.stop_method) {
+      const methodKo = {'지지선': '지지선', 'SWING_LOW': '스윙 저점', 'ATR': 'ATR'}[plan.stop_method] || plan.stop_method;
+      const wr = plan.win_rate;
+      const wrText = wr != null && wr > 0 ? ` · 승률 ${Math.min(100, Math.max(0, wr)).toFixed(0)}%` : '';
+      smEl.innerHTML = methodKo + (wrText ? `<span style="color:${wr >= 60 ? 'var(--success)' : wr >= 40 ? 'var(--brand)' : 'var(--destructive)'};font-weight:700;">${wrText}</span>` : '');
+    } else {
+      smEl.textContent = '—';
+    }
+  }
+  // 핵심 태그 (EntryPhrase의 태그들)
+  const tagsEl = document.getElementById('dp-entry-tags');
+  if (tagsEl) {
+    const phrases = plan.score_breakdown ? Object.values(plan.score_breakdown).map(v => v.tag).filter(Boolean) : [];
+    tagsEl.innerHTML = phrases.map(t => {
+      const isNeg = t.includes('과') || t.includes('주의') || t.includes('약세');
+      const bg = isNeg ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)';
+      const col = isNeg ? 'var(--destructive)' : 'var(--success)';
+      return `<span style="padding:2px 8px;border-radius:100px;font-size:11px;font-weight:600;background:${bg};color:${col};">${esc(t)}</span>`;
+    }).join('');
+  }
+  // 점수 분해 바 차트
+  const bdEl = document.getElementById('dp-entry-breakdown');
+  if (bdEl) {
+    const bd = plan.score_breakdown || {};
+    const keys = Object.keys(bd);
+    if (keys.length > 0) {
+      const maxAbs = Math.max(16, ...keys.map(k => Math.abs(bd[k].pts)));
+      bdEl.innerHTML = keys.map(k => {
+        const p = bd[k].pts;
+        const pct = Math.abs(p) / maxAbs * 100;
+        const cls = p >= 0 ? 'pos' : 'neg';
+        const col = p >= 0 ? '#16A34A' : '#DC2626';
+        return `<div class="bd-row">
+          <span class="bd-label">${esc(bd[k].tag || k)}</span>
+          <div class="bd-bar-wrap"><div class="bd-bar ${cls}" style="width:${pct}%;"></div></div>
+          <span class="bd-pts" style="color:${col};">${p >= 0 ? '+' : ''}${p}</span>
+        </div>`;
+      }).join('');
+    } else {
+      bdEl.innerHTML = '<div style="font-size:11px;color:var(--text-tertiary);">분해 데이터 없음</div>';
+    }
   }
   // AgentQuant 융합 신호 (있을 때만)
   const aqRow = document.getElementById('dp-aq-row');
-  if (aqRow && (d.AQ_Verdict || d.AQ_Regime || d.EntryScore_aq != null)) {
-    aqRow.style.display = '';
-    const vEl = document.getElementById('dp-aq-verdict');
-    if (vEl) {
-      vEl.textContent = d.AQ_Verdict || '—';
-      const vc = d.AQ_VerdictCode;
-      const col = vc === 'BUY' ? '#16A34A' : vc === 'ACCUMULATE' ? '#F59E0B' : vc === 'AVOID' ? '#DC2626' : 'var(--text-secondary)';
-      vEl.style.color = col; vEl.style.background = col + '22';
-    }
-    setText('dp-aq-regime', d.AQ_Regime ? `시장 ${d.AQ_Regime}` : '');
-    const detail = [];
-    if (d.EntryScore_engine != null) detail.push(`기존 ${Math.round(d.EntryScore_engine)}`);
-    if (d.EntryScore_aq != null)     detail.push(`AQ ${Math.round(d.EntryScore_aq)}`);
-    setText('dp-aq-detail', detail.length ? `(융합 ${detail.join(' · ')})` : '');
-    const rEl = document.getElementById('dp-aq-reasons');
-    if (rEl) {
-      rEl.innerHTML = (Array.isArray(d.AQ_Reasons) ? d.AQ_Reasons : []).map(r =>
-        `<span style="padding:1px 7px;border:1px solid var(--border);border-radius:100px;background:var(--bg-tertiary);">${esc(r)}</span>`
-      ).join('');
+  if (aqRow) {
+    if (d.AQ_Verdict || d.AQ_Regime || d.EntryScore_aq != null) {
+      aqRow.style.display = '';
+      const vEl = document.getElementById('dp-aq-verdict');
+      if (vEl) {
+        vEl.textContent = d.AQ_Verdict || '—';
+        const vc = d.AQ_VerdictCode;
+        const col = vc === 'BUY' ? '#16A34A' : vc === 'ACCUMULATE' ? '#F59E0B' : vc === 'AVOID' ? '#DC2626' : 'var(--text-secondary)';
+        vEl.style.color = col; vEl.style.background = col + '22';
+      }
+      setText('dp-aq-regime', d.AQ_Regime ? `시장 ${d.AQ_Regime}` : '');
+      const detail = [];
+      if (d.EntryScore_engine != null) detail.push(`기존 ${Math.round(d.EntryScore_engine)}`);
+      if (d.EntryScore_aq != null)     detail.push(`AQ ${Math.round(d.EntryScore_aq)}`);
+      setText('dp-aq-detail', detail.length ? `(융합 ${detail.join(' · ')})` : '');
+      const rEl = document.getElementById('dp-aq-reasons');
+      if (rEl) {
+        rEl.innerHTML = (Array.isArray(d.AQ_Reasons) ? d.AQ_Reasons : []).map(r =>
+          `<span style="padding:2px 8px;border:1px solid var(--border);border-radius:100px;background:var(--bg-tertiary);font-size:10px;">${esc(r)}</span>`
+        ).join('');
+      }
+    } else {
+      aqRow.style.display = 'none';
     }
   }
 }
@@ -2210,27 +2256,6 @@ function _renderConsensusData(wrap, data) {
 
 // ── 관심 종목 토글 ───────────────────────────────────────────────────────
 
-async function loadAIComment(ticker) {
-  const card = document.getElementById('ai-comment-card');
-  const body = document.getElementById('ai-comment-body');
-  if (!card || !body || !ticker) return;
-
-  card.hidden = false;
-  body.innerHTML = '<span class="ai-comment-loading"><span class="ai-comment-spinner"></span>AI 코멘트 생성 중...</span>';
-  const reqSeq = ++_aiCommentReqSeq;
-
-  try {
-    const p = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
-    const res = await fetch(`/api/ai_comment/${encodeURIComponent(ticker)}?${p}`);
-    const data = await res.json();
-    if (reqSeq !== _aiCommentReqSeq) return;
-    if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
-    body.textContent = data.comment || 'AI 코멘트 불러오기 실패';
-  } catch (_) {
-    if (reqSeq !== _aiCommentReqSeq) return;
-    body.textContent = 'AI 코멘트 불러오기 실패';
-  }
-}
 
 function toggleBookmark(btn) {
   const icon = document.getElementById('bookmarkIcon');
@@ -2414,7 +2439,6 @@ document.addEventListener('DOMContentLoaded', () => {
   } else if (typeof TICKER !== 'undefined' && TICKER) {
     // ── 디테일 페이지
     loadDetail(TICKER);
-    loadAIComment(TICKER);
     // KR 마켓일 때만 공시·뉴스 탭 표시 (currentMarket은 위에서 URL params로 설정 완료)
     if (currentMarket === 'KR') {
       const dnBtn = document.getElementById('btn-dartnews');

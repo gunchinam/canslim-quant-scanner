@@ -1021,45 +1021,6 @@ html, body {
   background-size: 16px 16px;
   opacity: 0.18;
 }
-.ai-comment-card {
-  margin: 0 0 12px 0;
-  padding: 12px 14px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--brand) 16%, var(--border));
-  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 10%, var(--card)), var(--card));
-}
-.ai-comment-card[hidden] { display: none; }
-.ai-comment-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--brand);
-  letter-spacing: 0.2px;
-}
-.ai-comment-body {
-  font-size: 12px;
-  line-height: 1.55;
-  color: var(--text-secondary);
-}
-.ai-comment-loading {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.ai-comment-spinner {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid color-mix(in srgb, var(--brand) 16%, transparent);
-  border-top-color: var(--brand);
-  animation: aiCommentSpin 0.8s linear infinite;
-}
-@keyframes aiCommentSpin {
-  to { transform: rotate(360deg); }
-}
 </style>
 </head>
 <body>
@@ -1087,10 +1048,6 @@ html, body {
     <div class="hero-wrap">
       <div class="hero-card">
         <div id="detail-oneliner" class="hero-oneliner" style="display:none;"></div>
-        <div id="ai-comment-card" class="ai-comment-card" hidden>
-          <div class="ai-comment-head">AI 종목 코멘트</div>
-          <div id="ai-comment-body" class="ai-comment-body"></div>
-        </div>
         <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;margin-bottom:2px;">🏆 이 회사 자체는 좋은가?</div>
         <div class="hero-top">
           <span class="hero-label">종합점수 <span style="font-size:10px;font-weight:500;color:var(--text-tertiary);margin-left:4px;">(재무·밸류·기술 모두 합산)</span></span>
@@ -1149,72 +1106,108 @@ html, body {
       </div>
     </div>
 
-    <!-- 진입 타이밍 카드 (V5.1 풀백 진입) -->
+    <!-- 진입 타이밍 카드 (V6 - 3단 구조) -->
     <div style="padding:12px 24px 0;">
-      <div id="dp-entry-card" class="card entry-card" style="padding:14px 16px;">
+      <div id="dp-entry-card" class="card entry-card" style="padding:0; overflow:hidden;">
         <style>
           .entry-card { border-left:4px solid var(--text-tertiary); transition:border-color .2s; }
           .entry-card.green  { border-left-color:#16A34A; }
           .entry-card.yellow { border-left-color:#F59E0B; }
           .entry-card.red    { border-left-color:#DC2626; }
+          /* 상단: 판단 요약 */
+          .entry-verdict { padding:14px 16px 10px; }
           .entry-bar { position:relative; height:8px; background:var(--bg-tertiary); border-radius:6px; overflow:hidden; margin-top:6px; }
           .entry-bar-fill { position:absolute; left:0; top:0; height:100%; background:linear-gradient(90deg,#DC2626 0%,#F59E0B 50%,#16A34A 100%); border-radius:6px; transition:width .3s; }
-          .entry-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:12px; font-size:13px; }
+          /* 중단: 가격 플랜 */
+          .entry-prices { padding:10px 16px; border-top:1px solid var(--border); background:var(--bg-tertiary); }
+          .entry-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; font-size:13px; }
           .entry-grid .lbl { color:var(--text-tertiary); font-size:12px; margin-bottom:2px; display:block; }
           .entry-grid .val { font-weight:700; color:var(--text-primary); font-size:14px; }
-          .entry-meta { display:flex; flex-direction:column; gap:5px; margin-top:10px; font-size:12px; color:var(--text-secondary); }
+          .entry-meta-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:6px 16px; margin-top:10px; font-size:12px; }
+          .entry-meta-grid .meta-lbl { color:var(--text-tertiary); font-size:11px; }
+          .entry-meta-grid .meta-val { font-weight:600; color:var(--text-secondary); }
+          /* 하단: 상세 (토글) */
+          .entry-detail { padding:0 16px; max-height:0; overflow:hidden; transition:max-height .3s ease, padding .3s ease; }
+          .entry-detail.open { max-height:500px; padding:10px 16px; border-top:1px solid var(--border); }
+          .entry-detail-toggle { display:flex; align-items:center; justify-content:center; padding:6px; font-size:11px; color:var(--text-tertiary); cursor:pointer; border-top:1px solid var(--border); user-select:none; gap:4px; }
+          .entry-detail-toggle:hover { background:var(--bg-tertiary); }
+          /* 점수 분해 바 */
+          .bd-row { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-size:11px; }
+          .bd-label { width:60px; text-align:right; color:var(--text-tertiary); flex-shrink:0; }
+          .bd-bar-wrap { flex:1; height:14px; background:var(--bg-tertiary); border-radius:3px; overflow:hidden; position:relative; }
+          .bd-bar { height:100%; border-radius:3px; transition:width .3s; min-width:2px; }
+          .bd-bar.pos { background:#16A34A; }
+          .bd-bar.neg { background:#DC2626; position:absolute; right:0; top:0; }
+          .bd-pts { width:36px; font-weight:700; font-size:11px; }
         </style>
-        <div style="font-size:12px;color:var(--text-tertiary);font-weight:600;margin-bottom:8px;">📈 지금 사기 좋은 타이밍인가? <span style="font-weight:400;">— RSI·BB·MACD·이동평균·레짐 종합</span></div>
-        <div style="display:flex; align-items:center; justify-content:space-between;">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span id="dp-entry-icon" style="font-size:22px;">⚪</span>
-            <span id="dp-entry-phrase" style="font-size:15px; font-weight:700; color:var(--text-primary);">진입 타이밍</span>
-          </div>
-          <div style="display:flex; align-items:center; gap:6px;">
-            <span style="font-size:12px; color:var(--text-tertiary);">진입점수</span>
-            <span id="dp-entry-score" style="font-size:22px; font-weight:800; color:var(--text-primary);">—</span>
-            <span style="font-size:12px; color:var(--text-tertiary);">/ 100</span>
-          </div>
-        </div>
-        <div class="entry-bar"><div id="dp-entry-bar-fill" class="entry-bar-fill" style="width:0%;"></div></div>
 
-        <div class="entry-grid">
-          <div>
-            <span class="lbl">진입가 (풀백)</span>
-            <span class="val" id="dp-entry-px-entry">—</span>
-            <span id="dp-entry-discount" style="font-size:11px; color:var(--brand); font-weight:700; margin-left:2px;"></span>
+        <!-- ① 판단 요약 -->
+        <div class="entry-verdict">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span id="dp-entry-icon" style="font-size:24px;">⚪</span>
+              <div>
+                <div style="font-size:11px; color:var(--text-tertiary); font-weight:600;">📈 진입 타이밍</div>
+                <div id="dp-entry-phrase" style="font-size:15px; font-weight:700; color:var(--text-primary); margin-top:1px;">—</div>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <span id="dp-entry-score" style="font-size:28px; font-weight:800; color:var(--text-primary); line-height:1;">—</span>
+              <span style="font-size:12px; color:var(--text-tertiary); font-weight:500;">/ 100</span>
+            </div>
           </div>
-          <div>
-            <span class="lbl">손절</span>
-            <span class="val" id="dp-entry-px-stop" style="color:var(--destructive);">—</span>
-          </div>
-          <div>
-            <span class="lbl">목표가1 <span style="font-size:10px;color:var(--text-tertiary);">(T1)</span></span>
-            <span class="val" id="dp-entry-px-t1" style="color:var(--success);">—</span>
-          </div>
-          <div>
-            <span class="lbl">목표가2 <span style="font-size:10px;color:var(--text-tertiary);">(T2)</span></span>
-            <span class="val" id="dp-entry-px-t2" style="color:var(--success);">—</span>
-          </div>
+          <div class="entry-bar"><div id="dp-entry-bar-fill" class="entry-bar-fill" style="width:0%;"></div></div>
+          <!-- 핵심 태그 -->
+          <div id="dp-entry-tags" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:8px;"></div>
         </div>
 
-        <div class="entry-meta">
-          <span id="dp-entry-type" style="font-weight:700;"></span>
-          <span id="dp-entry-rr" style="font-weight:600;"></span>
-          <span id="dp-entry-stop-method"></span>
-          <span id="dp-entry-current" style="color:var(--text-tertiary);"></span>
+        <!-- ② 가격 플랜 -->
+        <div class="entry-prices">
+          <div class="entry-grid">
+            <div>
+              <span class="lbl">진입가 (풀백)</span>
+              <span class="val" id="dp-entry-px-entry">—</span>
+              <span id="dp-entry-discount" style="font-size:11px; color:var(--brand); font-weight:700; margin-left:2px;"></span>
+            </div>
+            <div>
+              <span class="lbl">손절</span>
+              <span class="val" id="dp-entry-px-stop" style="color:var(--destructive);">—</span>
+            </div>
+            <div>
+              <span class="lbl">목표가1 <span style="font-size:10px;color:var(--text-tertiary);">(T1)</span></span>
+              <span class="val" id="dp-entry-px-t1" style="color:var(--success);">—</span>
+            </div>
+            <div>
+              <span class="lbl">목표가2 <span style="font-size:10px;color:var(--text-tertiary);">(T2)</span></span>
+              <span class="val" id="dp-entry-px-t2" style="color:var(--success);">—</span>
+            </div>
+          </div>
+          <div class="entry-meta-grid">
+            <div><span class="meta-lbl">유형</span> <span class="meta-val" id="dp-entry-type">—</span></div>
+            <div><span class="meta-lbl">손익비</span> <span class="meta-val" id="dp-entry-rr" style="font-weight:700;">—</span></div>
+            <div><span class="meta-lbl">손절기준</span> <span class="meta-val" id="dp-entry-stop-method">—</span></div>
+            <div><span class="meta-lbl">현재가</span> <span class="meta-val" id="dp-entry-current" style="color:var(--text-tertiary);">—</span></div>
+          </div>
         </div>
-        <div id="dp-aq-row" style="display:none; margin-top:10px; padding-top:8px; border-top:1px dashed var(--border); font-size:11px; color:var(--text-secondary);">
-          <div style="margin-bottom:4px;padding:4px 8px;background:var(--bg-tertiary);border-radius:6px;font-size:10px;color:var(--text-tertiary);line-height:1.4;">
-            💡 규칙 기반 종합 판단입니다(ML 추론이 아님). 200/50일선·RSI·MACD·BB·시장 국면을 점수 합산해 산출.
+
+        <!-- ③ 상세 (토글) -->
+        <div id="dp-entry-detail" class="entry-detail">
+          <!-- 점수 분해 -->
+          <div style="font-size:11px; color:var(--text-tertiary); font-weight:600; margin-bottom:6px;">점수 구성 (base 40)</div>
+          <div id="dp-entry-breakdown"></div>
+          <!-- AgentQuant -->
+          <div id="dp-aq-row" style="display:none; margin-top:10px; padding-top:8px; border-top:1px dashed var(--border); font-size:11px; color:var(--text-secondary);">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-size:11px; color:var(--text-tertiary); font-weight:600;">AI 종합판단</span>
+              <span id="dp-aq-verdict" style="font-weight:700; padding:2px 10px; border-radius:100px; font-size:11px;"></span>
+              <span id="dp-aq-regime" style="color:var(--text-tertiary);"></span>
+              <span id="dp-aq-detail" style="color:var(--text-tertiary); margin-left:auto;"></span>
+            </div>
+            <div id="dp-aq-reasons" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; font-size:10px;"></div>
           </div>
-          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <span style="font-size:10px; color:var(--text-tertiary); font-weight:600;">AI 종합판단 <span style="font-size:9px;color:var(--text-tertiary);">(AgentQuant)</span></span>
-            <span id="dp-aq-verdict" style="font-weight:700; padding:1px 8px; border-radius:100px; font-size:10px;"></span>
-            <span id="dp-aq-regime" style="color:var(--text-tertiary);"></span>
-            <span id="dp-aq-detail" style="color:var(--text-tertiary); margin-left:auto;"></span>
-          </div>
-          <div id="dp-aq-reasons" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; font-size:10px;"></div>
+        </div>
+        <div class="entry-detail-toggle" onclick="document.getElementById('dp-entry-detail').classList.toggle('open'); this.querySelector('.arrow').textContent = document.getElementById('dp-entry-detail').classList.contains('open') ? '▲' : '▼';">
+          <span class="arrow">▼</span> 상세 분석
         </div>
       </div>
     </div>

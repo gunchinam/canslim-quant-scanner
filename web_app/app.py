@@ -51,10 +51,6 @@ def _render_deployment() -> bool:
 
 
 
-_AI_COMMENT_TTL_SEC = 3600
-_ai_comment_cache: dict[tuple[str, str, str], dict[str, object]] = {}
-_ai_comment_cache_lock = threading.Lock()
-
 # ── 4축 차트 / 컨센서스 캐시 (성능 최적화) ──
 _FOUR_AXIS_TTL_SEC = 1800  # 30분
 _four_axis_cache: dict[str, dict] = {}
@@ -210,169 +206,6 @@ def _strip_kr_suffix(ticker: str) -> str:
         if raw.endswith(suf):
             return raw[:-len(suf)]
     return raw
-
-
-def _cache_get_ai_comment(key: tuple[str, str, str]) -> dict[str, object] | None:
-    now = int(time.time())
-    with _ai_comment_cache_lock:
-        cached = _ai_comment_cache.get(key)
-        if not cached:
-            return None
-        ts = int(cached.get("ts", 0) or 0)
-        if now - ts > _AI_COMMENT_TTL_SEC:
-            _ai_comment_cache.pop(key, None)
-            return None
-        return cached
-
-
-def _cache_set_ai_comment(key: tuple[str, str, str], comment: str) -> dict[str, object]:
-    payload = {"comment": comment, "ts": int(time.time())}
-    with _ai_comment_cache_lock:
-        _ai_comment_cache[key] = payload
-    return payload
-
-
-def _build_ai_comment_prompt(ticker: str, market: str, metrics: dict) -> str:
-    payload = {
-        "Ticker": metrics.get("Ticker") or ticker,
-        "Name": metrics.get("Name"),
-        "Market": market,
-        "Sector": metrics.get("Sector"),
-        "TotalScore": metrics.get("TotalScore"),
-        "Signal": metrics.get("Signal"),
-        "Conviction": metrics.get("Conviction"),
-        "Price": metrics.get("Price"),
-        "DayChg": metrics.get("DayChg"),
-        "RSI": metrics.get("RSI"),
-        "Mom12M": metrics.get("Mom12M"),
-        "Mom3M": metrics.get("_Mom3M", metrics.get("Mom3M")),
-        "PER": metrics.get("_PER"),
-        "ROE": metrics.get("_ROE"),
-        "EPSGrowth": metrics.get("_EPSGrowth"),
-        "RSRating": metrics.get("RSRating"),
-        "EntryStatus": metrics.get("EntryStatus"),
-        "EntryScore": metrics.get("EntryScore"),
-        "TargetPrice": metrics.get("TargetPrice"),
-        "BrokerTarget": metrics.get("BrokerTarget"),
-        "TopReason": metrics.get("TopReason"),
-        "OneLiner": metrics.get("OneLiner"),
-        "Desc": metrics.get("Desc"),
-    }
-    return (
-        "당신은 한국어로 답하는 주식 애널리스트다.\n"
-        "아래 지표만 바탕으로 2~3문장 코멘트를 작성하라.\n"
-        "- 밸류에이션, 모멘텀, 리스크를 모두 언급할 것\n"
-        "- 불릿 금지, 문장형으로만 작성\n"
-        "- 과도한 확신 표현과 투자 권유 문구는 피할 것\n"
-        "- 160자 안팎으로 간결하게 작성할 것\n"
-        "- 절대 금지: 제공된 JSON에 없는 데이터를 언급하지 마라. "
-        "기관/외인/세력 수급, 콜옵션/풋옵션, 신용잔고, 반대매매, "
-        "배당금/배당수익률/배당성향, 매출 성장률, 수주잔고, 컨센서스, "
-        "내부자 매매, 프로그램 매매, 호가창, 체결강도 등 "
-        "JSON에 없는 정보는 절대 지어내지 마라\n\n"
-        f"종목 지표 JSON:\n{json.dumps(payload, ensure_ascii=False)}"
-    )
-
-
-def _call_ai_comment_llm(prompt: str) -> str:
-    openai_key    = (os.environ.get("OPENAI_API_KEY") or "").strip()
-    anthropic_key = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
-    grok_key      = (os.environ.get("GROK_API_KEY") or "").strip()
-    pref          = (os.environ.get("AI_COMMENT_PROVIDER") or "").strip().lower()
-
-    # 우선순위: 명시된 pref → 첫 번째로 키가 있는 provider
-    order = []
-    if pref in ("openai", "anthropic", "grok"):
-        order.append(pref)
-    for p in ("openai", "anthropic", "grok"):
-        if p not in order: order.append(p)
-    provider = None
-    for p in order:
-        if p == "openai" and openai_key: provider = "openai"; break
-        if p == "anthropic" and anthropic_key: provider = "anthropic"; break
-        if p == "grok" and grok_key: provider = "grok"; break
-
-    if provider == "openai":
-        model = (os.environ.get("AI_COMMENT_OPENAI_MODEL") or "gpt-4o-mini").strip()
-        req = urllib.request.Request(
-            "https://api.openai.com/v1/chat/completions",
-            data=json.dumps(
-                {
-                    "model": model,
-                    "temperature": 0.4,
-                    "max_tokens": 220,
-                    "messages": [
-                        {"role": "system", "content": "한국어로 간결한 주식 코멘트를 작성해라."},
-                        {"role": "user", "content": prompt},
-                    ],
-                }
-            ).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {openai_key}",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=25) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        comment = (((data.get("choices") or [{}])[0]).get("message") or {}).get("content", "")
-    elif provider == "anthropic":
-        model = (os.environ.get("AI_COMMENT_ANTHROPIC_MODEL") or "claude-3-5-haiku-latest").strip()
-        req = urllib.request.Request(
-            "https://api.anthropic.com/v1/messages",
-            data=json.dumps(
-                {
-                    "model": model,
-                    "max_tokens": 220,
-                    "messages": [{"role": "user", "content": prompt}],
-                }
-            ).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "x-api-key": anthropic_key,
-                "anthropic-version": "2023-06-01",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=25) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        parts = data.get("content") or []
-        comment = " ".join(
-            str(part.get("text", "")).strip()
-            for part in parts
-            if isinstance(part, dict) and part.get("type") == "text"
-        )
-    elif provider == "grok":
-        model = (os.environ.get("AI_COMMENT_GROK_MODEL") or "grok-2-latest").strip()
-        req = urllib.request.Request(
-            "https://api.x.ai/v1/chat/completions",
-            data=json.dumps(
-                {
-                    "model": model,
-                    "temperature": 0.4,
-                    "max_tokens": 220,
-                    "messages": [
-                        {"role": "system", "content": "한국어로 간결한 주식 코멘트를 작성해라."},
-                        {"role": "user", "content": prompt},
-                    ],
-                }
-            ).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {grok_key}",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=25) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        comment = (((data.get("choices") or [{}])[0]).get("message") or {}).get("content", "")
-    else:
-        raise RuntimeError("LLM API key not configured")
-
-    text = " ".join(str(comment or "").split())
-    if not text:
-        raise RuntimeError("Empty AI comment response")
-    return text
 
 
 @app.after_request
@@ -653,28 +486,6 @@ def api_aq_signal(ticker: str):
         return jsonify({"ok": False, "error": str(e)})
 
 
-@app.route("/api/ai_comment/<ticker>")
-def api_ai_comment(ticker: str):
-    market = (request.args.get("market") or "US").upper()
-    strategy = request.args.get("strategy", "BALANCED")
-    cache_key = (market, strategy, (ticker or "").upper())
-
-    cached = _cache_get_ai_comment(cache_key)
-    if cached:
-        return jsonify(cached)
-
-    try:
-        adapter = _get_scan_adapter_cls()(market=market, strategy=strategy)
-        result = adapter.analyze_ticker(ticker)
-        if result is None:
-            return jsonify({"error": "종목 데이터를 찾을 수 없습니다."}), 404
-
-        prompt = _build_ai_comment_prompt(ticker, market, result)
-        comment = _call_ai_comment_llm(prompt)
-        return jsonify(_cache_set_ai_comment(cache_key, comment))
-    except Exception as e:
-        logging.warning("api_ai_comment failed for %s: %s", ticker, e)
-        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/consensus/<ticker>")

@@ -973,6 +973,26 @@ function populateDetail(d) {
     }
   }
 
+  // 미장: '메인 목표가' 박스 + 'DCF 적정가' 줄을 숨기고 증권사 목표가만 노출.
+  // 단독 노출이라 점선 보조박스 대신 메인 박스처럼 강조. (한국장은 기존 그대로)
+  (function _usTargetLayout() {
+    const isUS = currentMarket === 'US';
+    const mainBox  = document.getElementById('detail-main-box');
+    const dcfLine  = document.getElementById('detail-dcf-line');
+    const auxLabel = document.getElementById('detail-aux-label');
+    const auxBox   = document.getElementById('detail-aux-box');
+    if (mainBox)  mainBox.style.display  = isUS ? 'none' : '';
+    if (dcfLine)  dcfLine.style.display  = isUS ? 'none' : '';
+    if (auxLabel) auxLabel.style.display = isUS ? 'none' : '';
+    if (auxBox) {
+      auxBox.style.border     = isUS ? '1px solid var(--border)'
+                                     : '1px dashed var(--border)';
+      auxBox.style.background = isUS
+        ? 'color-mix(in srgb, var(--brand) 6%, var(--card))'
+        : 'var(--bg-tertiary)';
+    }
+  })();
+
   const scoreEl = document.getElementById('detail-score');
   if (scoreEl) {
     const sc = scoreClass(d.TotalScore || 0);
@@ -1150,7 +1170,10 @@ function _breakdownItemHtml(item) {
   }
   const badge    = badgeMatch[1];
   const cleanLbl = label.replace(/^\[[^\]]+\]\s*/, '');
-  const sc       = scoreClass(score);
+  const _isNum   = (typeof score === 'number' && isFinite(score));
+  const _isZero  = _isNum && Math.abs(score) < 1e-9;
+  // 점수 0 = 실패가 아니라 '기여 없음/중립' → 빨강 대신 회색 처리
+  const sc       = (_isZero || !_isNum) ? '' : scoreClass(score);
   const barW     = Math.min(100, Math.max(0, score));
   // 한글 레이블 + 한줄 설명
   const mapped    = _LABEL_KO[cleanLbl];
@@ -1362,6 +1385,10 @@ function _populatePanelDetail(d, skipFourAxis) {
   setText('dp-price',   d.Price  != null ? fmtPrice(d.Price) : '—');
   setText('dp-target',  d.TargetPrice ? fmtPrice(d.TargetPrice) : '—');
   setText('dp-broker-target', d.BrokerTarget ? fmtPrice(d.BrokerTarget) : '—');
+
+  // 미장: '메인 목표가' 행을 숨기고 증권사 목표가만 노출 (한국장은 기존 그대로)
+  const _dpTgtRow = document.getElementById('dp-target-row');
+  if (_dpTgtRow) _dpTgtRow.style.display = currentMarket === 'US' ? 'none' : '';
 
   // 메인 목표가 상승여력 (노무라식 우선, 없으면 DCF)
   const dpDcfUp = document.getElementById('dp-dcf-upside');

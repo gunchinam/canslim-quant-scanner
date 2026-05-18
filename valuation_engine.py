@@ -565,6 +565,87 @@ def nomura_target_price(
 
 
 # ---------------------------------------------------------------------------
+# 투자지주사 NAV-할인율 평가
+# ---------------------------------------------------------------------------
+#
+# SK스퀘어·LG·㈜SK 같은 투자지주사는 실적/DCF/PER로 평가하면 안 된다.
+# 보유 자산(특히 상장 자회사 지분)의 시가총액 합 = NAV(순자산가치)이고,
+# 지주사 주가는 NAV에 "지주사 할인율"이 적용된 값이다.
+#
+# 평가 축 2개:
+#   1) 보유지분 시가 대비 현재 시총에 할인율이 얼마나 적용되어 고/저평가인가
+#   2) 주주환원 정책(배당·자사주 매입/소각)이 목표 할인율을 얼마나 좁히는가
+#
+# BPS·EPS 기반 Gordon-PB/PER 경로는 지분법 장부가가 시가를 반영하지 못해
+# 구조적으로 틀리므로, 투자지주사는 이 함수로 라우팅한다.
+
+
+def holdco_nav_target_price(
+    nav_ps: float,
+    current_price: float,
+    shareholder_yield: float = 0.0,
+    *,
+    base_discount: float = 0.50,
+    floor_yield: float = 0.02,
+    yield_sensitivity: float = 4.0,
+    min_discount: float = 0.25,
+) -> dict[str, Any]:
+    """투자지주사 NAV-할인율 기반 목표가.
+
+    Args:
+        nav_ps: 주당 순자산가치. (Σ 상장지분 시가 + 비상장 장부가 + 순현금 − 차입) / 발행주식수.
+            호출부에서 실시간 자회사 시총으로 산출해 넘긴다.
+        current_price: 지주사 현재가.
+        shareholder_yield: 주주환원 수익률(배당+자사주, decimal). 0.05 = 5%.
+        base_discount: 주주환원이 평범할 때의 목표 할인율(한국 투자지주 통상 ~50%).
+        floor_yield: "평범한" 주주환원 기준선. 이를 초과한 만큼 할인율이 좁혀진다.
+        yield_sensitivity: 초과 주주환원 1%p당 목표 할인율 축소 폭(%p) 계수.
+        min_discount: 목표 할인율 하한(주주환원이 강해도 이 밑으로는 안 좁힘).
+
+    Returns:
+        ``{"target_price", "method": "NAV-Discount", "components": {...}}``
+    """
+    nav = float(nav_ps or 0.0)
+    px = float(current_price or 0.0)
+    if nav <= 0.0:
+        return {"target_price": 0.0, "method": "NAV-Discount",
+                "components": {"error": "nav_ps<=0"}}
+
+    sy = max(0.0, float(shareholder_yield or 0.0))
+    # 주주환원이 floor를 넘는 만큼 목표 할인율을 좁힌다.
+    excess = max(0.0, sy - floor_yield)
+    target_discount = base_discount - yield_sensitivity * excess
+    target_discount = max(min_discount, min(base_discount, target_discount))
+
+    fair_value = nav * (1.0 - target_discount)
+
+    # 현재 시장이 NAV에 매기고 있는 할인율
+    current_discount = 1.0 - (px / nav) if px > 0 else 1.0
+
+    # 시장 할인율이 목표보다 깊으면 저평가(상승여력), 얕으면 고평가
+    if current_discount > target_discount + 0.03:
+        verdict = "UNDERVALUED"
+    elif current_discount < target_discount - 0.03:
+        verdict = "OVERVALUED"
+    else:
+        verdict = "FAIR"
+
+    return {
+        "target_price": fair_value,
+        "method": "NAV-Discount",
+        "components": {
+            "nav_ps": nav,
+            "fair_value": fair_value,
+            "current_discount": current_discount,
+            "target_discount": target_discount,
+            "base_discount": base_discount,
+            "shareholder_yield": sy,
+            "verdict": verdict,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Demo
 # ---------------------------------------------------------------------------
 

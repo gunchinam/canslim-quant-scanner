@@ -96,6 +96,82 @@ import valuation_engine
 from us_company_info import US_COMPANY_INFO as _US_COMPANY_INFO
 from kr_company_info import KR_COMPANY_INFO as _KR_COMPANY_INFO
 
+# ─── 투자지주사 보유지분 테이블 (NAV-할인율 평가용) ──────────────────────
+# 투자지주사는 실적/DCF가 아니라 보유 상장지분 시가총액(NAV)에 지주사
+# 할인율이 적용돼 주가가 결정된다. 아래는 직접 보유 "상장 자회사" 지분만
+# 큐레이션한 것(비상장·간접지분은 보수적으로 제외 → NAV가 보수적으로 산출됨).
+#
+# stakes: [(자회사 6자리코드, 지분율 decimal), ...]
+# buyback_yield: 배당 외 자사주 매입/소각에 의한 추가 주주환원율(decimal).
+#                배당수익률은 런타임 info에서 합산되므로 여기엔 넣지 않는다.
+#
+# ⚠ 지분율은 근사치이며 분기보고서 기준으로 주기적 갱신 필요.
+HOLDCO_HOLDINGS: dict[str, dict] = {
+    "402340": {  # SK스퀘어 — SK ICT 투자지주
+        "stakes": [("000660", 0.2007)],          # SK하이닉스
+        "buyback_yield": 0.04,                    # 적극적 자사주 소각 정책
+    },
+    "034730": {  # ㈜SK — SK그룹 지주
+        "stakes": [("017670", 0.3057),           # SK텔레콤
+                   ("096770", 0.3622),           # SK이노베이션
+                   ("402340", 0.3055)],          # SK스퀘어
+        "buyback_yield": 0.02,
+    },
+    "003550": {  # ㈜LG — LG그룹 지주
+        "stakes": [("051910", 0.3006),           # LG화학
+                   ("066570", 0.3047),           # LG전자
+                   ("032640", 0.3766),           # LG유플러스
+                   ("051900", 0.3000)],          # LG생활건강
+        "buyback_yield": 0.01,
+    },
+    "000150": {  # 두산 — 두산그룹 지주
+        "stakes": [("034020", 0.3039)],          # 두산에너빌리티
+        "buyback_yield": 0.0,
+    },
+    "000880": {  # ㈜한화 — 한화그룹 지주
+        "stakes": [("012450", 0.3395),           # 한화에어로스페이스
+                   ("009830", 0.3631)],          # 한화솔루션
+        "buyback_yield": 0.0,
+    },
+    "001040": {  # CJ — CJ그룹 지주
+        "stakes": [("097950", 0.4455),           # CJ제일제당
+                   ("035760", 0.4007)],          # CJ ENM
+        "buyback_yield": 0.0,
+    },
+    "004990": {  # 롯데지주
+        "stakes": [("011170", 0.2559),           # 롯데케미칼
+                   ("023530", 0.4000),           # 롯데쇼핑
+                   ("280360", 0.4840)],          # 롯데웰푸드
+        "buyback_yield": 0.0,
+    },
+    "002790": {  # 아모레퍼시픽홀딩스
+        "stakes": [("090430", 0.3706)],          # 아모레퍼시픽
+        "buyback_yield": 0.0,
+    },
+    "008930": {  # 한미사이언스
+        "stakes": [("128940", 0.4142)],          # 한미약품
+        "buyback_yield": 0.0,
+    },
+    "180640": {  # 한진칼 — 한진그룹 지주
+        "stakes": [("003490", 0.2606)],          # 대한항공
+        "buyback_yield": 0.0,
+    },
+    "004800": {  # 효성 — 효성그룹 지주
+        "stakes": [("298000", 0.2134),           # 효성첨단소재
+                   ("298050", 0.2194),           # 효성티앤씨
+                   ("298040", 0.3240)],          # 효성중공업
+        "buyback_yield": 0.0,
+    },
+    "006260": {  # LS — LS그룹 지주
+        "stakes": [("010120", 0.4600)],          # LS ELECTRIC
+        "buyback_yield": 0.0,
+    },
+    "010060": {  # OCI홀딩스
+        "stakes": [("456040", 0.4600)],          # OCI
+        "buyback_yield": 0.0,
+    },
+}
+
 # ─── v21 Sprint 1 모듈 (안전 import — 실패해도 앱 구동) ──────────────────
 try:
     import macro_gate as _macro_gate
@@ -2012,9 +2088,29 @@ class WallStreetQuantStrategies:
             result["ev_ebitda"]   = float(vr.ev_ebitda_fair or 0.0)
             result["weighted_mid"] = float(mid or 0.0)
 
-            # ── 노무라식 12개월 선행 목표가 (sector 지정 시) ──
+            # ── 투자지주사: NAV-할인율 (실적/노무라 경로 우회) ──
+            _hnav_ps = float(info.get("_holdco_nav_ps") or 0.0)
+            _is_holdco = _hnav_ps > 0.0
+            if _is_holdco:
+                try:
+                    hr = valuation_engine.holdco_nav_target_price(
+                        nav_ps=_hnav_ps,
+                        current_price=cur_price,
+                        shareholder_yield=float(info.get("_holdco_shyield") or 0.0),
+                    )
+                    h_tp = float(hr.get("target_price") or 0.0)
+                    result["nomura_target"] = h_tp
+                    result["nomura_method"] = "NAV-할인율"
+                    result["nomura_bias"]   = 1.0
+                    result["holdco_components"] = hr.get("components", {})
+                    if h_tp > 0 and cur_price > 0:
+                        result["nomura_upside"] = (h_tp - cur_price) / cur_price
+                except Exception as e:
+                    logging.debug(f"[Holdco] nav target: {e}")
+
+            # ── 노무라식 12개월 선행 목표가 (sector 지정 시, 지주사 제외) ──
             try:
-                if sector:
+                if sector and not _is_holdco:
                     bps_ps = financials["book_value"]  # per share
                     shares_n = financials["shares_outstanding"]
                     net_income = safe_get(info.get("netIncomeToCommon"), 0.0)
@@ -2485,6 +2581,9 @@ class QuantNexusApp:
             os.path.dirname(os.path.abspath(__file__)), "naver_fund_cache.pkl"
         )
         self._load_naver_fund_cache()
+
+        # 투자지주사 NAV 산출용 자회사 시총 캐시: code -> (mktcap_oku, ts)
+        self._holdco_quote_cache: dict = {}
 
         self._init_sector_data()
         self._build_styles()
@@ -3281,6 +3380,72 @@ class QuantNexusApp:
 
         return current_name[:20] if current_name else ticker[:20]
 
+    def _holdco_subsidiary_mktcap(self, code: str) -> float:
+        """자회사 시가총액(억원). 6시간 캐시. 실패 시 0.0."""
+        now = time.time()
+        cached = self._holdco_quote_cache.get(code)
+        if cached and (now - cached[1]) < 21600:
+            return cached[0]
+        mc = 0.0
+        try:
+            from naver_finance import get_quote
+            q = get_quote(code) or {}
+            mc = float(q.get("market_cap_oku") or 0.0)
+        except Exception as e:
+            logging.debug(f"[Holdco] subsidiary mktcap {code}: {e}")
+        if mc > 0:
+            self._holdco_quote_cache[code] = (mc, now)
+        return mc
+
+    def _compute_holdco_nav(self, ticker: str, info: dict) -> dict | None:
+        """투자지주사면 보유 상장지분 시가 기반 주당 NAV·주주환원율 산출.
+
+        Returns ``{"nav_ps", "shareholder_yield", "sub_count"}`` 또는 None.
+        비상장·간접지분은 제외 → NAV는 보수적(실제 NAV의 하한)으로 산출됨.
+        """
+        code = str(ticker or "").split(".")[0]
+        spec = HOLDCO_HOLDINGS.get(code)
+        if not spec:
+            return None
+
+        # 상장 자회사 지분가치 합산 (억원 단위)
+        nav_oku = 0.0
+        n_ok = 0
+        for sub_code, pct in spec.get("stakes", []):
+            sub_mc = self._holdco_subsidiary_mktcap(sub_code)
+            if sub_mc > 0:
+                nav_oku += sub_mc * float(pct)
+                n_ok += 1
+        if nav_oku <= 0 or n_ok == 0:
+            return None
+
+        # 지주사 순현금(억원): info 의 totalCash − totalDebt. 누락 시 0.
+        try:
+            cash = float(safe_get(info.get("totalCash"), 0.0) or 0.0)
+            debt = float(safe_get(info.get("totalDebt"), 0.0) or 0.0)
+            net_cash_oku = (cash - debt) / 1e8  # 원 → 억원
+        except Exception:
+            net_cash_oku = 0.0
+        nav_oku += net_cash_oku
+
+        shares = float(safe_get(info.get("sharesOutstanding"), 0.0) or 0.0)
+        if shares <= 0:
+            return None
+        nav_ps = (nav_oku * 1e8) / shares  # 억원 → 원, 주당
+
+        # 주주환원율 = 배당수익률 + 큐레이션된 자사주 수익률
+        div_y = 0.0
+        try:
+            dy = info.get("dividendYield")
+            if dy is not None:
+                dy = float(dy)
+                div_y = dy / 100.0 if dy > 1.0 else dy  # % 또는 decimal 모두 수용
+        except Exception:
+            div_y = 0.0
+        sh_yield = div_y + float(spec.get("buyback_yield", 0.0) or 0.0)
+
+        return {"nav_ps": nav_ps, "shareholder_yield": sh_yield, "sub_count": n_ok}
+
     def _nomura_sector_hint(self, ticker: str, info: dict) -> str:
         """
         우선순위:
@@ -3938,23 +4103,55 @@ class QuantNexusApp:
                 except Exception:
                     pass
             else:
-                # US: yfinance targetMeanPrice (애널리스트 컨센서스)
+                # US: 증권사 목표가 = 애널리스트 투자의견 변경(upgrades_downgrades)의
+                #     최근 목표가 평균. US 인사이트의 'Analyst Recommendations'와
+                #     동일 출처라 두 화면의 기준이 일치한다.
                 try:
-                    tmp = info.get("targetMeanPrice")
-                    if tmp and float(tmp) > 0:
-                        broker_target = float(tmp)
-                        cnt = info.get("numberOfAnalystOpinions") or 0
-                        broker_target_count = int(cnt) if cnt else 0
-                        if broker_target_count:
-                            broker_target_source = f"Yahoo Finance Analyst Mean ({broker_target_count}명 평균)"
-                        else:
-                            broker_target_source = "Yahoo Finance Analyst Mean"
-                except Exception:
-                    pass
+                    ud = stock.upgrades_downgrades
+                    if (ud is not None and len(ud) > 0
+                            and "currentPriceTarget" in ud.columns):
+                        # head() = 최신 우선 (app.py US 인사이트와 동일 가정)
+                        pts = [
+                            float(v)
+                            for v in ud["currentPriceTarget"].head(12).tolist()
+                            if v is not None and not pd.isna(v) and float(v) > 0
+                        ]
+                        if pts:
+                            broker_target = sum(pts) / len(pts)
+                            broker_target_count = len(pts)
+                            broker_target_source = (
+                                f"애널리스트 투자의견 평균 (최근 {broker_target_count}건)"
+                            )
+                except Exception as _e:
+                    logging.debug(
+                        f"[US broker_target] {ticker} upgrades_downgrades 실패: {_e}")
+                # 폴백: 투자의견 목표가가 없으면 기존 yfinance 컨센서스 사용
+                if not broker_target:
+                    try:
+                        tmp = info.get("targetMeanPrice")
+                        if tmp and float(tmp) > 0:
+                            broker_target = float(tmp)
+                            cnt = info.get("numberOfAnalystOpinions") or 0
+                            broker_target_count = int(cnt) if cnt else 0
+                            if broker_target_count:
+                                broker_target_source = f"Yahoo Finance Analyst Mean ({broker_target_count}명 평균)"
+                            else:
+                                broker_target_source = "Yahoo Finance Analyst Mean"
+                    except Exception:
+                        pass
             # KR 재무 보강(Naver/KIS)·US targetMeanPrice 반영이 끝난
             # info 로 실적 모멘텀 산출 → KR EPS 성장률 '데이터 부족' 해소
             earn   = self.engine.earnings_momentum(info)
             _sector_for_nomura = self._nomura_sector_hint(ticker, info)
+            # 투자지주사면 NAV-할인율 경로로 라우팅 (실적/DCF 무시)
+            try:
+                _hnav = self._compute_holdco_nav(ticker, info)
+                if _hnav:
+                    info["_holdco_nav_ps"] = _hnav["nav_ps"]
+                    info["_holdco_shyield"] = _hnav["shareholder_yield"]
+                    info["_holdco_subs"] = _hnav["sub_count"]
+            except Exception as e:
+                logging.debug(f"[Holdco] nav compute {ticker}: {e}")
             pt     = self.engine.price_target(info, cur, sector=_sector_for_nomura)
             if pt.get("target", 0) > 0 and not target_source:
                 # 미국/글로벌은 yfinance Ticker.info 기반 DCF 입력값
@@ -3962,9 +4159,19 @@ class QuantNexusApp:
             # 노무라식이 메인 목표가로 채택된 경우 source 라벨 갱신
             if pt.get("nomura_target", 0) > 0 and float(pt.get("target", 0)) == float(pt.get("nomura_target", 0)):
                 _nm_method = pt.get("nomura_method") or "Nomura"
-                _nm_bias = pt.get("nomura_bias", 1.0)
-                _bias_tag = f" · bias {_nm_bias:.2f}" if _nm_bias and _nm_bias != 1.0 else ""
-                target_source = f"노무라式 {_nm_method}{_bias_tag} ({_sector_for_nomura})"
+                if _nm_method == "NAV-할인율":
+                    _hc = pt.get("holdco_components", {}) or {}
+                    _cd = _hc.get("current_discount")
+                    _td = _hc.get("target_discount")
+                    if _cd is not None and _td is not None:
+                        target_source = (f"투자지주 NAV-할인율 "
+                                         f"(현재할인 {_cd*100:.0f}% vs 적정 {_td*100:.0f}%)")
+                    else:
+                        target_source = "투자지주 NAV-할인율"
+                else:
+                    _nm_bias = pt.get("nomura_bias", 1.0)
+                    _bias_tag = f" · bias {_nm_bias:.2f}" if _nm_bias and _nm_bias != 1.0 else ""
+                    target_source = f"노무라式 {_nm_method}{_bias_tag} ({_sector_for_nomura})"
             si     = self.engine.short_interest(info)
             hurst  = self.engine.hurst_exponent(hist)
             kf     = self.engine.kalman_filter(hist)
@@ -4101,7 +4308,18 @@ class QuantNexusApp:
             f_cs_i = _n(i_raw)
 
             # ── [M] Market Direction (태그만 — regime에서 점수 처리) ─
-            canslim_tags.append(f"{regime['m_label']}")
+            #   다른 원칙(C/A/N/S/L/I)과 동일한 'M+이모지 한글설명' 포맷으로
+            #   생성해야 프론트가 본문(main)으로 분류한다. (대괄호 포맷은 보조지표로 빠짐)
+            _m_msg = {
+                "STRONG_BULL":  "M🔥 시장 전체가 강한 상승 추세예요 (CAN SLIM의 핵심 조건)",
+                "BULL":         "M✅ 시장이 상승 추세에 있어요",
+                "SIDEWAYS_BULL":"M 시장이 횡보 중이지만 상승 쪽으로 기울어 있어요",
+                "STRONG_BEAR":  "M🚫 시장이 강한 하락 추세예요. 점수에 50% 상한이 걸려요",
+                "BEAR":         "M🚫 시장이 하락 추세예요. 점수에 50% 상한이 걸려요",
+                "SIDEWAYS":     "M 시장이 뚜렷한 방향 없이 횡보 중이에요",
+            }.get(regime.get("regime", "SIDEWAYS"),
+                  "M 시장이 뚜렷한 방향 없이 횡보 중이에요")
+            canslim_tags.append(_m_msg)
 
             # ════════════════════════════════════════════════════════════
             # STEP 3.5 — Conviction Score (팩터 합의도)
@@ -4813,6 +5031,19 @@ class QuantNexusApp:
 
             entry_score = max(0, min(100, int(_e_score)))
 
+            # 팩터별 점수 분해 (프론트 시각화용)
+            _score_breakdown = {}
+            if mr_pts != 0: _score_breakdown["MeanRev"] = {"pts": mr_pts, "tag": mr_tag or ""}
+            if trend_pts != 0: _score_breakdown["Trend"] = {"pts": trend_pts, "tag": trend_tag or ""}
+            if _vol_jump_up: _score_breakdown["Volume"] = {"pts": 12, "tag": "거래량 점프"}
+            elif _atr_squeeze and _ma_aligned: _score_breakdown["Volume"] = {"pts": 4, "tag": "변동성 수축"}
+            if _pivot and _s_conf: _score_breakdown["Breakout"] = {"pts": 10, "tag": "돌파"}
+            if _macd_div == "BULLISH": _score_breakdown["MACD"] = {"pts": 3, "tag": "골든크로스"}
+            elif _macd_div == "BEARISH": _score_breakdown["MACD"] = {"pts": -4, "tag": "데드크로스"}
+            if _atr_p > 8.0: _score_breakdown["Volatility"] = {"pts": -10, "tag": "변동성 과대"}
+            if day_chg > 0.07: _score_breakdown["DayChg"] = {"pts": -10, "tag": "급등 추격"}
+            elif day_chg < -0.05: _score_breakdown["DayChg"] = {"pts": 4, "tag": "눌림 매수"}
+
             # 상태 등급 — V5.1 스윕 최적 (KR: fire 13%, edge +1.08%p, win 55.5%)
             if entry_score >= 50:
                 entry_status = "STRONG"; status_label = "진입 강함"
@@ -4891,6 +5122,7 @@ class QuantNexusApp:
                 "rr_now": atr.get("rr_ratio", 0.0),  # 현재가 기준 (참고)
                 "stop_method": atr.get("stop_method", "ATR"),
                 "win_rate": atr.get("win_rate", 0.0),
+                "score_breakdown": _score_breakdown,
             }
 
             result = {
@@ -8448,6 +8680,16 @@ class QuantNexusApp:
         "LYFT": "리프트",
         "GME": "게임스톱",
 
+        # 2026-05 추가: 게시판 요청 종목 (us_sectors 신규 편입)
+        "BKR": "베이커 휴즈",
+        "POWI": "파워 인티그레이션스",
+        "STM": "ST마이크로일렉트로닉스",
+        "QXO": "큐엑스오",
+        "LPTH": "라이트패스 테크놀로지",
+        "SLDP": "솔리드 파워",
+        "SATS": "에코스타",
+        "MOD": "모딘 매뉴팩처링",
+        "POET": "포엣 테크놀로지스",
     }
 
     # US_DESC — 미국 종목 한글 설명 (Name 컬럼 옆에 표시)
@@ -9148,6 +9390,16 @@ class QuantNexusApp:
         "LYFT": "라이드셰어 · 모빌리티",
         "GME": "게임 리테일 · 밈주식",
 
+        # 2026-05 추가: 게시판 요청 종목
+        "BKR": "유전 서비스 · LNG 설비 · 에너지 기술",
+        "POWI": "고전압 전력반도체 · 에너지 효율 IC",
+        "STM": "유럽 종합반도체 · MCU · 전력소자",
+        "QXO": "건축자재 유통 · M&A 롤업",
+        "LPTH": "적외선 광학 · 렌즈 · 방산 광부품",
+        "SLDP": "전고체 배터리 · 차세대 셀",
+        "SATS": "위성통신 · 디시 네트워크 · 5G",
+        "MOD": "열관리 · 데이터센터 냉각 · 전장",
+        "POET": "실리콘 포토닉스 · AI 광인터커넥트",
     }
 
     # ─────────────────────────────────────────────────────────────────────
@@ -9195,7 +9447,8 @@ class QuantNexusApp:
 
                 # 팹리스·아날로그·전력반도체
                 "Fabless & Analog":   ["ADI","AMBA","CRUS","DIOD","LSCC","MCHP","MPWR",
-                                       "NXPI","ON","QCOM","QRVO","SLAB","SITM","SWKS","TXN","WOLF"],
+                                       "NXPI","ON","POET","POWI","QCOM","QRVO","SLAB","SITM",
+                                       "STM","SWKS","TXN","WOLF"],
 
                 # 반도체 장비·소재·검사
                 "Semicon Equipment":  ["ACLS","AEIS","AMAT","ASML","AZTA","CAMT","COHU","ENTG",
@@ -9239,7 +9492,7 @@ class QuantNexusApp:
                 # 항공우주·방산 (지정학 리스크 고조, 국방예산 급증)
                 "Aerospace & Defense":["ACHR","ASTS","AXON","BA","BAH","BWXT","CACI","CW",
                                        "GD","HII","HWM","JOBY","KTOS","LDOS","LHX","LMT",
-                                       "LUNR","NOC","RKLB","RTX","SAIC","TDG","TXT"],
+                                       "LPTH","LUNR","NOC","RKLB","RTX","SAIC","TDG","TXT"],
 
                 # 전력 인프라·그리드 (AI 데이터센터 전력 수요 폭증)
                 "Power Grid & Infra": ["AYI","EME","ETN","GEV","GNRC","HON","HUBB",
@@ -9247,8 +9500,8 @@ class QuantNexusApp:
 
                 # 산업 복합기업·자동화
                 "Industrials":        ["AME","CAT","CARR","CGNX","CMI","DE","DOV",
-                                       "FLR","FTV","GEV","HON","IR","ITW","J","MMM","OTIS",
-                                       "PH","ROK","ROP","TT"],
+                                       "FLR","FTV","GEV","HON","IR","ITW","J","MMM","MOD","OTIS",
+                                       "PH","QXO","ROK","ROP","TT"],
 
                 # 물류·운송
                 "Transportation":     ["AAL","CHRW","CSX","DAL","FDX","JBHT","LUV","LYFT",
@@ -9258,7 +9511,7 @@ class QuantNexusApp:
             # ── 5. 에너지 ────────────────────────────────────────────────
             "⚡ Energy": {
                 # 오일·가스 메이저
-                "Oil & Gas Majors":   ["APA","COP","CVX","DVN","EOG","FANG","HES",
+                "Oil & Gas Majors":   ["APA","BKR","COP","CVX","DVN","EOG","FANG","HES",
                                        "MPC","MRO","OXY","PR","PSX","SLB","SM","VLO","XOM"],
 
                 # 미드스트림·파이프라인 (안정적 배당, 리쇼어링 수혜)
@@ -9392,7 +9645,7 @@ class QuantNexusApp:
                                        "KGC","NEM","OR","PAAS","RGLD","WPM"],
 
                 # 리튬·배터리 소재 (EV·ESS 수요)
-                "Lithium & Battery":  ["ALB","ENVX","LAC","QS","SQM"],
+                "Lithium & Battery":  ["ALB","ENVX","LAC","QS","SLDP","SQM"],
             },
 
             # ── 12. 통신 & 5G ─────────────────────────────────────────────
@@ -9403,7 +9656,7 @@ class QuantNexusApp:
 
                 # 5G·네트워크 장비·위성통신
                 "5G & Satellite":     ["ASTS","CALX","CIEN","CSCO","EXTR","GSAT",
-                                       "JNPR","MSI","NOK","QCOM","SPOK","VSAT"],
+                                       "JNPR","MSI","NOK","QCOM","SATS","SPOK","VSAT"],
             },
 
             # ── 13. 비즈니스 서비스 & 데이터 (신규) ──────────────────────────

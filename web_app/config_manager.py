@@ -41,14 +41,8 @@ SETTINGS_SCHEMA: dict[str, list[dict[str, str]]] = {
         {"key": "FOUR_AXIS_INFO_TIMEOUT_SEC",  "label": "종목명 조회 제한시간(초)", "type": "text"},
         {"key": "FOUR_AXIS_MIN_ROWS",          "label": "최소 필요 봉 수",         "type": "text"},
     ],
-    "AI 종목 코멘트": [
-        {"key": "AI_COMMENT_PROVIDER",        "label": "우선 사용 (openai/anthropic/grok, 비우면 자동)", "type": "text"},
-        {"key": "OPENAI_API_KEY",             "label": "OpenAI API Key",       "type": "password"},
-        {"key": "AI_COMMENT_OPENAI_MODEL",    "label": "OpenAI 모델 (기본 gpt-4o-mini)", "type": "text"},
-        {"key": "ANTHROPIC_API_KEY",          "label": "Anthropic API Key",    "type": "password"},
-        {"key": "AI_COMMENT_ANTHROPIC_MODEL", "label": "Anthropic 모델 (기본 claude-3-5-haiku-latest)", "type": "text"},
-        {"key": "GROK_API_KEY",               "label": "Grok (xAI) API Key",   "type": "password"},
-        {"key": "AI_COMMENT_GROK_MODEL",      "label": "Grok 모델 (기본 grok-2-latest)", "type": "text"},
+    "Finnhub (US 수급 데이터)": [
+        {"key": "FINNHUB_API_KEY",            "label": "API Key (finnhub.io 무료 발급)", "type": "password"},
     ],
 }
 
@@ -120,16 +114,7 @@ def get_connection_status(data: dict[str, str]) -> dict[str, dict[str, Any]]:
     naver_ok = bool(data.get("NAVER_CLIENT_ID") and data.get("NAVER_CLIENT_SECRET"))
     status["Naver"] = {"connected": naver_ok}
 
-    # AI 코멘트 (OpenAI/Anthropic/Grok 중 하나만 있어도 OK)
-    pref = (data.get("AI_COMMENT_PROVIDER") or "").strip().lower()
-    providers = []
-    if data.get("OPENAI_API_KEY"):    providers.append("OpenAI")
-    if data.get("ANTHROPIC_API_KEY"): providers.append("Anthropic")
-    if data.get("GROK_API_KEY"):      providers.append("Grok")
-    if pref == "openai" and "OpenAI" in providers:        active = "OpenAI"
-    elif pref == "anthropic" and "Anthropic" in providers: active = "Anthropic"
-    elif pref == "grok" and "Grok" in providers:           active = "Grok"
-    else: active = providers[0] if providers else None
-    status["AI 코멘트"] = {"connected": bool(active), "mode": active or "—"}
+    # Finnhub
+    status["Finnhub"] = {"connected": bool(data.get("FINNHUB_API_KEY"))}
 
     return status

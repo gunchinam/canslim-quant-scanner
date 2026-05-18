@@ -1455,6 +1455,9 @@ function _populatePanelDetail(d, skipFourAxis) {
   if (usBtn) usBtn.style.display = currentMarket === 'US' ? '' : 'none';
   _dpUSInsightLoaded = false;
 
+  // 투자자 동향 카드
+  _renderInvestorCard(d);
+
   // CAN SLIM 탭으로 초기화
   switchDpTab('canslim');
 
@@ -1479,6 +1482,104 @@ function _populatePanelDetail(d, skipFourAxis) {
       loadDpFourAxis(tk);
     }
   }
+}
+
+// ── 투자자 동향 카드 ─────────────────────────────────────────────────────
+function _renderInvestorCard(d) {
+  const wrap = document.getElementById('dp-investor-card');
+  const grid = document.getElementById('dp-investor-grid');
+  if (!wrap || !grid) return;
+
+  const items = [];
+
+  // KR: KIS 외인/기관
+  if (d._KIS_Available) {
+    const fmtQty = v => {
+      const abs = Math.abs(v);
+      const sign = v >= 0 ? '+' : '-';
+      return abs >= 10000 ? `${sign}${(abs/10000).toFixed(1)}만주` : `${sign}${abs.toLocaleString()}주`;
+    };
+    const frgn = d._KIS_Foreign || 0;
+    const inst = d._KIS_Institution || 0;
+    if (frgn !== 0) items.push({ label: '외국인', value: fmtQty(frgn), color: frgn > 0 ? 'var(--success)' : 'var(--destructive)' });
+    if (inst !== 0) items.push({ label: '기관', value: fmtQty(inst), color: inst > 0 ? 'var(--success)' : 'var(--destructive)' });
+  }
+
+  // US: Finnhub
+  if (d._FH_Available) {
+    const insNet = d._FH_InsiderNet || 0;
+    if (d._FH_InsiderCount > 0) {
+      items.push({
+        label: '내부자 거래',
+        value: insNet > 0 ? '순매수' : insNet < 0 ? '순매도' : '중립',
+        sub: `${d._FH_InsiderCount}건`,
+        color: insNet > 0 ? 'var(--success)' : insNet < 0 ? 'var(--destructive)' : 'var(--text-tertiary)'
+      });
+    }
+    const change = d._FH_RecChange || '';
+    if (change && change !== 'stable') {
+      items.push({
+        label: '추천 변화',
+        value: change === 'upgrade' ? '상향' : '하향',
+        sub: `매수 ${d._FH_RecBuy || 0} · 매도 ${d._FH_RecSell || 0}`,
+        color: change === 'upgrade' ? 'var(--success)' : 'var(--destructive)'
+      });
+    }
+    const surp = d._FH_EarnSurprise || 0;
+    if (surp !== 0) {
+      items.push({
+        label: '실적 서프라이즈',
+        value: `${surp >= 0 ? '+' : ''}${surp.toFixed(1)}%`,
+        sub: d._FH_EarnStreak >= 2 ? `${d._FH_EarnStreak}Q 연속 비트` : '',
+        color: surp > 0 ? 'var(--success)' : 'var(--destructive)'
+      });
+    }
+  }
+
+  // US: yfinance
+  if (d._YF_Available) {
+    const shortPct = d._YF_ShortPctFloat;
+    const instPct = d._YF_InstPct;
+    const recKey = d._YF_RecKey || '';
+    const tgtGap = d._YF_TargetGapPct;
+    if (shortPct != null && shortPct >= 1) {
+      items.push({
+        label: '공매도 비율',
+        value: `${shortPct.toFixed(1)}%`,
+        color: shortPct >= 5 ? 'var(--destructive)' : 'var(--text-secondary)'
+      });
+    }
+    if (instPct != null) {
+      items.push({ label: '기관 보유', value: `${instPct.toFixed(0)}%`, color: 'var(--text-secondary)' });
+    }
+    if (recKey) {
+      const recKr = {strong_buy:'적극매수', buy:'매수', hold:'보유', sell:'매도', strong_sell:'적극매도'};
+      const recCol = recKey.includes('buy') ? 'var(--success)' : recKey.includes('sell') ? 'var(--destructive)' : 'var(--text-secondary)';
+      items.push({
+        label: '컨센서스',
+        value: recKr[recKey] || recKey,
+        sub: d._YF_NumAnalysts ? `${d._YF_NumAnalysts}명` : '',
+        color: recCol
+      });
+    }
+    if (tgtGap != null && Math.abs(tgtGap) >= 3) {
+      items.push({
+        label: '목표가 괴리',
+        value: `${tgtGap >= 0 ? '+' : ''}${tgtGap.toFixed(0)}%`,
+        color: tgtGap > 0 ? 'var(--success)' : 'var(--destructive)'
+      });
+    }
+  }
+
+  if (items.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  grid.innerHTML = items.map(it => `
+    <div style="padding:10px 14px; border-right:1px solid var(--border); border-bottom:1px solid var(--border);">
+      <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:4px;">${esc(it.label)}</div>
+      <div style="font-size:16px; font-weight:800; color:${it.color};">${esc(it.value)}</div>
+      ${it.sub ? `<div style="font-size:10px; color:var(--text-tertiary); margin-top:2px;">${esc(it.sub)}</div>` : ''}
+    </div>
+  `).join('');
 }
 
 // ── 영어 → 한국어 번역 테이블 ────────────────────────────────────────────

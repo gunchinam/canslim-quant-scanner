@@ -878,102 +878,32 @@ td.score-col {
 
 .dp-axis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
-/* 진입 타이밍 카드 */
-.dp-entry-card {
-  background: var(--surface-page);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  margin-bottom: 10px;
-  transition: border-color var(--duration-fast);
-}
-.dp-entry-card.green  { border-color: rgba(34,197,94,0.45);  background: rgba(34,197,94,0.05); }
-.dp-entry-card.yellow { border-color: rgba(234,179,8,0.45);  background: rgba(234,179,8,0.05); }
-.dp-entry-card.red    { border-color: rgba(239,68,68,0.45);  background: rgba(239,68,68,0.04); }
-.dp-entry-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.dp-entry-icon { font-size: 22px; line-height: 1; }
-.dp-entry-text { flex: 1; min-width: 0; }
-.dp-entry-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-.dp-entry-phrase {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dp-entry-score {
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  color: var(--text-primary);
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
-}
-.dp-entry-score-suffix { font-size: 11px; font-weight: 500; color: var(--text-tertiary); }
-.dp-entry-bar {
-  height: 6px;
-  background: var(--surface-muted);
-  border-radius: 4px;
-  overflow: hidden;
-  margin: 10px 0 12px;
-}
-.dp-entry-bar-fill {
-  height: 100%;
-  background: var(--brand);
-  transition: width 0.3s var(--ease-out);
-}
-.dp-entry-card.green  .dp-entry-bar-fill { background: var(--success); }
-.dp-entry-card.yellow .dp-entry-bar-fill { background: var(--warning); }
-.dp-entry-card.red    .dp-entry-bar-fill { background: var(--destructive); }
-.dp-entry-prices {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.dp-entry-px {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  min-width: 0;
-}
-.dp-entry-px-label {
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-  font-weight: 600;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.dp-entry-px-val {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  text-align: right;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.dp-entry-px-stop { color: var(--destructive); }
-.dp-entry-px-tp   { color: var(--success); }
+/* 진입 타이밍 카드 (V6 - 3단 구조) */
+.entry-card { border-left:4px solid var(--text-tertiary); transition:border-color .2s; border-radius:var(--radius); overflow:hidden; margin-bottom:10px; background:var(--surface-page); }
+.entry-card.green  { border-left-color:#16A34A; }
+.entry-card.yellow { border-left-color:#F59E0B; }
+.entry-card.red    { border-left-color:#DC2626; }
+.entry-verdict { padding:14px 16px 10px; }
+.entry-bar { position:relative; height:8px; background:var(--bg-tertiary,var(--surface-muted)); border-radius:6px; overflow:hidden; margin-top:6px; }
+.entry-bar-fill { position:absolute; left:0; top:0; height:100%; background:linear-gradient(90deg,#DC2626 0%,#F59E0B 50%,#16A34A 100%); border-radius:6px; transition:width .3s; }
+.entry-prices { padding:10px 16px; border-top:1px solid var(--border); background:var(--bg-tertiary,var(--surface-muted)); }
+.entry-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; font-size:13px; }
+.entry-grid .lbl { color:var(--text-tertiary); font-size:12px; margin-bottom:2px; display:block; }
+.entry-grid .val { font-weight:700; color:var(--text-primary); font-size:14px; }
+.entry-meta-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:6px 16px; margin-top:10px; font-size:12px; }
+.entry-meta-grid .meta-lbl { color:var(--text-tertiary); font-size:11px; }
+.entry-meta-grid .meta-val { font-weight:600; color:var(--text-secondary); }
+.entry-detail { padding:0 16px; max-height:0; overflow:hidden; transition:max-height .3s ease, padding .3s ease; }
+.entry-detail.open { max-height:500px; padding:10px 16px; border-top:1px solid var(--border); }
+.entry-detail-toggle { display:flex; align-items:center; justify-content:center; padding:6px; font-size:11px; color:var(--text-tertiary); cursor:pointer; border-top:1px solid var(--border); user-select:none; gap:4px; }
+.entry-detail-toggle:hover { background:var(--bg-tertiary,var(--surface-muted)); }
+.bd-row { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-size:11px; }
+.bd-label { width:60px; text-align:right; color:var(--text-tertiary); flex-shrink:0; }
+.bd-bar-wrap { flex:1; height:14px; background:var(--bg-tertiary,var(--surface-muted)); border-radius:3px; overflow:hidden; position:relative; }
+.bd-bar { height:100%; border-radius:3px; transition:width .3s; min-width:2px; }
+.bd-bar.pos { background:#16A34A; }
+.bd-bar.neg { background:#DC2626; position:absolute; right:0; top:0; }
+.bd-pts { width:36px; font-weight:700; font-size:11px; }
 
 /* Signal cell — entry light + badge wrapper */
 .signal-row {
@@ -1709,42 +1639,69 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         </div>
 
         <!-- 진입 타이밍 카드 -->
-        <div class="dp-entry-card" id="dp-entry-card">
-          <div class="dp-entry-head">
-            <span class="dp-entry-icon" id="dp-entry-icon">⚪</span>
-            <div class="dp-entry-text">
-              <div class="dp-entry-label">진입 타이밍</div>
-              <div class="dp-entry-phrase" id="dp-entry-phrase">—</div>
+        <div id="dp-entry-card" class="card entry-card" style="padding:0; overflow:hidden;">
+          <!-- ① 판단 요약 -->
+          <div class="entry-verdict">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span id="dp-entry-icon" style="font-size:24px;">⚪</span>
+                <div>
+                  <div style="font-size:11px; color:var(--text-tertiary); font-weight:600;">📈 진입 타이밍</div>
+                  <div id="dp-entry-phrase" style="font-size:15px; font-weight:700; color:var(--text-primary); margin-top:1px;">—</div>
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <span id="dp-entry-score" style="font-size:28px; font-weight:800; color:var(--text-primary); line-height:1;">—</span>
+                <span style="font-size:12px; color:var(--text-tertiary); font-weight:500;">/ 100</span>
+              </div>
             </div>
-            <div class="dp-entry-score">
-              <span id="dp-entry-score">—</span>
-              <span class="dp-entry-score-suffix">/ 100</span>
+            <div class="entry-bar"><div id="dp-entry-bar-fill" class="entry-bar-fill" style="width:0%;"></div></div>
+            <div id="dp-entry-tags" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:8px;"></div>
+          </div>
+          <!-- ② 가격 플랜 -->
+          <div class="entry-prices">
+            <div class="entry-grid">
+              <div>
+                <span class="lbl">진입가 (풀백)</span>
+                <span class="val" id="dp-entry-px-entry">—</span>
+                <span id="dp-entry-discount" style="font-size:11px; color:var(--brand); font-weight:700; margin-left:2px;"></span>
+              </div>
+              <div>
+                <span class="lbl">손절</span>
+                <span class="val" id="dp-entry-px-stop" style="color:var(--destructive);">—</span>
+              </div>
+              <div>
+                <span class="lbl">목표가1 <span style="font-size:10px;color:var(--text-tertiary);">(T1)</span></span>
+                <span class="val" id="dp-entry-px-t1" style="color:var(--success);">—</span>
+              </div>
+              <div>
+                <span class="lbl">목표가2 <span style="font-size:10px;color:var(--text-tertiary);">(T2)</span></span>
+                <span class="val" id="dp-entry-px-t2" style="color:var(--success);">—</span>
+              </div>
+            </div>
+            <div class="entry-meta-grid">
+              <div><span class="meta-lbl">유형</span> <span class="meta-val" id="dp-entry-type">—</span></div>
+              <div><span class="meta-lbl">손익비</span> <span class="meta-val" id="dp-entry-rr" style="font-weight:700;">—</span></div>
+              <div><span class="meta-lbl">손절기준</span> <span class="meta-val" id="dp-entry-stop-method">—</span></div>
+              <div><span class="meta-lbl">현재가</span> <span class="meta-val" id="dp-entry-current" style="color:var(--text-tertiary);">—</span></div>
             </div>
           </div>
-          <div class="dp-entry-bar">
-            <div class="dp-entry-bar-fill" id="dp-entry-bar-fill" style="width:0%"></div>
-          </div>
-          <div class="dp-entry-prices">
-            <div class="dp-entry-px">
-              <span class="dp-entry-px-label">매수</span>
-              <span class="dp-entry-px-val" id="dp-entry-px-entry">—</span>
-            </div>
-            <div class="dp-entry-px">
-              <span class="dp-entry-px-label">손절</span>
-              <span class="dp-entry-px-val dp-entry-px-stop" id="dp-entry-px-stop">—</span>
-            </div>
-            <div class="dp-entry-px">
-              <span class="dp-entry-px-label">1차 익절</span>
-              <span class="dp-entry-px-val dp-entry-px-tp" id="dp-entry-px-t1">—</span>
-            </div>
-            <div class="dp-entry-px">
-              <span class="dp-entry-px-label">2차 익절</span>
-              <span class="dp-entry-px-val dp-entry-px-tp" id="dp-entry-px-t2">—</span>
+          <!-- ③ 상세 (토글) -->
+          <div id="dp-entry-detail" class="entry-detail">
+            <div style="font-size:11px; color:var(--text-tertiary); font-weight:600; margin-bottom:6px;">점수 구성 (base 40)</div>
+            <div id="dp-entry-breakdown"></div>
+            <div id="dp-aq-row" style="display:none; margin-top:10px; padding-top:8px; border-top:1px dashed var(--border); font-size:11px; color:var(--text-secondary);">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span style="font-size:11px; color:var(--text-tertiary); font-weight:600;">AI 종합판단</span>
+                <span id="dp-aq-verdict" style="font-weight:700; padding:2px 10px; border-radius:100px; font-size:11px;"></span>
+                <span id="dp-aq-regime" style="color:var(--text-tertiary);"></span>
+                <span id="dp-aq-detail" style="color:var(--text-tertiary); margin-left:auto;"></span>
+              </div>
+              <div id="dp-aq-reasons" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; font-size:10px;"></div>
             </div>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:6px 10px;background:var(--surface-subtle);border-radius:8px;font-size:11px;">
-            <span id="dp-entry-stop-method" style="color:var(--text-tertiary);">—</span>
-            <span id="dp-entry-rr" style="font-weight:700;">—</span>
+          <div class="entry-detail-toggle" onclick="document.getElementById('dp-entry-detail').classList.toggle('open'); this.querySelector('.arrow').textContent = document.getElementById('dp-entry-detail').classList.contains('open') ? '▲' : '▼';">
+            <span class="arrow">▼</span> 상세 분석
           </div>
         </div>
 
@@ -1771,6 +1728,14 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           </div>
         </div>
 
+      </div>
+
+      <!-- 투자자 동향 카드 -->
+      <div id="dp-investor-card" style="display:none; padding:0 0 8px;">
+        <div class="card" style="padding:0; overflow:hidden;">
+          <div style="padding:12px 16px 8px; font-size:12px; font-weight:700; color:var(--text-tertiary); letter-spacing:0.03em;">투자자 동향</div>
+          <div id="dp-investor-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:0; border-top:1px solid var(--border);"></div>
+        </div>
       </div>
 
       <!-- Right: Tabs + Breakdown -->

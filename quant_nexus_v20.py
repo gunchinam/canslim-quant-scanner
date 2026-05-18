@@ -4067,20 +4067,21 @@ class QuantNexusApp:
                 except Exception as _e:
                     logging.debug(f"[KIS] {ticker} 가격 보완 실패: {_e}")
 
-            # ── KR 밸류 팩터 보강 ─────────────────────────────────────
+            # ── KR 밸류 팩터 보강 (단일 진실원천) ──────────────────────
             # yfinance 는 .KS/.KQ 의 priceToBook·trailingPE 를 거의 항상
             # None 으로 준다. 그 결과 fama_french 의 value_score 가 0 으로
-            # 고정돼 '밸류 팩터'가 집계되지 않았다. 네이버 PER/PBR 을
-            # fama_french 호출 '전에' info 에 주입해 집계를 복원한다.
+            # 고정돼 '밸류 팩터'가 집계되지 않았다. 화면 표시 _PER/_PBR 과
+            # 동일한 소스(_fetch_naver_fundamentals 네이버 연간 재무 API)를
+            # fama_french 호출 '전에' info 에 주입 → 화면·점수 불일치 제거.
+            # (_fetch_naver_fundamentals 는 캐시되므로 5277행 재호출은 무비용.)
             if _is_kr_t:
                 try:
                     if not info.get("trailingPE") or not info.get("priceToBook"):
-                        from naver_finance import get_quote as _nq
-                        _q = _nq(ticker.split(".")[0])
-                        if _q.get("per") and not info.get("trailingPE"):
-                            info["trailingPE"] = float(_q["per"])
-                        if _q.get("pbr") and not info.get("priceToBook"):
-                            info["priceToBook"] = float(_q["pbr"])
+                        _nf = self._fetch_naver_fundamentals(ticker)
+                        if _nf.get("per") and not info.get("trailingPE"):
+                            info["trailingPE"] = float(_nf["per"])
+                        if _nf.get("pbr") and not info.get("priceToBook"):
+                            info["priceToBook"] = float(_nf["pbr"])
                 except Exception as _e:
                     logging.debug(f"[KR value] {ticker} PER/PBR 보강 실패: {_e}")
 

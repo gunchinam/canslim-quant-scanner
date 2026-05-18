@@ -288,7 +288,8 @@ def build_four_axis_card(parent: tk.Widget, ticker: str, hist: pd.DataFrame,
                          C: dict, F: dict,
                          canslim: dict | None = None,
                          macro: dict | None = None,
-                         interval: str = "1d") -> tk.Widget:
+                         interval: str = "1d",
+                         display_name: str | None = None) -> tk.Widget:
     """
     parent 안에 4축 핸드드로잉 분석 카드를 구성.
     canslim/macro 가 제공되면 7페르소나 위원회 패널도 추가 렌더.
@@ -296,6 +297,7 @@ def build_four_axis_card(parent: tk.Widget, ticker: str, hist: pd.DataFrame,
     """
     container = tk.Frame(parent, bg=C["BG"])
     container.pack(fill=tk.BOTH, expand=True)
+    chart_label = str(display_name or ticker or "").strip()
 
     # ── 0) 타임프레임 전환 버튼 ──────────────────────────────────────
     _TF_OPTIONS = [("일봉", "1d"), ("주봉", "1wk"), ("월봉", "1mo")]
@@ -356,7 +358,8 @@ def build_four_axis_card(parent: tk.Widget, ticker: str, hist: pd.DataFrame,
                     return
                 try:
                     build_four_axis_card(parent, ticker, nh, C, F,
-                                         canslim=canslim, macro=macro, interval=new_iv)
+                                         canslim=canslim, macro=macro, interval=new_iv,
+                                         display_name=chart_label)
                 except Exception as _e:
                     logging.error("타임프레임 전환 실패: %s", _e)
                     try:
@@ -526,7 +529,7 @@ def build_four_axis_card(parent: tk.Widget, ticker: str, hist: pd.DataFrame,
 
     # ── 3) 차트 임베드 ────────────────────────────────────────
     try:
-        img = HandDrawnChartRenderer(hist, result, ticker=ticker,
+        img = HandDrawnChartRenderer(hist, result, ticker=chart_label,
                                      lookback=120,
                                      width_px=720, height_px=640).render()
         photo = ImageTk.PhotoImage(img)

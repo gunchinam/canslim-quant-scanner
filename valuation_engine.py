@@ -393,6 +393,17 @@ def _nomura_bias(sector: str) -> float:
     for key, val in _NOMURA_SECTOR_BIAS.items():
         if key in s:
             return float(val)
+    s_u = s.upper()
+    if _contains_any(s_u, ("AI GPU", "HBM", "SEMICON", "SEMICONDUCTOR", "MEMORY", "FABLESS")):
+        return 1.20
+    if "장비" in s or _contains_any(s_u, _EQUIPMENT_SECTOR_ALIASES):
+        return 1.08
+    if _contains_any(s_u, ("PLATFORM", "CLOUD", "SAAS", "SOFTWARE", "INTERNET", "AI", "DATA")):
+        return 1.15
+    if _contains_any(s_u, ("BANK", "FINANCE", "FINTECH", "INSURANCE", "EXCHANGE", "PAYMENT", "BROKER")):
+        return 1.00
+    if _contains_any(s_u, ("BIOTECH", "PHARMA", "HEALTH", "MEDICAL")):
+        return 0.90
     return 1.0
 
 
@@ -412,6 +423,31 @@ def _route_sector(sector: str) -> str:
         if key in s:
             return key
     return ""
+
+
+def _contains_any(text: str, tokens: tuple[str, ...]) -> bool:
+    u = (text or "").upper()
+    return any(tok in u for tok in tokens)
+
+
+_CYCLICAL_SECTOR_ALIASES = (
+    "SEMICON", "SEMICONDUCTOR", "CHIP", "HBM", "GPU", "MEMORY", "FABLESS",
+    "AUTO", "EV", "VEHICLE", "TRANSPORT", "SHIPPING",
+    "OIL", "GAS", "ENERGY", "UTILITY", "POWER",
+    "STEEL", "METAL", "MINING", "CHEM",
+)
+_FINANCIAL_SECTOR_ALIASES = (
+    "BANK", "FINANCE", "FINTECH", "INSURANCE", "EXCHANGE", "PAYMENT",
+    "BROKER", "ASSET", "CAPITAL",
+)
+_GROWTH_SECTOR_ALIASES = (
+    "SOFTWARE", "SAAS", "CLOUD", "PLATFORM", "BIOTECH", "PHARMA",
+    "HEALTH", "MEDICAL", "INTERNET", "GAMING", "CONTENT", "AI", "DATA",
+)
+_EQUIPMENT_SECTOR_ALIASES = (
+    "EQUIPMENT", "TOOL", "TOOLS", "PROCESS", "PACKAGING", "TEST",
+    "INSPECTION", "ETCH", "DEPOSITION", "LITHO", "MATERIAL",
+)
 
 
 def _gordon_target_pb(roe: float, coe: float, g: float) -> float:
@@ -480,6 +516,7 @@ def nomura_target_price(
     """
     raw_sector = (sector or "").strip()
     sector = _route_sector(raw_sector)
+    raw_u = raw_sector.upper()
     bps   = float(financials.get("bps", financials.get("book_value", 0)) or 0)
     eps   = float(financials.get("eps", 0) or 0)
     roe   = float(financials.get("roe", 0) or 0)
@@ -503,7 +540,7 @@ def nomura_target_price(
             }
 
     # --- B. 은행·보험·증권: 2-stage Gordon Growth ---
-    if sector in _FINANCIAL_SECTORS:
+    if sector in _FINANCIAL_SECTORS or _contains_any(raw_u, _FINANCIAL_SECTOR_ALIASES):
         months = max(forward_months, 24)
         fwd_bps = _forward_bps(bps, roe, payout_ratio, months=months)
         target_pb = _gordon_target_pb(roe, coe, terminal_growth) * bias
@@ -521,7 +558,31 @@ def nomura_target_price(
         }
 
     # --- C. 시클리컬/메모리/소재: forward BPS × target P/B ---
-    if sector in _CYCLICAL_SECTORS:
+    # --- C. 반도체 장비: Cyclical-PB + Forward-PE blend ---
+    if "장비" in raw_sector or _contains_any(raw_u, _EQUIPMENT_SECTOR_ALIASES):
+        fwd_bps = _forward_bps(bps, roe, payout_ratio, months=forward_months)
+        target_pb = _gordon_target_pb(roe, coe, terminal_growth) * bias
+        cyc_tp = fwd_bps * target_pb
+        peer_pe = max(float(financials.get("peer_pe", 25.0) or 25.0), 22.0)
+        pe_tp = eps * peer_pe * bias
+        tp = (0.30 * cyc_tp) + (0.70 * pe_tp)
+        return {
+            "target_price": tp,
+            "method": "Semicon-Blend",
+            "components": {
+                "forward_bps": fwd_bps,
+                "target_pb": target_pb,
+                "cyclical_target": cyc_tp,
+                "forward_eps": eps,
+                "peer_pe": peer_pe,
+                "pe_target": pe_tp,
+                "blend_weights": {"cyclical_pb": 0.30, "forward_pe": 0.70},
+                "nomura_bias": bias,
+            },
+        }
+
+    # --- D. ????/??/??: forward BPS ? target P/B ---
+    if sector in _CYCLICAL_SECTORS or _contains_any(raw_u, _CYCLICAL_SECTOR_ALIASES):
         fwd_bps = _forward_bps(bps, roe, payout_ratio, months=forward_months)
         target_pb = _gordon_target_pb(roe, coe, terminal_growth) * bias
         tp = fwd_bps * target_pb
@@ -536,8 +597,7 @@ def nomura_target_price(
             },
         }
 
-    # --- D. 고성장: DCF (기존 엔진 재사용) ---
-    if sector in _GROWTH_SECTORS:
+    if sector in _GROWTH_SECTORS or _contains_any(raw_u, _GROWTH_SECTOR_ALIASES):
         fcf = float(financials.get("fcf", 0) or 0)
         if shares > 0 and fcf != 0 and abs(fcf) > shares:
             fcf = fcf / shares
@@ -551,7 +611,7 @@ def nomura_target_price(
             "components": {"fcf_ps": fcf, "wacc": coe, "nomura_bias": bias},
         }
 
-    # --- E. 기본/안정 성장주: forward EPS × peer P/E ---
+    # --- F. 기본/안정 성장주: forward EPS × peer P/E ---
     peer_pe = float(financials.get("peer_pe", 15.0) or 15.0)
     tp = eps * peer_pe * bias
     return {

@@ -18,6 +18,30 @@ _pykrx_logger = logging.getLogger("pykrx")
 _cache: dict[str, str] = {}
 _loaded = False
 _lock = threading.Lock()
+_ALIASES: dict[str, str] = {
+    "089030": "테크윙",
+    "131290": "티에스이",
+}
+
+
+def _normalize_keys(code: str) -> list[str]:
+    raw = str(code or "").strip().upper()
+    if not raw:
+        return []
+    keys = [raw]
+    base = raw
+    for suf in (".KS", ".KQ"):
+        if base.endswith(suf):
+            base = base[:-len(suf)]
+            break
+    if base and base not in keys:
+        keys.append(base)
+    if base.isdigit():
+        padded = base.zfill(6)
+        for key in (padded, f"{padded}.KS", f"{padded}.KQ"):
+            if key not in keys:
+                keys.append(key)
+    return keys
 
 
 def _load_fdr() -> bool:
@@ -35,10 +59,12 @@ def _load_fdr() -> bool:
             return False
         count = 0
         for _, row in df.iterrows():
-            code = str(row[col_code]).strip().zfill(6)
+            code = str(row[col_code]).strip()
+            code6 = code.zfill(6) if code.isdigit() else code
             name = str(row[col_name]).strip()
-            if code and name and name != code:
-                _cache[code] = name
+            if code6 and name and name != code6:
+                for key in _normalize_keys(code6):
+                    _cache[key] = name
                 count += 1
         logger.info("[stock_names] FDR %d개 종목명 로드 완료", count)
         return count > 0
@@ -60,7 +86,8 @@ def _load_pykrx() -> bool:
                 for t in tickers:
                     name = krx.get_market_ticker_name(t)
                     if name and name != t:
-                        _cache[t] = name
+                        for key in _normalize_keys(t):
+                            _cache[key] = name
                         count += 1
             except Exception as e:
                 logger.debug("[stock_names] pykrx %s 로드 실패: %s", market, e)
@@ -99,7 +126,15 @@ def get_name(code: str) -> str:
     if not code:
         return code
     _ensure_loaded()
-    return _cache.get(code, code)
+    for key in _normalize_keys(code):
+        if key in _cache:
+            return _cache[key]
+    base = _normalize_keys(code)
+    if base:
+        short = base[0].split(".")[0]
+        if short in _ALIASES:
+            return _ALIASES[short]
+    return code
 
 
 def preload_async() -> None:

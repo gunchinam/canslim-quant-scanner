@@ -215,18 +215,23 @@ def get_regime_signal(ticker: str, market: str = "US") -> Optional[dict]:
     if not yf_tk:
         return None
 
-    stock_df = _fetch_ohlcv(yf_tk)
+    # 벤치마크/VIX를 종목과 병렬로 fetch (yfinance I/O 대기 최소화)
+    bench_ticker = "^KS11" if market == "KR" else "SPY"
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        f_stock = pool.submit(_fetch_ohlcv, yf_tk)
+        f_bench = pool.submit(_fetch_ohlcv, bench_ticker)
+        f_vix   = pool.submit(_fetch_ohlcv, "^VIX")
+        stock_df = f_stock.result()
+        bench_df = f_bench.result()
+        vix_df   = f_vix.result()
+
     # KR .KS 실패시 .KQ 폴백
     if (stock_df is None or stock_df.empty) and market == "KR" and yf_tk.endswith(".KS"):
         yf_tk = yf_tk[:-3] + ".KQ"
         stock_df = _fetch_ohlcv(yf_tk)
     if stock_df is None or stock_df.empty:
         return None
-
-    # 시장 레짐용 벤치마크 (KR: ^KS11 코스피, US: SPY)
-    bench_ticker = "^KS11" if market == "KR" else "SPY"
-    bench_df = _fetch_ohlcv(bench_ticker)
-    vix_df = _fetch_ohlcv("^VIX")
 
     payload: dict = {"ticker": ticker, "market": market, "yf_ticker": yf_tk}
 

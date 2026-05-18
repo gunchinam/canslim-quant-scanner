@@ -117,5 +117,48 @@ class TestNomuraTargetPrice(unittest.TestCase):
         self.assertEqual(_forward_bps(100_000, 0.20, 0.30, months=0), 100_000)
 
 
+    def test_english_sector_aliases_route(self) -> None:
+        """English sector labels should still route to Nomura buckets."""
+        kw = dict(coe=0.11, terminal_growth=0.025, payout_ratio=0.10, forward_months=0)
+        semi = nomura_target_price(
+            "Technology / Semiconductors",
+            {"bps": 100_000, "roe": 0.35},
+            **kw,
+        )
+        bank = nomura_target_price(
+            "Financials / Banks",
+            {"bps": 100_000, "roe": 0.10},
+            **kw,
+        )
+        growth = nomura_target_price(
+            "Software / Cloud",
+            {"fcf": 500_000, "cash": 0, "debt": 0},
+            **kw,
+        )
+        self.assertEqual(semi["method"], "Cyclical-PB")
+        self.assertEqual(bank["method"], "Gordon-PB")
+        self.assertEqual(growth["method"], "DCF")
+
+    def test_semicon_equipment_uses_blend(self) -> None:
+        """Semicon equipment should avoid a pure P/B haircut."""
+        r = nomura_target_price(
+            "반도체 장비",
+            {"bps": 100_000, "roe": 0.35, "eps": 10_000, "peer_pe": 25.0},
+            coe=0.11, terminal_growth=0.025, payout_ratio=0.10, forward_months=0,
+        )
+        self.assertEqual(r["method"], "Semicon-Blend")
+        self.assertGreater(r["target_price"], 100_000)
+
+    def test_korean_equipment_sector_routes_to_blend(self) -> None:
+        """실제 KR 섹터명인 '반도체장비·소재'도 장비 블렌드로 들어가야 한다."""
+        r = nomura_target_price(
+            "반도체장비·소재",
+            {"bps": 100_000, "roe": 0.35, "eps": 10_000, "peer_pe": 25.0},
+            coe=0.11, terminal_growth=0.025, payout_ratio=0.10, forward_months=0,
+        )
+        self.assertEqual(r["method"], "Semicon-Blend")
+        self.assertGreater(r["target_price"], 100_000)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

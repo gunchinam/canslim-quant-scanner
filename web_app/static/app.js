@@ -23,6 +23,24 @@ let _oneLinerFilter = null; // OneLinerTag filter
 let _compareSet = new Set();
 let _aiCommentReqSeq = 0;
 
+// ── 클라이언트 API 캐시 (sessionStorage) ──────────────────────────────
+const _clientCache = {
+  _TTL: 5 * 60 * 1000, // 5분
+  _key(endpoint) { return `_sc_${endpoint}`; },
+  get(endpoint) {
+    try {
+      const raw = sessionStorage.getItem(this._key(endpoint));
+      if (!raw) return null;
+      const { data, ts } = JSON.parse(raw);
+      if (Date.now() - ts > this._TTL) { sessionStorage.removeItem(this._key(endpoint)); return null; }
+      return data;
+    } catch { return null; }
+  },
+  set(endpoint, data) {
+    try { sessionStorage.setItem(this._key(endpoint), JSON.stringify({ data, ts: Date.now() })); } catch {}
+  }
+};
+
 function _wlKey(market) { return `scanner_watchlist_${market || currentMarket}`; }
 function loadWatchlist(market) {
   try {
@@ -237,6 +255,8 @@ function onMarketChange(val) {
   loadWatchlist();
   _setSegActive('market-btn-group', val);
   loadSectors();
+  runScan();
+  return;
   setStockListMsg('섹터를 선택하거나 스캔 버튼을 눌러주세요.');
   setStatHTML('stat-total',  '—<span class="unit">개</span>');
   setStatHTML('stat-strong', '—<span class="unit">개</span>');
@@ -611,7 +631,7 @@ function renderStockRow(stock, rank) {
   <td class="right ${chgClass}">${chgSign}${chgPct}%</td>
   <td class="right">${rsi}</td>
   <td class="right" style="color:${stock.TargetUpside > 0 ? 'var(--success)' : 'var(--text-tertiary)'}" title="${stock.TargetSource ? '출처: ' + esc(stock.TargetSource) + (stock.TargetPrice ? ' · ' + targetLabel + ' ' + fmtPrice(stock.TargetPrice) : '') : '메인 목표가 없음'}">${upside}</td>
-  <td class="right" title="${stock.BrokerTargetSource ? esc(stock.BrokerTargetSource) : '증권사 컨센서스 데이터 없음'}">${stock.BrokerTarget ? (() => { const bUp = stock.Price ? ((stock.BrokerTarget - stock.Price) / stock.Price) * 100 : null; return `<div class="target-price">${fmtPrice(stock.BrokerTarget)}</div><div class="target-upside" style="color:${bUp != null && bUp >= 0 ? 'var(--success)' : 'var(--destructive)'}">${bUp != null ? (bUp >= 0 ? '+' : '') + fmt(bUp, 1) + '%' : ''}</div>`; })() : '—'}</td>
+  <td class="right" title="${stock.BrokerTargetSource ? esc(stock.BrokerTargetSource) : '증권사 컨센서스 없음'}">${stock.BrokerTarget ? (() => { const bUp = stock.Price ? ((stock.BrokerTarget - stock.Price) / stock.Price) * 100 : null; return `<div class="target-price">${fmtPrice(stock.BrokerTarget)}</div><div class="target-upside" style="color:${bUp != null && bUp >= 0 ? 'var(--success)' : 'var(--destructive)'}">${bUp != null ? (bUp >= 0 ? '+' : '') + fmt(bUp, 1) + '%' : ''}</div>`; })() : '<div class="target-empty">컨센서스 없음</div>'}</td>
   <td class="reason-cell">${reasonHtml}</td>
 </tr>`;
 }
@@ -711,11 +731,15 @@ function initSearch() {
 
 async function loadDetail(ticker) {
   const p = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
+  const cacheKey = `ticker:${ticker}:${currentMarket}:${currentStrategy}`;
+  const cached = _clientCache.get(cacheKey);
+  if (cached) { populateDetail(cached); return; }
   try {
     const res = await fetch(`/api/ticker/${ticker}?${p}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    _clientCache.set(cacheKey, data);
     populateDetail(data);
   } catch (e) {
     console.error('loadDetail 실패:', e);
@@ -739,14 +763,14 @@ function populateDetail(d) {
   }
   setText('detail-rsi',    d.RSI != null ? `RSI ${fmt(d.RSI, 1)}` : '—');
   setText('detail-price',  d.Price != null ? fmtPrice(d.Price) : '—');
-  setText('detail-target', d.TargetPrice ? fmtPrice(d.TargetPrice) : '—');
-  setText('detail-broker-target', d.BrokerTarget ? fmtPrice(d.BrokerTarget) : '—');
-  setText('detail-nomura-target', d.NomuraTarget ? fmtPrice(d.NomuraTarget) : '—');
+  setText('detail-target', d.TargetPrice != null ? fmtPrice(d.TargetPrice) : '—');
+  setText('detail-broker-target', d.BrokerTarget != null ? fmtPrice(d.BrokerTarget) : '컨센서스 없음');
+  setText('detail-nomura-target', d.NomuraTarget != null ? fmtPrice(d.NomuraTarget) : '—');
 
   // 노무라식 목표가 상승여력 + 방식
   const _detNomUp = document.getElementById('detail-nomura-upside');
   if (_detNomUp) {
-    if (d.NomuraTarget && d.Price) {
+    if (d.NomuraTarget != null && d.Price != null) {
       const pct = ((d.NomuraTarget - d.Price) / d.Price) * 100;
       _detNomUp.textContent = (pct >= 0 ? '+' : '') + fmt(pct, 1) + '%';
       _detNomUp.style.color = pct >= 0 ? 'var(--success)' : 'var(--destructive)';
@@ -756,13 +780,10 @@ function populateDetail(d) {
   }
   const _detNomMethod = document.getElementById('detail-nomura-method');
   if (_detNomMethod) {
-    if (d.NomuraMethod) {
-      const bias = d.NomuraBias && d.NomuraBias !== 1 ? ` · bias ${fmt(d.NomuraBias, 2)}` : '';
-      const routed = d.NomuraUsed ? '메인 목표가 반영' : '참고값';
-      _detNomMethod.textContent = `${d.NomuraMethod}${bias} · ${routed}`;
-    } else {
-      _detNomMethod.textContent = '';
-    }
+    const method = d.NomuraMethod || d.TargetMethod || 'DCF';
+    const bias = d.NomuraBias && d.NomuraBias !== 1 ? ` · bias ${fmt(d.NomuraBias, 2)}` : '';
+    const routed = d.NomuraUsed ? '메인 목표가 반영' : '참고값';
+    _detNomMethod.textContent = `${method}${bias} · ${routed}`;
   }
 
   // 보조 검증용 DCF 적정가 대비 상승여력
@@ -802,7 +823,7 @@ function populateDetail(d) {
       _detBrkSrc.textContent = shortSrc;
       _detBrkSrc.title = d.BrokerTargetSource;  // 풀 텍스트는 툴팁
     } else {
-      _detBrkSrc.textContent = '';
+      _detBrkSrc.textContent = '컨센서스 없음';
       _detBrkSrc.title = '';
     }
   }
@@ -1098,13 +1119,16 @@ async function openDetail(ticker) {
   panel.classList.add('open');
   document.body.style.overflow = 'hidden';
 
+  // 4축 차트와 종목 데이터를 병렬로 요청
+  const fourAxisPromise = loadDpFourAxis(ticker);
+
   try {
     const p   = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
     const res = await fetch(`/api/ticker/${encodeURIComponent(ticker)}?${p}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    _populatePanelDetail(data);
+    _populatePanelDetail(data, /* skipFourAxis */ true);
   } catch (e) {
     console.error('openDetail 실패:', e);
     setText('dp-name', '데이터를 불러올 수 없습니다');
@@ -1136,7 +1160,7 @@ function _clearPanelDetail() {
   if (fc) fc.innerHTML = loading;
 }
 
-function _populatePanelDetail(d) {
+function _populatePanelDetail(d, skipFourAxis) {
   setText('dp-name',    d.Name   || d.Ticker || '—');
   setText('dp-ticker',  d.Ticker || '—');
   setText('dp-sector',  d.Sector || '—');
@@ -1146,13 +1170,13 @@ function _populatePanelDetail(d) {
   if (aboutEl)  aboutEl.textContent = aboutText;
   if (aboutBox) aboutBox.style.display = aboutText ? '' : 'none';
   setText('dp-price',   d.Price  != null ? fmtPrice(d.Price) : '—');
-  setText('dp-target',  d.TargetPrice ? fmtPrice(d.TargetPrice) : '—');
-  setText('dp-broker-target', d.BrokerTarget ? fmtPrice(d.BrokerTarget) : '—');
+  setText('dp-target',  d.TargetPrice != null ? fmtPrice(d.TargetPrice) : '—');
+  setText('dp-broker-target', d.BrokerTarget != null ? fmtPrice(d.BrokerTarget) : '—');
 
   // 메인 목표가 상승여력 (노무라식 우선, 없으면 DCF)
   const dpDcfUp = document.getElementById('dp-dcf-upside');
   if (dpDcfUp) {
-    if (d.TargetPrice && d.Price) {
+    if (d.TargetPrice != null && d.Price != null) {
       const pct = ((d.TargetPrice - d.Price) / d.Price) * 100;
       dpDcfUp.textContent = (pct >= 0 ? '+' : '') + fmt(pct, 1) + '%';
       dpDcfUp.style.color = pct >= 0 ? 'var(--success)' : 'var(--destructive)';
@@ -1162,7 +1186,7 @@ function _populatePanelDetail(d) {
   // 증권사 목표가 상승여력 (보조 검증)
   const dpBrkUp = document.getElementById('dp-broker-upside');
   if (dpBrkUp) {
-    if (d.BrokerTarget && d.Price) {
+    if (d.BrokerTarget != null && d.Price != null) {
       const pct = ((d.BrokerTarget - d.Price) / d.Price) * 100;
       dpBrkUp.textContent = (pct >= 0 ? '+' : '') + fmt(pct, 1) + '%';
       dpBrkUp.style.color = pct >= 0 ? 'var(--success)' : 'var(--destructive)';
@@ -1181,7 +1205,7 @@ function _populatePanelDetail(d) {
       brkSrcEl.textContent = shortSrc;
       brkSrcEl.title = d.BrokerTargetSource;
     } else {
-      brkSrcEl.textContent = '컨센서스';
+      brkSrcEl.textContent = '컨센서스 없음';
       brkSrcEl.removeAttribute('title');
     }
   }
@@ -1264,10 +1288,12 @@ function _populatePanelDetail(d) {
     }
   }
 
-  // 차트 자동 로드 (탭 제거되어 항상 표시)
-  const tk = (document.getElementById('dp-ticker')?.textContent || '').trim();
-  if (tk && tk !== '—' && tk !== '…' && _dpFourAxisLoadedFor !== tk) {
-    loadDpFourAxis(tk);
+  // 차트 자동 로드 (openDetail에서 병렬 호출 시 skipFourAxis=true)
+  if (!skipFourAxis) {
+    const tk = (document.getElementById('dp-ticker')?.textContent || '').trim();
+    if (tk && tk !== '—' && tk !== '…' && _dpFourAxisLoadedFor !== tk) {
+      loadDpFourAxis(tk);
+    }
   }
 }
 
@@ -1297,7 +1323,7 @@ const _KO_MAP = {
   'STRONG_DISTRIBUTION': '강한 분산', 'MILD_DISTRIBUTION': '약한 분산',
   'UNCONFIRMED_BREAKOUT': '미확인 돌파', 'NO_INTEREST': '관심 부족',
   'STRONG_TREND': '강한 추세', 'MEAN_REVERTING': '평균 회귀', 'RANDOM_WALK': '불규칙',
-  'ORB_BREAKOUT': 'ORB 돌파', 'OVERHEATED': '과열',
+  'ORB_BREAKOUT': 'ORB 돌파', 'ORB_READY': 'ORB 관찰', 'ORB_WATCH': 'ORB 감시', 'ORB_WEAK': '약한 ORB', 'OVERHEATED': '과열',
   'MODERATE_BUY': '적정 매수', 'SLIGHT_UPSIDE': '소폭 상승 여력',
   'SLIGHT_OVERVALUED': '소폭 고평가', 'AT_TARGET': 'DCF 적정가 도달',
   'ABOVE_STRONG': '강한 상회', 'BELOW_WEAK': '약한 하회',
@@ -1595,6 +1621,15 @@ async function loadFourAxis(ticker) {
   const chartW  = document.getElementById('fouraxis-chart-wrap');
   if (!loading) return;
 
+  const cacheKey = `fouraxis:${ticker}:${currentMarket}`;
+  const cached = _clientCache.get(cacheKey);
+  if (cached) {
+    document.getElementById('fouraxis-chart').src = 'data:image/png;base64,' + cached.chart;
+    chartW.style.display = 'block';
+    loading.style.display = 'none';
+    return;
+  }
+
   loading.style.display = 'block';
   errDiv.style.display  = 'none';
   const reqSeq = ++_detailFourAxisReqSeq;
@@ -1608,11 +1643,12 @@ async function loadFourAxis(ticker) {
     if (!d.chart) throw new Error('Empty chart payload');
     if (reqSeq !== _detailFourAxisReqSeq) return;
 
+    _clientCache.set(cacheKey, d);
     document.getElementById('fouraxis-chart').src = 'data:image/png;base64,' + d.chart;
     chartW.style.display = 'block';
   } catch (e) {
     if (reqSeq !== _detailFourAxisReqSeq) return;
-    errDiv.textContent = '?? ?? ??: ' + e.message;
+    errDiv.textContent = '4축 차트 실패: ' + e.message;
     errDiv.style.display = 'block';
   } finally {
     if (reqSeq !== _detailFourAxisReqSeq) return;
@@ -1622,7 +1658,19 @@ async function loadFourAxis(ticker) {
 
 if (typeof TICKER !== 'undefined' && TICKER) {
   document.addEventListener('DOMContentLoaded', () => {
-    loadFourAxis(TICKER);
+    // 4축 차트: 화면에 보일 때만 로드 (IntersectionObserver)
+    const fourAxisEl = document.getElementById('fouraxis-loading') || document.getElementById('fouraxis-chart-wrap');
+    if (fourAxisEl && 'IntersectionObserver' in window) {
+      const obs = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          obs.disconnect();
+          loadFourAxis(TICKER);
+        }
+      }, { rootMargin: '200px' });
+      obs.observe(fourAxisEl);
+    } else {
+      loadFourAxis(TICKER);
+    }
     loadConsensus(TICKER);
   });
 }
@@ -1923,49 +1971,53 @@ async function loadConsensus(ticker) {
   const wrap = document.getElementById('consensus-wrap');
   if (!wrap) return;
   const p = new URLSearchParams({ market: currentMarket });
+  const cacheKey = `consensus:${ticker}:${currentMarket}`;
+  const cached = _clientCache.get(cacheKey);
+  if (cached) { _renderConsensusData(wrap, cached); return; }
   try {
     const res = await fetch(`/api/consensus/${ticker}?${p}`);
     if (!res.ok) return;
     const data = await res.json();
-    const s = data.summary || {};
-    const reports = data.reports || [];
-
-    // 요약 데이터가 없으면 숨김
-    if (!s.mean && !s.high && reports.length === 0) return;
-    wrap.style.display = '';
-
-    // 투자의견 배지
-    const badge = document.getElementById('cons-opinion-badge');
-    if (badge && s.opinion) {
-      badge.textContent = s.opinion;
-    } else if (badge) {
-      badge.style.display = 'none';
-    }
-
-    // 목표가 범위
-    if (s.low)  setText('cons-low',  fmtPrice(s.low));
-    if (s.mean) setText('cons-mean', fmtPrice(s.mean));
-    if (s.high) setText('cons-high', fmtPrice(s.high));
-
-    const countWrap = document.getElementById('cons-count-wrap');
-    if (countWrap && s.count) {
-      countWrap.textContent = `(${s.count}개 증권사)`;
-    }
-
-    // 개별 증권사 리포트
-    const reportsEl = document.getElementById('cons-reports');
-    if (reportsEl && reports.length > 0) {
-      reportsEl.innerHTML = reports.map(r => `
-        <div style="display:flex; align-items:center; padding:8px 0; border-top:1px solid var(--border); font-size:12px;">
-          <span style="flex:1; font-weight:600; color:var(--text-primary);">${esc(r.firm)}</span>
-          <span style="font-weight:700; color:var(--text-primary); margin-right:8px;">${r.target ? fmtPrice(r.target) : '—'}</span>
-          <span style="color:${r.opinion && r.opinion.includes('매수') ? 'var(--success)' : 'var(--text-tertiary)'}; font-weight:600; width:32px; text-align:center;">${esc(r.opinion || '')}</span>
-          <span style="color:var(--text-tertiary); margin-left:8px; min-width:60px; text-align:right;">${esc(r.date || '')}</span>
-        </div>
-      `).join('');
-    }
+    _clientCache.set(cacheKey, data);
+    _renderConsensusData(wrap, data);
   } catch (e) {
     console.debug('loadConsensus:', e);
+  }
+}
+
+function _renderConsensusData(wrap, data) {
+  const s = data.summary || {};
+  const reports = data.reports || [];
+
+  if (!s.mean && !s.high && reports.length === 0) return;
+  wrap.style.display = '';
+
+  const badge = document.getElementById('cons-opinion-badge');
+  if (badge && s.opinion) {
+    badge.textContent = s.opinion;
+  } else if (badge) {
+    badge.style.display = 'none';
+  }
+
+  if (s.low)  setText('cons-low',  fmtPrice(s.low));
+  if (s.mean) setText('cons-mean', fmtPrice(s.mean));
+  if (s.high) setText('cons-high', fmtPrice(s.high));
+
+  const countWrap = document.getElementById('cons-count-wrap');
+  if (countWrap && s.count) {
+    countWrap.textContent = `(${s.count}개 증권사)`;
+  }
+
+  const reportsEl = document.getElementById('cons-reports');
+  if (reportsEl && reports.length > 0) {
+    reportsEl.innerHTML = reports.map(r => `
+      <div style="display:flex; align-items:center; padding:8px 0; border-top:1px solid var(--border); font-size:12px;">
+        <span style="flex:1; font-weight:600; color:var(--text-primary);">${esc(r.firm)}</span>
+        <span style="font-weight:700; color:var(--text-primary); margin-right:8px;">${r.target ? fmtPrice(r.target) : '—'}</span>
+        <span style="color:${r.opinion && r.opinion.includes('매수') ? 'var(--success)' : 'var(--text-tertiary)'}; font-weight:600; width:32px; text-align:center;">${esc(r.opinion || '')}</span>
+        <span style="color:var(--text-tertiary); margin-left:8px; min-width:60px; text-align:right;">${esc(r.date || '')}</span>
+      </div>
+    `).join('');
   }
 }
 
@@ -2198,6 +2250,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderSectorHeatmap([]);
     document.getElementById('btn-scan')?.addEventListener('click', runScan);
     loadSectors();
+    runScan();
   }
 });
 

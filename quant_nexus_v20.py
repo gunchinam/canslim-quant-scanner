@@ -222,9 +222,46 @@ try:
     import xlsxwriter
     import pandas as pd
     import numpy as np
+    import io
+    try:
+        _YF_CACHE_DIR = os.path.join(os.path.dirname(__file__), ".yfinance-cache")
+        os.makedirs(_YF_CACHE_DIR, exist_ok=True)
+        if hasattr(yf, "set_tz_cache_location"):
+            yf.set_tz_cache_location(_YF_CACHE_DIR)
+    except Exception as _e:
+        logging.warning("[yf] cache dir init failed: %s", _e)
 except ImportError:
     print("필수 라이브러리 설치 필요: pip install yfinance pandas xlsxwriter numpy")
     sys.exit(1)
+
+
+def _fetch_stooq_history(ticker: str) -> pd.DataFrame | None:
+    """Fetch daily US price history from Stooq as a Yahoo fallback."""
+    try:
+        sym = ticker.upper().replace(".", "-")
+        url = f"https://stooq.com/q/d/l/?s={sym.lower()}.us&i=d"
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            raw = resp.read().decode("utf-8", errors="ignore")
+        if not raw or "Date,Open,High,Low,Close,Volume" not in raw:
+            return None
+        df = pd.read_csv(io.StringIO(raw))
+        if df.empty or "Date" not in df.columns:
+            return None
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df = df.dropna(subset=["Date"]).set_index("Date").sort_index()
+        df.columns = [c.capitalize() for c in df.columns]
+        needed = {"Open", "High", "Low", "Close", "Volume"}
+        if not needed.issubset(df.columns):
+            return None
+        for col in ["Open", "High", "Low", "Close", "Volume"]:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+        df = df.dropna(subset=["Close"])
+        if df.empty or len(df) < 30:
+            return None
+        return df
+    except Exception as e:
+        logging.warning("[stooq] history failed %s: %s", ticker, e)
+        return None
 
 # ============================================================
 # Toss Design System 컬러 팔레트
@@ -555,6 +592,9 @@ class DataCache:
     - max_age_minutes 를 초과한 항목은 만료 처리합니다.
     """
     REQUIRED_KEYS = {"Ticker", "Name", "Price", "TotalScore", "Signal"}
+    NAME_FIXUPS = {
+        "LITE": "루멘텀",
+    }
 
     def __init__(self, cache_dir: str = "./cache_v19"):
         self.cache_dir = cache_dir
@@ -613,6 +653,10 @@ class DataCache:
                 logging.warning(f"[Cache] 무결성 실패: {ticker}")
                 os.remove(path)
                 return None
+            base_ticker = str(data.get("Ticker") or ticker).split("__")[0].upper()
+            fixed_name = self.NAME_FIXUPS.get(base_ticker)
+            if fixed_name and data.get("Name") != fixed_name:
+                data["Name"] = fixed_name
             return data
         except Exception as e:
             logging.warning(f"[Cache] 로드 실패({ticker}): {e}")
@@ -2227,23 +2271,30 @@ class WallStreetQuantStrategies:
             vol_ratio = cur_vol / avg_vol
             result["vol_ratio"] = vol_ratio
 
-            if close <= prev_high:
-                return result
-            breakout_pct = (close - prev_high) / prev_high
+            intraday_high = float(hist["High"].iloc[-1])
+            high_break_pct = (intraday_high - prev_high) / prev_high if prev_high > 0 else 0.0
+            close_break_pct = (close - prev_high) / prev_high if prev_high > 0 else 0.0
+            breakout_pct = max(close_break_pct, high_break_pct)
             result["breakout_pct"] = breakout_pct
 
             if breakout_pct > 0.10:
                 return result
 
             score = 0
-            if vol_ratio >= 2.0 and breakout_pct >= 0.003:
+            if close > prev_high and vol_ratio >= 2.0 and breakout_pct >= 0.003:
                 score = 15
                 result["signal"] = "ORB_BREAKOUT"
                 score += min(int(breakout_pct * 200), 10)
                 score += min(int((vol_ratio - 2.0) * 3), 5)
-            elif vol_ratio >= 1.5 and breakout_pct >= 0.002:
+            elif high_break_pct >= 0.001 and vol_ratio >= 1.2:
+                score = 6
+                result["signal"] = "ORB_READY"
+            elif vol_ratio >= 1.5 and close_break_pct >= 0.001:
                 score = 8
                 result["signal"] = "ORB_WEAK"
+            elif close >= prev_high * 0.98 and close >= float(hist["Open"].iloc[-1]) and vol_ratio >= 0.95:
+                score = 3
+                result["signal"] = "ORB_WATCH"
             result["score"] = score
         except Exception as e:
             logging.error(f"[Strategy] orb_breakout: {e}")
@@ -2429,12 +2480,14 @@ class QuantNexusApp:
                 ts = data.get('_ts')
                 if ts and (datetime.now() - ts).total_seconds() < 43200:
                     self._naver_target_cache = data
+                    self._naver_target_meta = data.get('_meta', {}) or {}
             except Exception:
                 pass
 
     def _save_naver_cache(self):
         """(DEPRECATED: DCF로 대체됨) 네이버 컨센서스 목표가 캐시 저장."""
         self._naver_target_cache['_ts'] = datetime.now()
+        self._naver_target_cache['_meta'] = self._naver_target_meta
         try:
             with open(self._naver_cache_path, 'wb') as f:
                 pickle.dump(self._naver_target_cache, f)
@@ -2447,11 +2500,15 @@ class QuantNexusApp:
         cached = self._naver_target_cache.get(code)
         if cached is not None:
             return cached if cached > 0 else None
+        _ua = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        def _int(v):
+            try:
+                return int(str(v).replace(',', '').strip())
+            except Exception:
+                return 0
         try:
             url = f"https://m.stock.naver.com/api/stock/{code}/integration"
-            req = urllib.request.Request(url, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-            })
+            req = urllib.request.Request(url, headers=_ua)
             with urllib.request.urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
             ci = data.get('consensusInfo', {})
@@ -2460,11 +2517,39 @@ class QuantNexusApp:
                 target = int(str(tp_str).replace(',', ''))
                 if target > 0:
                     self._naver_target_cache[code] = target
+                    self._naver_target_meta[code] = "네이버 증권 통합 평균"
                     self._save_naver_cache()
                     return target
         except Exception as e:
             logging.debug(f"Naver target fetch failed for {code}: {e}")
+
+        # 2차 폴백: 증권사 리서치 목록에서 목표가를 평균화
+        try:
+            for ep in [
+                f"https://m.stock.naver.com/api/stock/{code}/finance/research?pageSize=8",
+                f"https://m.stock.naver.com/api/stock/{code}/research?pageSize=8",
+            ]:
+                req = urllib.request.Request(ep, headers=_ua)
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    data = json.loads(resp.read().decode('utf-8'))
+                items = data if isinstance(data, list) else (data.get('list') or data.get('reports') or data.get('items') or [])
+                tps = []
+                for it in items[:8]:
+                    tp = _int(it.get('priceTarget') or it.get('targetPrice') or it.get('target'))
+                    if tp > 0:
+                        tps.append(tp)
+                if tps:
+                    target = int(round(sum(tps) / len(tps)))
+                    if target > 0:
+                        self._naver_target_cache[code] = target
+                        self._naver_target_meta[code] = "네이버 증권 리서치 평균"
+                        self._save_naver_cache()
+                        return target
+        except Exception as e:
+            logging.debug(f"Naver research target fetch failed for {code}: {e}")
+
         self._naver_target_cache[code] = 0
+        self._naver_target_meta[code] = ""
         return None
 
     # ─────────────────────────────────────────────────────────────────────
@@ -3147,6 +3232,82 @@ class QuantNexusApp:
             return self.us_sector_labels_kr.get(key, name)
         return name
 
+    def _resolve_display_name(self, ticker: str, current_name: str = "") -> str:
+        ticker = str(ticker or "").strip()
+        current_name = str(current_name or "").strip()
+        is_kr_t = bool(ticker) and (ticker.endswith(".KS") or ticker.endswith(".KQ"))
+
+        if is_kr_t:
+            try:
+                from swing_scan.config import stock_names as _sn
+                code6 = ticker.split(".")[0].zfill(6)
+                nm = _sn.get_name(code6)
+                if nm and nm != code6:
+                    return nm[:20]
+            except Exception:
+                pass
+            nm = getattr(QuantNexusApp, "KR_NAMES", {}).get(ticker)
+            if nm:
+                return str(nm)[:20]
+        else:
+            nm = getattr(QuantNexusApp, "US_NAMES", {}).get(ticker)
+            if nm:
+                return str(nm)[:20]
+
+        return current_name[:20] if current_name else ticker[:20]
+
+    def _nomura_sector_hint(self, ticker: str, info: dict) -> str:
+        """
+        우선순위:
+        1) 현재 스캔 맵에서 찾은 내부 섹터
+        2) 현재 market sector/industry
+        3) valuation_engine가 이해하는 canonical sector token
+        """
+        sector_name = ""
+        try:
+            if hasattr(self, "_ticker_sector_map"):
+                sector_name = self._ticker_sector_map.get(ticker, "") or ""
+        except Exception:
+            sector_name = ""
+        if not sector_name and hasattr(self, "sectors"):
+            try:
+                for subs in self.sectors.values():
+                    for sec_name, sec_tickers in subs.items():
+                        if ticker in sec_tickers:
+                            sector_name = str(sec_name or "")
+                            raise StopIteration
+            except StopIteration:
+                pass
+            except Exception:
+                pass
+
+        raw = " ".join(
+            str(x).strip() for x in (
+                sector_name,
+                info.get("sector"),
+                info.get("industry"),
+            ) if x
+        ).strip()
+        raw_u = raw.upper()
+
+        if any(tok in raw_u for tok in ("AI GPU", "HBM", "SEMICON", "SEMICONDUCTOR", "MEMORY", "FABLESS")):
+            if "장비" in raw_u or any(tok in raw_u for tok in ("EQUIPMENT", "TOOL", "TOOLS", "TEST", "INSPECTION", "ETCH", "DEPOSITION")):
+                return "반도체 장비"
+            return "반도체"
+        if any(tok in raw_u for tok in ("PLATFORM", "CLOUD", "SAAS", "SOFTWARE")):
+            return "플랫폼"
+        if any(tok in raw_u for tok in ("BANK", "FINANCE", "FINTECH", "INSURANCE", "EXCHANGE", "DATA")):
+            return "금융"
+        if any(tok in raw_u for tok in ("BIOTECH", "HEALTHCARE", "PHARMA", "MEDICAL")):
+            return "바이오"
+        if any(tok in raw_u for tok in ("AUTO", "AUTOM", "CAR", "TRUCK", "TRANSPORT")):
+            return "자동차"
+        if any(tok in raw_u for tok in ("OIL", "GAS", "ENERGY", "NUCLEAR", "UTILITY", "POWER")):
+            return "정유"
+
+        # 최후 fallback: 현재 섹터명 자체를 전달
+        return sector_name or str(info.get("sector") or info.get("industry") or "").strip()
+
     def _load_sector_tree(self):
         for item in self.sector_tree.get_children():
             self.sector_tree.delete(item)
@@ -3556,11 +3717,9 @@ class QuantNexusApp:
             if cached:
                 with self._stats_lock:
                     self.stats["cache_hits"] += 1
-                # 캐시된 결과에 한국어 이름 적용 (영문명·티커폴백·빈값 모두 덮어쓰기)
-                _us_names = getattr(QuantNexusApp, "US_NAMES", {})
-                _kr_name = _us_names.get(ticker)
-                if _kr_name and cached.get("Name") != _kr_name:
-                    cached["Name"] = _kr_name[:20]
+                fixed_name = self._resolve_display_name(ticker, cached.get("Name", ""))
+                if fixed_name and cached.get("Name") != fixed_name:
+                    cached["Name"] = fixed_name
                 return cached
             with self._stats_lock:
                 self.stats["cache_misses"] += 1
@@ -3573,41 +3732,48 @@ class QuantNexusApp:
                 from yfinance.exceptions import YFRateLimitError as _YFRL
             except Exception:
                 _YFRL = Exception
-            for _attempt in range(3):
+            is_us = self._scan_market == "US"
+            for _attempt in range(1):
                 try:
                     hist = stock.history(period="2y")
                     break
                 except _YFRL:
-                    wait = 15 * (_attempt + 1)
-                    logging.warning(
-                        "[yf] rate-limited %s (attempt %d/3) — sleep %ds",
-                        ticker, _attempt + 1, wait,
-                    )
-                    time.sleep(wait)
-                    continue
+                    logging.warning("[yf] rate-limited %s (US fast path)", ticker)
+                    break
                 except Exception as _e:
                     logging.warning("[yf] history failed %s: %s", ticker, _e)
-                    time.sleep(1.5 * (_attempt + 1))
-                    continue
-            if hist is None:
-                # 마지막 시도로 1y 폴백
-                try:
-                    hist = stock.history(period="1y")
-                except Exception:
-                    hist = None
-            if hist is None:
-                try:
-                    hist = stock.history(period="6mo")
-                except Exception:
-                    hist = None
+                    break
             if hist is None or hist.empty or len(hist) < 30:
-                return None
+                stale = self.cache.get(strategy_key, max_age_minutes=60 * 24 * 30)
+                if stale:
+                    stale = dict(stale)
+                    stale.setdefault("DataSource", "cache")
+                    stale.setdefault("DataStatus", "STALE_CACHE")
+                    return stale
+                if is_us:
+                    try:
+                        hist = _fetch_stooq_history(ticker)
+                    except Exception:
+                        hist = None
+                else:
+                    try:
+                        hist = stock.history(period="1y")
+                    except Exception:
+                        hist = None
+                    if hist is None or hist.empty or len(hist) < 30:
+                        try:
+                            hist = stock.history(period="6mo")
+                        except Exception:
+                            hist = None
+                if hist is None or hist.empty or len(hist) < 30:
+                    return None
 
             try:
                 info = stock.info or {}
                 if not info:
-                    time.sleep(0.3)
-                    info = stock.info or {}
+                    if self._scan_market != "US":
+                        time.sleep(0.3)
+                        info = stock.info or {}
             except Exception as _e:
                 logging.warning(f"[yf.info] {ticker} 실패: {_e}")
                 # fast_info fallback: 기본 시가총액·가격만
@@ -3736,7 +3902,7 @@ class QuantNexusApp:
                     bt = self._fetch_naver_target(ticker)
                     if bt and bt > 0:
                         broker_target = float(bt)
-                        broker_target_source = "네이버 증권 컨센서스 (국내 증권사 평균)"
+                        broker_target_source = self._naver_target_meta.get(code, "") or "네이버 증권 컨센서스 (국내 증권사 평균)"
                 except Exception:
                     pass
             else:
@@ -3753,11 +3919,7 @@ class QuantNexusApp:
                             broker_target_source = "Yahoo Finance Analyst Mean"
                 except Exception:
                     pass
-            _sector_for_nomura = ""
-            try:
-                _sector_for_nomura = self._ticker_sector_map.get(ticker, "") if hasattr(self, "_ticker_sector_map") else ""
-            except Exception:
-                _sector_for_nomura = ""
+            _sector_for_nomura = self._nomura_sector_hint(ticker, info)
             pt     = self.engine.price_target(info, cur, sector=_sector_for_nomura)
             if pt.get("target", 0) > 0 and not target_source:
                 # 미국/글로벌은 yfinance Ticker.info 기반 DCF 입력값
@@ -4767,6 +4929,7 @@ class QuantNexusApp:
                 "About":            (info.get("longBusinessSummary") or "")[:300],
                 "CompanyInfo":      _KR_COMPANY_INFO.get(ticker, "") if _is_kr else _US_COMPANY_INFO.get(ticker, ""),
                 "Industry":         info.get("industry", "") or info.get("sector", ""),
+                "Sector":           _sector_for_nomura or (info.get("industry", "") or info.get("sector", "")),
                 # NH 필터용 원시 재무 데이터
                 "_EPSGrowth":       earn["eps_growth"],
                 "_ROE":             ff["roe"],
@@ -5184,6 +5347,9 @@ class QuantNexusApp:
 
     def _show_detail_data(self, d):
         """단타 스크리너 상세 팝업 — 스캘핑 시그널 (US-002)."""
+        display_name = self._resolve_display_name(d.get("Ticker", ""), d.get("Name", ""))
+        if display_name and d.get("Name") != display_name:
+            d["Name"] = display_name
         win = tk.Toplevel(self.root)
         win.title(f"{d['Name']} ({d['Ticker']})")
         win.geometry("640x560")
@@ -5459,12 +5625,19 @@ class QuantNexusApp:
         data   = next((d for d in self.current_data if d["Ticker"] == ticker), None)
         if not data:
             return
+        display_name = self._resolve_display_name(ticker, data.get("Name", ""))
+        if display_name and data.get("Name") != display_name:
+            data["Name"] = display_name
 
         pop = tk.Toplevel(self.root)
         pop.title(f"📊 {ticker} — CAN SLIM 상세 분석")
         pop.geometry("780x900")
         pop.configure(bg=C["PANEL"])
         pop.resizable(True, True)
+        try:
+            pop.title(f"{display_name} ({ticker})")
+        except Exception:
+            pass
 
         # ── 헤더 ──────────────────────────────────────────────────────
         hdr = tk.Frame(pop, bg=C["HEADER_BG"], relief="flat", bd=0)
@@ -5480,7 +5653,7 @@ class QuantNexusApp:
 
         title_row = tk.Frame(hdr, bg=C["HEADER_BG"])
         title_row.pack(fill=tk.X)
-        tk.Label(title_row, text=f"  {ticker}  |  {data['Name']}",
+        tk.Label(title_row, text=f"  {display_name}  |  {ticker}",
                  font=F["POPUP_TITLE"], bg=C["HEADER_BG"], fg=C["ACCENT"],
                  pady=8, anchor="w").pack(side=tk.LEFT)
 
@@ -5576,6 +5749,75 @@ class QuantNexusApp:
             tk.Label(cell, text=str(val), font=F["SMALL_BOLD"],
                      bg=bg, fg=fg, padx=8, pady=3).pack()
 
+        # 노무라식 목표가 + 진입 타이밍 카드
+        nomura_card = tk.Frame(win, bg=C["PANEL"])
+        nomura_card.pack(fill=tk.X, padx=8, pady=(8, 0))
+        nomura_inner = tk.Frame(nomura_card, bg=C["CARD"], relief="flat", bd=0)
+        nomura_inner.pack(fill=tk.X)
+        tk.Label(nomura_inner, text="노무라식 목표가 / 진입 타이밍",
+                 font=F["POPUP_SUB"], bg=C["CARD"], fg=C["ACCENT"],
+                 anchor="w", padx=12, pady=8).pack(fill=tk.X)
+
+        nomura_target = d.get("NomuraTarget") or d.get("TargetPrice") or 0
+        nomura_method = d.get("NomuraMethod") or d.get("TargetMethod") or "DCF"
+        nomura_source  = d.get("TargetSource") or ""
+        nomura_bias    = d.get("NomuraBias", 1.0)
+        nomura_used    = bool(d.get("NomuraUsed", False))
+        nomura_routed  = "메인 목표가 반영" if nomura_used else "참고값"
+        nomura_upside  = d.get("NomuraUpside", 0.0)
+        if not nomura_upside and nomura_target and d.get("Price"):
+            nomura_upside = (float(nomura_target) - float(d["Price"])) / float(d["Price"])
+
+        entry_plan = d.get("EntryPlan") or {}
+        entry_score = d.get("EntryScore", 0)
+        entry_phrase = d.get("EntryPhrase") or "-"
+        entry_status = d.get("EntryStatus") or "-"
+        entry_entry = entry_plan.get("entry")
+        entry_stop  = entry_plan.get("stop")
+        entry_t1    = entry_plan.get("t1")
+        entry_t2    = entry_plan.get("t2")
+        entry_rr    = entry_plan.get("rr")
+
+        lines = tk.Frame(nomura_inner, bg=C["CARD"])
+        lines.pack(fill=tk.X, padx=12, pady=(0, 10))
+        row1 = tk.Frame(lines, bg=C["CARD"])
+        row1.pack(fill=tk.X)
+        tk.Label(row1, text=f"노무라식 목표가: {nomura_target:,.2f}" if nomura_target else "노무라식 목표가: —",
+                 font=F["BODY_BOLD"], bg=C["CARD"], fg=C["TEXT_MAIN"]).pack(side=tk.LEFT)
+        tk.Label(row1, text=(f"{nomura_upside:+.1%}" if isinstance(nomura_upside, (int, float)) else ""),
+                 font=F["BODY_BOLD"], bg=C["CARD"],
+                 fg=C["GREEN"] if (nomura_upside or 0) >= 0 else C["RED"]).pack(side=tk.LEFT, padx=(8, 0))
+        tk.Label(row1, text=f"{nomura_method} · {nomura_routed}",
+                 font=F["TINY"], bg=C["CARD"], fg=C["TEXT_SUB"]).pack(side=tk.RIGHT)
+
+        row2 = tk.Frame(lines, bg=C["CARD"])
+        row2.pack(fill=tk.X, pady=(4, 0))
+        tk.Label(row2, text=f"출처: {nomura_source or '—'}",
+                 font=F["TINY"], bg=C["CARD"], fg=C["TEXT_SUB"],
+                 anchor="w").pack(side=tk.LEFT)
+        tk.Label(row2, text=f"bias {nomura_bias:.2f}" if nomura_bias else "",
+                 font=F["TINY"], bg=C["CARD"], fg=C["TEXT_SUB"]).pack(side=tk.RIGHT)
+
+        row3 = tk.Frame(lines, bg=C["CARD"])
+        row3.pack(fill=tk.X, pady=(8, 0))
+        tk.Label(row3, text=f"진입 타이밍: {entry_phrase}",
+                 font=F["BODY_BOLD"], bg=C["CARD"], fg=C["TEXT_MAIN"],
+                 anchor="w").pack(side=tk.LEFT)
+        tk.Label(row3, text=f"{entry_status} / {entry_score:.0f}점" if isinstance(entry_score, (int, float)) else f"{entry_status}",
+                 font=F["TINY"], bg=C["CARD"], fg=C["ACCENT"]).pack(side=tk.RIGHT)
+
+        row4 = tk.Frame(lines, bg=C["CARD"])
+        row4.pack(fill=tk.X, pady=(4, 0))
+        entry_bits = []
+        if entry_entry is not None: entry_bits.append(f"진입가 {entry_entry:,.2f}")
+        if entry_stop is not None:  entry_bits.append(f"손절 {entry_stop:,.2f}")
+        if entry_t1 is not None:    entry_bits.append(f"1차 {entry_t1:,.2f}")
+        if entry_t2 is not None:    entry_bits.append(f"2차 {entry_t2:,.2f}")
+        if entry_rr is not None:    entry_bits.append(f"R:R {entry_rr:.2f}:1")
+        tk.Label(row4, text=" · ".join(entry_bits) if entry_bits else "진입 계획: —",
+                 font=F["TINY"], bg=C["CARD"], fg=C["TEXT_SUB"],
+                 anchor="w", justify="left").pack(fill=tk.X)
+
         # ── 노트북 탭 (CAN SLIM / 4축 핸드드로잉) ─────────────────────
         nb = ttk.Notebook(pop)
         nb.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
@@ -5632,8 +5874,11 @@ class QuantNexusApp:
                 inner.bind("<MouseWheel>", _wheel)
                 _macro = {"regime": data.get("Regime", "Neutral"),
                           "vix":    data.get("VIX")}
-                build_four_axis_card(inner, ticker, hist_df, C, F,
-                                     canslim=data, macro=_macro)
+                build_four_axis_card(
+                    inner, ticker, hist_df, C, F,
+                    canslim=data, macro=_macro,
+                    display_name=display_name,
+                )
             except Exception as e:
                 try:
                     loading.destroy()
@@ -6409,7 +6654,10 @@ class QuantNexusApp:
                 self._show_detail_data(data)
             else:
                 # current_data 미스: ticker 기반 최소 dict 로 표시
-                self._show_detail_data({"Ticker": ticker, "Name": ticker})
+                self._show_detail_data({
+                    "Ticker": ticker,
+                    "Name": self._resolve_display_name(ticker, ticker),
+                })
             return
         sel = self.tree.selection()
         if sel:
@@ -7653,7 +7901,6 @@ class QuantNexusApp:
         "CVS": "CVS 헬스",
         "CVX": "셰브론",
         "CW": "커티스 라이트",
-        "CYBR": "사이버아크",
         "D": "도미니언 에너지",
         "DAL": "델타항공",
         "DCPH": "데시페라 파마",
@@ -7662,7 +7909,6 @@ class QuantNexusApp:
         "DE": "디어",
         "DELL": "델",
         "DEO": "디아지오",
-        "DFS": "디스커버 파이낸셜",
         "DG": "달러제너럴",
         "DHI": "DR호튼",
         "DHR": "다나허",
@@ -7719,7 +7965,6 @@ class QuantNexusApp:
         "FCX": "프리포트 맥모란",
         "FDS": "팩트셋",
         "FDX": "페덱스",
-        "FI": "파이서브",
         "FIS": "FIS",
         "FISV": "파이서브",
         "FIVE": "파이브 빌로우",
@@ -7792,7 +8037,6 @@ class QuantNexusApp:
         "ISRG": "인튜이티브 서지컬",
         "ITW": "일리노이 툴웍스",
         "IVZ": "인베스코",
-        "JAMF": "잼프",
         "JBHT": "JB헌트",
         "JNJ": "존슨앤존슨",
         "JNPR": "주니퍼 네트웍스",
@@ -7823,7 +8067,7 @@ class QuantNexusApp:
         "LHX": "L3 해리스",
         "LI": "리오토",
         "LIN": "린데",
-        "LITE": "라이트텔",
+        "LITE": "루멘텀",
         "LLY": "일라이릴리",
         "LMT": "록히드마틴",
         "LNG": "셰니에르 에너지",
@@ -8030,7 +8274,7 @@ class QuantNexusApp:
         "SPGI": "S&P 글로벌",
         "SPOK": "스폭 홀딩스",
         "SPOT": "스포티파이",
-        "SQ": "블록",
+        "XYZ": "블록",
         "SQM": "SQM",
         "SRE": "셈프라",
         "STAG": "스태그 인더스트리얼",
@@ -8200,7 +8444,7 @@ class QuantNexusApp:
         "JPM": "미국 최대 · 투자 은행", "GS": "IB · 트레이딩 · 자산운용",
         "MS": "IB · 자산운용 · 리서치", "BAC": "미국 2위 · 상업 · 소매 은행",
         "V": "비자 결제 · 글로벌 네트워크", "MA": "마스터카드 · 결제 네트워크",
-        "PYPL": "페이팔 · 벤모 결제", "SQ": "모바일 POS · 비트코인 핀테크",
+        "PYPL": "페이팔 · 벤모 결제", "XYZ": "모바일 POS · 비트코인 핀테크",
         "COIN": "암호화폐 · 거래소 · 플랫폼", "HOOD": "주식 · 암호화폐 · 거래앱",
         "CME": "선물 · 옵션 · 거래소", "ICE": "NYSE · 파생상품 · 거래소",
         "SPGI": "S&P · 신용평가 · 데이터", "MCO": "무디스 · 신용평가",
@@ -8285,7 +8529,6 @@ class QuantNexusApp:
         # 사이버보안 추가
         "AKAM": "CDN · 엣지 보안",
         "CHKP": "방화벽 · VPN",
-        "CYBR": "특권 접근 관리 · PAM",
         "GEN": "소비자 보안 · 안티바이러스",
         "QLYS": "클라우드 · 취약점 스캔",
         "RPD": "MDR · 보안 운영 플랫폼",
@@ -8296,7 +8539,6 @@ class QuantNexusApp:
         "BILL": "중소기업 · 청구 결제 자동화",
         "DOCU": "전자 계약 · 서명",
         "DUOL": "AI · 언어 학습",
-        "JAMF": "애플 기기 · MDM 관리",
         "MGNI": "CTV · 광고 플랫폼",
         "PCTY": "HR · 급여 · 클라우드 SaaS",
         "RAMP": "데이터 연결 · 마케팅",
@@ -8350,8 +8592,7 @@ class QuantNexusApp:
         "ALLY": "온라인 · 자동차 금융 은행",
         "AXP": "신용카드 · 프리미엄",
         "COF": "대형 · 신용카드 · 은행",
-        "DFS": "신용카드 · 네트워크 · 금융",
-        "FI": "결제 처리 · 금융 IT 솔루션",
+        "FISV": "결제 처리 · 금융 IT 솔루션",
         "FOUR": "통합 결제 · 레스토랑 플랫폼",
         "GPN": "글로벌 결제 처리 · 상점 솔루션",
         "MELI": "라틴 아메리카 · 이커머스 · 핀테크",
@@ -8895,12 +9136,12 @@ class QuantNexusApp:
                                        "VRT","WDC","WULF"],
 
                 # 사이버보안
-                "Cybersecurity":      ["AKAM","CHKP","CRWD","CYBR","FTNT","GEN","NET",
+                "Cybersecurity":      ["AKAM","CHKP","CRWD","FTNT","GEN","NET",
                                        "OKTA","PANW","QLYS","RPD","S","TENB","VRNS","ZS"],
 
                 # SaaS·소프트웨어 고성장
                 "SaaS & Software":    ["ADBE","APP","BILL","CRM","DOCU","DUOL","GLOB","GTLB",
-                                       "HUBS","JAMF","MGNI","MNDY","NOW","PCTY","RAMP",
+                                       "HUBS","MGNI","MNDY","NOW","PCTY","RAMP",
                                        "SHOP","TWLO","TTD","VEEV","ZM"],
             },
 
@@ -8930,9 +9171,9 @@ class QuantNexusApp:
                                        "CORZ","CRCL","HOOD","HUT","IREN","MARA","MSTR","RIOT","SOLS","WULF"],
 
                 # 핀테크·결제·BNPL
-                "Fintech & Payments": ["AFRM","ALLY","AXP","BILL","COF","DFS","FI",
+                "Fintech & Payments": ["AFRM","ALLY","AXP","BILL","COF","FISV",
                                        "FOUR","GPN","IBKR","MA","MELI","NU","PYPL","SE",
-                                       "SOFI","SQ","SYF","TOST","UPST","V"],
+                                       "SOFI","SYF","TOST","UPST","V","XYZ"],
 
                 # 금융거래소·신용평가·데이터 — Russell 1000 핵심 (신규)
                 "Exchanges & Data":   ["CBOE","CME","FDS","ICE","MCO","MSCI",
@@ -9226,8 +9467,7 @@ class QuantNexusApp:
                 # SK하이닉스 HBM·삼성전자 메모리 + 후공정 핵심 밸류체인
                 "메모리·HBM":         [                                       "000660.KS","000990.KS",
                                        "005930.KS","007660.KS",
-                                       "042700.KS","058470.KQ",
-                                       "095340.KQ","110990.KQ",
+                                       "110990.KQ",
                                        "166090.KQ","168360.KQ",
                                        "067310.KQ"],  # 하나마이크론(HBM 후공정 패키징)
 
@@ -9249,7 +9489,8 @@ class QuantNexusApp:
                                        "228760.KQ","064760.KQ","039030.KQ",
                                        "317330.KQ","112290.KQ","064290.KQ",
                                        "084370.KQ","053610.KQ",
-                                       "098460.KQ","095610.KQ","218410.KQ","067390.KQ","195870.KS"],  # 119870 제외(상폐), 유진테크/프로텍/고영(3D검사)/테스(PECVD)/RFHIC(RF반도체)/야스(증착), 해성디에스(리드프레임)
+                                       "098460.KQ","095610.KQ","218410.KQ","067390.KQ","195870.KS",
+                                       "042700.KS","089030.KQ","131290.KQ"],  # 119870 제외(상폐), 유진테크/프로텍/고영(3D검사)/테스(PECVD)/RFHIC(RF반도체)/야스(증착), 해성디에스(리드프레임), TC본더·테스트핸들러·검사장비 추가
 
                 # AI 서버·HBM용 기판·패키징
                 "AI서버기판·패키징":  [                                       "008060.KS","009150.KS",

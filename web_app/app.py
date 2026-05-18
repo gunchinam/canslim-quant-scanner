@@ -62,6 +62,29 @@ _AI_COMMENT_TTL_SEC = 3600
 _ai_comment_cache: dict[tuple[str, str, str], dict[str, object]] = {}
 _ai_comment_cache_lock = threading.Lock()
 
+# ── 4축 차트 / 컨센서스 캐시 (성능 최적화) ──
+_FOUR_AXIS_TTL_SEC = 1800  # 30분
+_four_axis_cache: dict[str, dict] = {}
+_four_axis_cache_lock = threading.Lock()
+
+_CONSENSUS_TTL_SEC = 900  # 15분
+_consensus_cache: dict[str, dict] = {}
+_consensus_cache_lock = threading.Lock()
+
+_scan_refresh_lock = threading.Lock()
+_scan_refresh_inflight: set[tuple[str, str, str]] = set()
+
+
+def _configure_yf_cache() -> None:
+    try:
+        import yfinance as yf
+        cache_dir = os.path.join(_BASE, ".yfinance-cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        if hasattr(yf, "set_tz_cache_location"):
+            yf.set_tz_cache_location(cache_dir)
+    except Exception as e:
+        logging.warning("yfinance cache init failed: %s", e)
+
 
 def _build_yf_candidates(ticker: str, market: str) -> list[str]:
     raw = (ticker or "").strip()
@@ -116,6 +139,38 @@ def _make_adapter():
     market   = request.args.get("market",   "US")
     strategy = request.args.get("strategy", "BALANCED")
     return _get_scan_adapter_cls()(market=market, strategy=strategy)
+
+
+def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
+    key = (market, strategy, sector)
+    with _scan_refresh_lock:
+        if key in _scan_refresh_inflight:
+            return
+        _scan_refresh_inflight.add(key)
+
+    def _worker() -> None:
+        try:
+            adapter_cls = _get_scan_adapter_cls()
+            adapter = adapter_cls(market=market, strategy=strategy)
+            results = adapter.scan_sector(sector) if sector else adapter.scan_all()
+            try:
+                import history
+                results = history.annotate_deltas(results, market)
+                if not sector:
+                    history.save_snapshot(results, market)
+            except Exception as he:
+                logging.warning("background history annotate/save failed: %s", he)
+            try:
+                _annotate_one_liners(results)
+            except Exception as oe:
+                logging.warning("background one_liner annotate failed: %s", oe)
+        except Exception as e:
+            logging.warning("background scan refresh failed: %s", e)
+        finally:
+            with _scan_refresh_lock:
+                _scan_refresh_inflight.discard(key)
+
+    threading.Thread(target=_worker, daemon=True).start()
 
 
 def _get_config_int(name: str, default: int, minimum: int | None = None, maximum: int | None = None) -> int:
@@ -484,12 +539,21 @@ def api_scan():
         adapter = _make_adapter()
         sector  = request.args.get("sector", "")
         market  = (request.args.get("market") or "US").upper()
+        strategy = (request.args.get("strategy") or "BALANCED").upper()
         # 기본 0 — 32-bit Python 환경 안정성 우선. ?aq_top=10 또는 env AQ_SCAN_TOP 로 활성화.
         try:
             aq_top = int(request.args.get("aq_top", os.environ.get("AQ_SCAN_TOP", "0")))
         except (TypeError, ValueError):
             aq_top = 0
-        results = adapter.scan_sector(sector) if sector else adapter.scan_all()
+        results = []
+        if market == "US":
+            results = adapter.scan_sector(sector, prefer_cache=True, cache_only=True) if sector else adapter.scan_all(prefer_cache=True, cache_only=True)
+            if results:
+                _refresh_scan_background(market, strategy, sector)
+            else:
+                results = adapter.scan_sector(sector) if sector else adapter.scan_all()
+        else:
+            results = adapter.scan_sector(sector) if sector else adapter.scan_all()
         # 히스토리 델타 주석/스냅샷 저장
         try:
             import history
@@ -522,8 +586,24 @@ def api_ticker(ticker: str):
     try:
         adapter = _make_adapter()
         result  = adapter.analyze_ticker(ticker)
+        market = (request.args.get("market") or "US").upper()
         if result is None:
             return jsonify({"error": "해당 티커의 데이터를 찾을 수 없습니다."}), 404
+        if market == "KR":
+            code6 = _strip_kr_suffix(ticker).zfill(6)
+            name_now = str(result.get("Name") or "").strip()
+            if not name_now or name_now in {ticker, code6, f"{code6}.KS", f"{code6}.KQ"}:
+                try:
+                    from quant_nexus_v20 import QuantNexusApp
+                    fixed = (
+                        QuantNexusApp.KR_NAMES.get(f"{code6}.KS")
+                        or QuantNexusApp.KR_NAMES.get(f"{code6}.KQ")
+                        or ""
+                    )
+                    if fixed:
+                        result["Name"] = fixed
+                except Exception:
+                    pass
         try:
             result = _annotate_one_liners([result])[0]
         except Exception as oe:
@@ -531,7 +611,6 @@ def api_ticker(ticker: str):
         # AgentQuant 진입 점수 융합 (가중치 0.6 기존 / 0.4 AQ)
         try:
             from agentquant_signal import get_regime_signal
-            market = (request.args.get("market") or "US").upper()
             aq = get_regime_signal(ticker, market=market)
             if aq and aq.get("stock"):
                 aq_score = float(aq["stock"].get("score") or 0)
@@ -587,6 +666,13 @@ def api_consensus(ticker: str):
     import json as _json
 
     market = (request.args.get("market") or "US").upper()
+    cons_cache_key = f"{ticker}:{market}"
+    now = int(time.time())
+    with _consensus_cache_lock:
+        cached = _consensus_cache.get(cons_cache_key)
+        if cached and (now - cached.get("_ts", 0)) < _CONSENSUS_TTL_SEC:
+            return jsonify(cached["data"])
+
     result = {"summary": {}, "reports": []}
 
     if market == "KR":
@@ -655,6 +741,8 @@ def api_consensus(ticker: str):
         except Exception as e:
             logging.warning("yfinance consensus: %s", e)
 
+    with _consensus_cache_lock:
+        _consensus_cache[cons_cache_key] = {"data": result, "_ts": int(time.time())}
     return jsonify(result)
 
 @app.route("/api/regime/<ticker>")
@@ -675,12 +763,19 @@ def api_regime(ticker: str):
 @app.route("/api/four_axis/<ticker>")
 def api_four_axis(ticker: str):
     """4축 핸드드로윙 차트 + 분석 데이터 반환 (base64 PNG)."""
+    market = (request.args.get("market") or "US").upper()
+    cache_key = f"{ticker}:{market}"
+    now = int(time.time())
+    with _four_axis_cache_lock:
+        cached = _four_axis_cache.get(cache_key)
+        if cached and (now - cached.get("_ts", 0)) < _FOUR_AXIS_TTL_SEC:
+            return jsonify(cached["data"])
     try:
         import yfinance as yf
+        _configure_yf_cache()
         from four_axis_analyzer import FourAxisAnalyzer
         from handdrawn_renderer import HandDrawnChartRenderer
 
-        market = (request.args.get("market") or "US").upper()
         candidates = _build_yf_candidates(ticker, market)
         fetch_timeout_sec = _get_config_int("FOUR_AXIS_FETCH_TIMEOUT_SEC", 20, minimum=5, maximum=120)
         info_timeout_sec = _get_config_int("FOUR_AXIS_INFO_TIMEOUT_SEC", 8, minimum=3, maximum=60)
@@ -727,9 +822,18 @@ def api_four_axis(ticker: str):
         chart_title = ""
         try:
             if market == "KR":
+                code6 = _strip_kr_suffix(ticker).zfill(6)
+                try:
+                    from quant_nexus_v20 import QuantNexusApp
+                    chart_title = (
+                        QuantNexusApp.KR_NAMES.get(f"{code6}.KS")
+                        or QuantNexusApp.KR_NAMES.get(f"{code6}.KQ")
+                        or ""
+                    )
+                except Exception:
+                    pass
                 try:
                     from swing_scan.config import stock_names as _sn
-                    code6 = _strip_kr_suffix(ticker).zfill(6)
                     nm = _sn.get_name(code6)
                     if nm and nm != code6:
                         chart_title = str(nm)
@@ -784,7 +888,7 @@ def api_four_axis(ticker: str):
             return obj
 
         rd = _sanitize(result.to_dict())
-        return jsonify({
+        payload = {
             "chart": chart_b64,
             "phase": rd["phase"],
             "signal_stars": rd["signal_stars"],
@@ -795,7 +899,10 @@ def api_four_axis(ticker: str):
             "volume": rd["volume"],
             "key_observation": rd.get("key_observation", ""),
             "structured_analysis": rd.get("structured_analysis", ""),
-        })
+        }
+        with _four_axis_cache_lock:
+            _four_axis_cache[cache_key] = {"data": payload, "_ts": int(time.time())}
+        return jsonify(payload)
     except Exception as e:
         logging.exception("api_four_axis")
         return jsonify({"error": str(e)}), 500

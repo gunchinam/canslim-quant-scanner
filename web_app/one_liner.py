@@ -1602,7 +1602,7 @@ def _metric_tags(d: dict) -> list[str]:
     return tags
 
 
-def _bucket(d: dict) -> str:
+def _raw_bucket(d: dict) -> str:
     per     = _num(d.get("_PER"))
     roe     = _num(d.get("_ROE"))
     eps_g   = _num(d.get("_EPSGrowth"))
@@ -1720,6 +1720,115 @@ def _bucket(d: dict) -> str:
     if per >= 25 and eps_g >= 10:
         return "STORY_STOCK"
     return "NEUTRAL"
+
+
+# ── 버킷 polarity (한줄평 톤) ──────────────────────────────────────────
+_POS_BUCKETS = {
+    "STRONG_BUY", "BREAKOUT", "SECTOR_LEADER", "MOMENTUM_LEADER",
+    "EARNINGS_BEAT", "TRUE_VALUE", "SLEEPING_GIANT", "CASH_COW",
+    "EXPENSIVE_JUSTIFIED", "DEFENSIVE",
+}
+_NEG_BUCKETS = {"AVOID", "FALLING_KNIFE", "VALUE_TRAP", "BUBBLE", "OVERBOUGHT"}
+# 그 외(NEUTRAL, OVERSOLD, STORY_STOCK)는 중립/혼합
+
+
+def _score_grade(score: float) -> str:
+    """TotalScore → 한줄평 톤 등급. 별점/상태(quant_nexus)와 동일 임계값 정렬."""
+    if score >= 72:   # ⭐⭐ LEADER 이상 → 긍정 톤
+        return "STRONG"
+    if score >= 48:   # ⏸ NEUTRAL Hold 이상 → 중립~약긍정
+        return "SOLID"
+    if score >= 35:   # ⚠️ CAUTION → 주의
+        return "WEAK"
+    return "AVOID"     # 📉 SELL/AVOID → 부정 톤
+
+
+def _positive_for(d: dict, score: float) -> str:
+    """고득점인데 부정/중립 버킷이 나왔을 때, 팩터를 반영한 긍정 버킷으로 치환."""
+    per    = _num(d.get("_PER"))
+    roe    = _num(d.get("_ROE")) * 100
+    eps_g  = _num(d.get("_EPSGrowth")) * 100
+    mom12  = _num(d.get("Mom12M")) * 100
+    near_h = bool(d.get("NearHighPass"))
+    eps_acc = bool(d.get("EPSAcceleration"))
+    leader = bool(d.get("IsLeader"))
+
+    if leader:
+        return "SECTOR_LEADER"
+    if near_h and mom12 >= 30:
+        return "BREAKOUT"
+    if eps_acc:
+        return "EARNINGS_BEAT"
+    if mom12 >= 20:
+        return "MOMENTUM_LEADER"
+    if 0 < per <= 15 and roe >= 15 and eps_g >= 8:
+        return "TRUE_VALUE"
+    if roe >= 18:
+        return "SLEEPING_GIANT"
+    if score >= 80:
+        return "STRONG_BUY"
+    return "SECTOR_LEADER"
+
+
+def _negative_for(d: dict) -> str:
+    """저득점인데 긍정 버킷이 나왔을 때, 팩터를 반영한 부정 버킷으로 치환."""
+    per    = _num(d.get("_PER"))
+    roe    = _num(d.get("_ROE")) * 100
+    eps_g  = _num(d.get("_EPSGrowth")) * 100
+    mom3   = _num(d.get("_Mom3M"))
+    dd     = _num(d.get("Drawdown"))
+    dd_pct = dd * 100 if -1 <= dd <= 0 else dd
+
+    if dd_pct <= -25 and mom3 <= -8:
+        return "FALLING_KNIFE"
+    if 0 < per <= 15 and (roe < 8 or eps_g < 0):
+        return "VALUE_TRAP"
+    return "AVOID"
+
+
+def _bucket(d: dict) -> str:
+    """원시 버킷을 점수 등급에 맞춰 톤 정렬한다.
+
+    별점/상태(TotalScore)·진입 타이밍(EntryStatus)·한줄평이 서로 다른
+    이야기를 하던 문제 해결: 한줄평 톤을 점수 등급에 종속시킨다.
+    진입 타이밍 뉘앙스는 진입 카드/데이터 태그가 별도로 담당.
+    """
+    raw = _raw_bucket(d)
+    score = _num(d.get("TotalScore"))
+    grade = _score_grade(score)
+
+    if grade == "STRONG":
+        # ⭐⭐ 이상인데 부정/중립이면 → 긍정으로 치환
+        if raw in _NEG_BUCKETS or raw in ("NEUTRAL", "STORY_STOCK"):
+            return _positive_for(d, score)
+        return raw
+
+    if grade == "SOLID":
+        # 관망 구간: 강한 부정만 차단(중립/약긍정으로 완화)
+        if raw in _NEG_BUCKETS:
+            mom12 = _num(d.get("Mom12M")) * 100
+            roe   = _num(d.get("_ROE")) * 100
+            if mom12 >= 10:
+                return "MOMENTUM_LEADER"
+            if roe >= 10:
+                return "DEFENSIVE"
+            return "NEUTRAL"
+        return raw
+
+    if grade == "WEAK":
+        # 주의 구간: 강한 긍정만 차단(중립/방어로 하향)
+        if raw in ("STRONG_BUY", "BREAKOUT", "SECTOR_LEADER"):
+            per = _num(d.get("_PER"))
+            roe = _num(d.get("_ROE")) * 100
+            if 0 < per <= 25 and roe >= 10:
+                return "DEFENSIVE"
+            return "NEUTRAL"
+        return raw
+
+    # grade == "AVOID": 모든 긍정 버킷 차단 → 부정으로 치환
+    if raw in _POS_BUCKETS or raw in ("NEUTRAL", "STORY_STOCK", "OVERSOLD"):
+        return _negative_for(d)
+    return raw
 
 
 def get_one_liner(d: dict) -> str:

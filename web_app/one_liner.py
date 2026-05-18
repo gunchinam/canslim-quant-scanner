@@ -1174,6 +1174,150 @@ def _num(v, default=0.0):
         return default
 
 
+# ── 수치 기반 조건부 문구 ─────────────────────────────────────────────────
+# (bucket, condition_key) → [phrases]
+# condition_key는 _metric_tags()가 반환하는 태그와 매칭
+_METRIC_PHRASES: dict[tuple[str, str], list[str]] = {
+    # ── NEUTRAL: 변동성 높은데 방향 없음 ──
+    ("NEUTRAL", "high_vol"): [
+        "변동성은 큰데 방향이 안 잡혀서 리스크만 큰 거임",
+        "위아래로 출렁이기만 하고 추세는 안 나오는 구간임",
+        "변동성 높아서 단타 매력은 있는데 방향 잡기 어려운 놈임",
+        "흔들림만 크고 결론은 제자리인 전형적 횡보 변동형임",
+        "차트 보면 요동치는데 결국 원점 회귀하는 패턴임",
+        "변동성에 비해 수익률은 안 나오는 애매한 종목임",
+    ],
+    # ── NEUTRAL: 변동성 낮음 ──
+    ("NEUTRAL", "low_vol"): [
+        "진짜 미동도 없는 종목이라 들고 있어도 재미없는 거임",
+        "변동성 자체가 바닥이라 단타도 스윙도 안 먹히는 거임",
+        "차트가 일직선이라 매매 타이밍 잡을 게 없는 거임",
+        "등락폭 자체가 없으니 이 종목에 시간 쓸 이유 없음",
+        "ETF보다 변동성 없는 개별주가 무슨 의미인 거임",
+        "1년 내내 같은 가격대에서 놀고 있는 지루한 놈임",
+    ],
+    # ── NEUTRAL: 모멘텀 하락 중 ──
+    ("NEUTRAL", "neg_mom"): [
+        "하락 추세인데 반등 신호도 안 보여서 관망이 답임",
+        "내려가는 중인데 뚜렷한 지지선도 안 보이는 상태임",
+        "모멘텀이 꺾인 상태에서 진입 근거가 부족한 거임",
+        "3개월째 하락인데 바닥이 어딘지 아무도 모르는 거임",
+        "추세가 아래를 향하고 있으니 섣불리 들어가면 안 됨",
+        "하방 모멘텀 살아 있는 상태라 기다리는 게 맞음",
+    ],
+    # ── TRUE_VALUE: PER 극저 ──
+    ("TRUE_VALUE", "deep_per"): [
+        "PER 한 자릿수는 시장이 놓치고 있거나 이유가 있거나 둘 중 하나임",
+        "이 PER이면 이익 대비 거의 버림받은 수준이라 체크해볼 만함",
+        "PER이 이 정도로 낮으면 뭔가 심각하거나 기회이거나 둘 중 하나임",
+        "한 자릿수 PER에 이익 성장까지 있으면 시장이 틀린 거임",
+    ],
+    # ── TRUE_VALUE: ROE 높음 ──
+    ("TRUE_VALUE", "high_roe"): [
+        "ROE가 이 수준이면 자본 효율성 끝판왕인데 주가가 안 따라간 거임",
+        "이 ROE에 이 PER이면 숫자가 안 맞는 거라 재평가 여지 큼",
+        "돈 버는 효율이 업종 최고 수준인데 시장이 아직 모르는 거임",
+        "ROE 두 자릿수에 PER 저평가면 교과서적 가치주임",
+    ],
+    # ── OVERSOLD: 극단적 과매도 ──
+    ("OVERSOLD", "deep_rsi"): [
+        "RSI가 20 밑이면 역사적으로 바닥 확률 높은 구간임",
+        "이 정도 과매도면 팔 놈 다 판 거라 매도 압력 소진된 거임",
+        "RSI 극단치에서 양봉 나오면 기술적 반등 기대할 만함",
+        "이렇게까지 눌린 건 흔치 않은데 ROE 살아있으면 주목임",
+    ],
+    # ── MOMENTUM_LEADER: 극강 모멘텀 ──
+    ("MOMENTUM_LEADER", "extreme_mom"): [
+        "12개월 수익률이 이 정도면 로켓 타고 있는 거임",
+        "이 모멘텀이면 추세 꺾일 때까지 올라타는 게 맞음",
+        "1년 수익률 보면 시장에서 가장 뜨거운 놈 중 하나임",
+        "이 정도 상승 추세면 눌림목에서 추가 매수 고려할 만함",
+    ],
+    # ── FALLING_KNIFE: 극단적 낙폭 ──
+    ("FALLING_KNIFE", "deep_drop"): [
+        "낙폭이 이 수준이면 반등보다 추가 하락 확률이 더 높음",
+        "고점 대비 이 정도 빠졌으면 펀더멘탈 자체가 훼손된 거임",
+        "이 낙폭에서 줍줍하는 건 떨어지는 칼날 잡는 거임",
+        "30% 넘게 빠진 종목이 V자 반등하는 경우는 극히 드묾",
+    ],
+    # ── OVERBOUGHT: RSI 극단 ──
+    ("OVERBOUGHT", "extreme_rsi"): [
+        "RSI 80 넘으면 어떤 좋은 종목도 단기 조정 올 수 있음",
+        "이 RSI 수준에서 추매하는 건 고점 물리는 지름길임",
+        "기술적으로 극단적 과매수라 차익실현 물량 나올 타이밍임",
+        "RSI가 이 정도면 숨 좀 쉬어야 할 구간인 거임",
+    ],
+    # ── EARNINGS_BEAT: EPS 폭증 ──
+    ("EARNINGS_BEAT", "strong_eps"): [
+        "EPS 성장률이 이 수준이면 실적으로 증명한 거임",
+        "이익이 이렇게 폭발하는 분기는 주가도 따라갈 수밖에 없음",
+        "EPS 성장이 업종 평균의 몇 배면 이놈만 뭔가 다른 거임",
+        "이 정도 이익 성장이면 밸류에이션 재평가 불가피함",
+    ],
+    # ── CASH_COW: 고마진 ──
+    ("CASH_COW", "high_margin"): [
+        "영업이익률이 이 수준이면 진짜 돈 찍는 기계임",
+        "이 마진율이면 불황에도 이익 나는 체질인 거임",
+        "영업이익률 보면 업종 내에서 수익성 끝판왕임",
+        "이 정도 마진이면 매출 조금만 늘어도 이익 폭발함",
+    ],
+}
+
+
+def _metric_tags(d: dict) -> list[str]:
+    """종목 지표에서 조건부 문구 태그 목록을 반환."""
+    tags = []
+    mom3  = _num(d.get("_Mom3M"))
+    mom12 = _num(d.get("Mom12M"))
+    dd    = _num(d.get("Drawdown"))
+    dd_pct = dd * 100 if -1 <= dd <= 0 else dd
+    rsi   = _num(d.get("RSI"), 50)
+    per   = _num(d.get("_PER"))
+    roe   = _num(d.get("_ROE"))
+    eps_g = _num(d.get("_EPSGrowth"))
+    op_mgn = _num(d.get("_OperatingMargin"))
+    op_pct = op_mgn * 100 if 0 <= op_mgn <= 1 else op_mgn
+
+    # 변동성: |Mom3M| 또는 |Drawdown|으로 판단
+    vol = max(abs(mom3), abs(dd_pct))
+    if vol >= 20:
+        tags.append("high_vol")
+    elif vol <= 5 and abs(mom12) <= 10:
+        tags.append("low_vol")
+
+    # 모멘텀 방향
+    if mom3 <= -8 or mom12 <= -15:
+        tags.append("neg_mom")
+    if mom12 >= 50:
+        tags.append("extreme_mom")
+
+    # PER/ROE
+    if 0 < per <= 8:
+        tags.append("deep_per")
+    if roe >= 20:
+        tags.append("high_roe")
+
+    # RSI 극단
+    if rsi <= 20:
+        tags.append("deep_rsi")
+    if rsi >= 80:
+        tags.append("extreme_rsi")
+
+    # 낙폭
+    if dd_pct <= -30:
+        tags.append("deep_drop")
+
+    # EPS 성장
+    if eps_g >= 30:
+        tags.append("strong_eps")
+
+    # 마진
+    if op_pct >= 25:
+        tags.append("high_margin")
+
+    return tags
+
+
 def _bucket(d: dict) -> str:
     per     = _num(d.get("_PER"))
     roe     = _num(d.get("_ROE"))
@@ -1302,16 +1446,27 @@ def get_one_liner(d: dict) -> str:
 
 
 def _friendly_one_liner(d: dict) -> str:
-    """이해하기 쉬운 커뮤니티 톤 한줄평 — _PHRASES 풀(18×56=1008개) 사용."""
+    """수치 기반 커뮤니티 톤 한줄평 — 조건부 문구 우선, 일반 풀 fallback."""
     bucket = _bucket(d)
-    phrases = _PHRASES.get(bucket) or _PHRASES["NEUTRAL"]
     ticker = (d.get("Ticker") or "").upper()
-    # 시드에 점수/모멘텀/RSI 양자화값을 섞어 같은 버킷이라도 종목·조건별로 분산
     s_q = int(_num(d.get("TotalScore")) // 5)
     m_q = int(_num(d.get("Mom12M")) // 5)
     r_q = int(_num(d.get("RSI"), 50) // 5)
     seed = hashlib.md5(f"{ticker}|{bucket}|{s_q}|{m_q}|{r_q}".encode("utf-8")).hexdigest()
-    base = phrases[int(seed, 16) % len(phrases)]
+    h = int(seed, 16)
+
+    # 1) 수치 기반 조건부 문구 우선 선택
+    tags = _metric_tags(d)
+    cond_pool = []
+    for tag in tags:
+        cond_pool.extend(_METRIC_PHRASES.get((bucket, tag), []))
+    if cond_pool:
+        base = cond_pool[h % len(cond_pool)]
+        return _stylize_one_liner(base, d, bucket)
+
+    # 2) fallback: 기존 일반 문구 풀
+    phrases = _PHRASES.get(bucket) or _PHRASES["NEUTRAL"]
+    base = phrases[h % len(phrases)]
     return _stylize_one_liner(base, d, bucket)
 
 

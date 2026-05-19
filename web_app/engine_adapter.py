@@ -175,7 +175,10 @@ class ScanAdapter:
                 try:
                     r = fut.result()
                     if r:
-                        r.setdefault("Sector", sector)
+                        # 표시 섹터는 큐레이션된 내부 분류로 고정.
+                        # (_analyze_ticker가 노무라용으로 채운 yfinance
+                        #  영문 섹터가 새어나오지 않도록 scan_sector와 동일하게 덮어쓴다)
+                        r["Sector"] = sector
                         results.append(r)
                 except Exception as e:
                     logging.error("scan_all [%s] error: %s", ticker, e)

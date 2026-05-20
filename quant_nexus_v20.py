@@ -704,6 +704,180 @@ def _meanrev_overheat_penalty(rsi: float, bb_pos: float, regime: str) -> tuple[i
     return pts, tag
 
 
+def _compute_entry_status(
+    *,
+    mr: dict,
+    vwap: dict,
+    atr: dict,
+    regime: dict,
+    mom: dict,
+    vol_a: dict,
+    hist,
+    cur: float,
+    day_chg: float,
+    fail_safe_triggered: bool = False,
+    bear_cap_applied: bool = False,
+) -> dict:
+    """
+    EntryStatus 진입 타이밍 점수 계산 (순수 함수, 백테스트/단위테스트 호출 가능).
+
+    V5.1_TUNED 스윕 최적값 유지: base=40, STRONG≥50, NEUTRAL 30~49.
+    팩터: MeanRev(RSI+BB+VWAP 통합) / TrendAlign(MA+Regime 통합) / 거래량 점프 /
+          돌파+거래량 / MACD / 변동성 / 당일등락 / 안전장치.
+
+    Returns:
+        score:      int [0,100]
+        status:     'STRONG' | 'NEUTRAL' | 'AVOID'
+        label:      한국어 라벨 ('진입 강함' / '관망' / '진입 부적합')
+        phrases:    list[str] — 카드 표시용 핵심 신호
+        breakdown:  dict[str, {pts:int, tag:str}] — 팩터별 점수 분해
+        signals:    dict — ma_aligned/vol_jump_up/atr_squeeze 등 중간 신호
+    """
+    _e_score = 40
+    _phrases: list[str] = []
+
+    _rsi_v = mr.get("rsi", 50.0)
+    _bb_pos = mr.get("bb_position", 0.0)
+    _macd_div = mr.get("macd_divergence", "NONE")
+    _vwap_d = vwap.get("distance", 0.0)
+    _atr_p = atr.get("atr_percent", 0.0)
+    _reg = regime.get("regime", "SIDEWAYS")
+    _pivot = mom.get("pivot_breakout", False)
+    _s_conf = vol_a.get("s_confirmed", False)
+
+    _ma_aligned = False
+    _vol_jump_up = False
+    _atr_squeeze = False
+    try:
+        _c = hist["Close"]
+        _v = hist["Volume"]
+        _o = hist["Open"]
+        if len(_c) >= 200:
+            _sma50  = float(_c.rolling(50).mean().iloc[-1])
+            _sma200 = float(_c.rolling(200).mean().iloc[-1])
+            _ma_aligned = bool(cur > _sma50 > _sma200)
+        if len(_v) >= 20:
+            _vol_avg20 = float(_v.rolling(20).mean().iloc[-1])
+            _vol_jump_up = bool(
+                float(_v.iloc[-1]) > _vol_avg20 * 2.0
+                and float(_c.iloc[-1]) > float(_o.iloc[-1])
+            )
+        if len(_c) >= 30 and _atr_p > 0:
+            h_, l_, c_ = hist["High"], hist["Low"], hist["Close"]
+            tr = pd.concat([
+                (h_ - l_).abs(),
+                (h_ - c_.shift()).abs(),
+                (l_ - c_.shift()).abs(),
+            ], axis=1).max(axis=1)
+            atr_series = (tr.rolling(14).mean() / c_) * 100
+            _atr_avg30 = float(atr_series.rolling(30).mean().iloc[-1])
+            _atr_squeeze = bool(_atr_p < _atr_avg30 * 0.8)
+    except Exception:
+        pass
+
+    # 1) MeanRev 컴포지트
+    mr_pts = 0
+    mr_tag = None
+    if   _rsi_v < 30: mr_pts = max(mr_pts, 16); mr_tag = "과매도 반등"
+    elif _rsi_v < 40: mr_pts = max(mr_pts, 9);  mr_tag = mr_tag or "RSI 저점권"
+    _oh_pts, _oh_tag = _meanrev_overheat_penalty(_rsi_v, _bb_pos, _reg)
+    if _oh_pts < 0 and _oh_pts < mr_pts:
+        mr_pts = _oh_pts
+        mr_tag = _oh_tag
+    if _bb_pos < -0.7 and mr_pts < 14:
+        mr_pts = 14; mr_tag = "BB 하단"
+    if mr_pts == 0 and -0.03 <= _vwap_d <= 0.02:
+        mr_pts = 4; mr_tag = "VWAP 눌림"
+    elif _vwap_d > 0.07 and mr_pts > -6:
+        mr_pts = -6; mr_tag = "VWAP 과확장"
+    _e_score += mr_pts
+    if mr_tag and abs(mr_pts) >= 4:
+        _phrases.append(mr_tag)
+
+    # 2) TrendAlign 컴포지트
+    trend_pts = 0
+    trend_tag = None
+    if _ma_aligned and _reg in ("STRONG_BULL", "BULL"):
+        trend_pts = 8;  trend_tag = "강한 정배열"
+    elif _ma_aligned:
+        trend_pts = 5;  trend_tag = "정배열"
+    elif _reg == "STRONG_BEAR":
+        trend_pts = -15; trend_tag = "강한 약세장"
+    elif _reg == "BEAR":
+        trend_pts = -8;  trend_tag = "약세장"
+    _e_score += trend_pts
+    if trend_tag and abs(trend_pts) >= 6:
+        _phrases.append(trend_tag)
+
+    # 3) 거래량 점프
+    if _vol_jump_up:
+        _e_score += 12; _phrases.append("거래량 점프")
+    elif _atr_squeeze and _ma_aligned:
+        _e_score += 4
+
+    # 4) 돌파 + 거래량
+    if _pivot and _s_conf:
+        _e_score += 10; _phrases.append("거래량 동반 돌파")
+
+    # 5) MACD
+    if _macd_div == "BULLISH":
+        _e_score += 3
+    elif _macd_div == "BEARISH":
+        _e_score -= 4
+
+    # 6) 변동성 과대
+    if _atr_p > 8.0:
+        _e_score -= 10; _phrases.append("변동성 과대")
+
+    # 7) 당일 등락
+    if   day_chg >  0.07: _e_score -= 10; _phrases.append("급등 추격 주의")
+    elif day_chg < -0.05: _e_score += 4;  _phrases.append("눌림 매수")
+
+    # 8) 안전장치
+    if fail_safe_triggered: _e_score -= 15
+    if bear_cap_applied:    _e_score -= 10
+
+    entry_score = max(0, min(100, int(_e_score)))
+
+    # 팩터별 분해 (프론트 시각화)
+    breakdown: dict = {}
+    if mr_pts != 0: breakdown["MeanRev"] = {"pts": mr_pts, "tag": mr_tag or ""}
+    if trend_pts != 0: breakdown["Trend"] = {"pts": trend_pts, "tag": trend_tag or ""}
+    if _vol_jump_up: breakdown["Volume"] = {"pts": 12, "tag": "거래량 점프"}
+    elif _atr_squeeze and _ma_aligned: breakdown["Volume"] = {"pts": 4, "tag": "변동성 수축"}
+    if _pivot and _s_conf: breakdown["Breakout"] = {"pts": 10, "tag": "돌파"}
+    if _macd_div == "BULLISH": breakdown["MACD"] = {"pts": 3, "tag": "골든크로스"}
+    elif _macd_div == "BEARISH": breakdown["MACD"] = {"pts": -4, "tag": "데드크로스"}
+    if _atr_p > 8.0: breakdown["Volatility"] = {"pts": -10, "tag": "변동성 과대"}
+    if day_chg > 0.07: breakdown["DayChg"] = {"pts": -10, "tag": "급등 추격"}
+    elif day_chg < -0.05: breakdown["DayChg"] = {"pts": 4, "tag": "눌림 매수"}
+
+    if entry_score >= 50:
+        status = "STRONG"; label = "진입 강함"
+    elif entry_score >= 30:
+        status = "NEUTRAL"; label = "관망"
+    else:
+        status = "AVOID"; label = "진입 부적합"
+
+    return {
+        "score": entry_score,
+        "status": status,
+        "label": label,
+        "phrases": _phrases,
+        "breakdown": breakdown,
+        "signals": {
+            "ma_aligned": _ma_aligned,
+            "vol_jump_up": _vol_jump_up,
+            "atr_squeeze": _atr_squeeze,
+            "mr_pts": mr_pts, "mr_tag": mr_tag,
+            "trend_pts": trend_pts, "trend_tag": trend_tag,
+            "rsi": _rsi_v, "bb_pos": _bb_pos, "vwap_d": _vwap_d,
+            "atr_p": _atr_p, "regime": _reg,
+            "macd_div": _macd_div, "pivot": _pivot, "s_conf": _s_conf,
+        },
+    }
+
+
 def rate_limit(max_per_second: float):
     """호출 빈도를 제한하는 데코레이터 (스레드 안전)."""
     min_interval = 1.0 / max_per_second
@@ -5163,154 +5337,19 @@ class QuantNexusApp:
             top_reason_str = " · ".join(top_reasons[:4]) if top_reasons else "-"
 
             # ── 진입 타이밍 신호 (Entry Timing · V5.1_TUNED) ────────────
-            # 패널 진단 v5 (2026-05) + 그리드 스윕 결과:
-            #   sweep 1080조합 × KR/US 14만관측 → KR best (fire 13%, +1.08%p edge, win 55.5%)
-            #   설정: base=40, voljump=12, trend_strong=8, macd_bear=-4
-            #   임계: STRONG ≥ 50, NEUTRAL 30~49, AVOID < 30
-            #   sharpe: +0.062, BEAR regime 에서도 +0.73%p edge 회복
-            # 변경:
-            #   1) base 30 → 40 (스윕 결과 가장 안정)
-            #   2) trend_strong 10 → 8 (과적합 방지)
-            #   3) STRONG 임계 65 → 50, NEUTRAL 35 → 30
-            #   4) RSI+BB+VWAP 통합 MeanRev (max-only) 유지
-            #   5) MAAlign+RegimeBull 통합 TrendAlign 유지
-            _e_score = 40
-            _phrases: list[str] = []
-
-            _rsi_v = mr.get("rsi", 50.0)
-            _bb_pos = mr.get("bb_position", 0.0)
-            _macd_div = mr.get("macd_divergence", "NONE")
-            _vwap_d = vwap.get("distance", 0.0)
-            _atr_p = atr.get("atr_percent", 0.0)
-            _reg = regime.get("regime", "SIDEWAYS")
-            _near52 = mom.get("near_52w_high", False)
-            _pivot = mom.get("pivot_breakout", False)
-            _s_conf = vol_a.get("s_confirmed", False)
-
-            # 신규 피처: MA 정배열·거래량 점프·변동성 수축
-            _ma_aligned = False
-            _vol_jump_up = False
-            _atr_squeeze = False
-            try:
-                _c = hist["Close"]
-                _v = hist["Volume"]
-                _o = hist["Open"]
-                if len(_c) >= 200:
-                    _sma50  = float(_c.rolling(50).mean().iloc[-1])
-                    _sma200 = float(_c.rolling(200).mean().iloc[-1])
-                    _ma_aligned = bool(cur > _sma50 > _sma200)
-                if len(_v) >= 20:
-                    _vol_avg20 = float(_v.rolling(20).mean().iloc[-1])
-                    _vol_jump_up = bool(
-                        float(_v.iloc[-1]) > _vol_avg20 * 2.0
-                        and float(_c.iloc[-1]) > float(_o.iloc[-1])
-                    )
-                if len(_c) >= 30 and _atr_p > 0:
-                    h_, l_, c_ = hist["High"], hist["Low"], hist["Close"]
-                    tr = pd.concat([
-                        (h_ - l_).abs(),
-                        (h_ - c_.shift()).abs(),
-                        (l_ - c_.shift()).abs(),
-                    ], axis=1).max(axis=1)
-                    atr_series = (tr.rolling(14).mean() / c_) * 100
-                    _atr_avg30 = float(atr_series.rolling(30).mean().iloc[-1])
-                    _atr_squeeze = bool(_atr_p < _atr_avg30 * 0.8)
-            except Exception:
-                pass
-
-            # ── 1) MeanRev 컴포지트 (RSI + BB + VWAP 통합) ──────────────
-            # 셋 다 r>0.83 의 동조 신호이므로 합산 금지. 최대 가점만 적용.
-            # 과열 페널티는 regime-gated helper로 계산 (STRONG_BULL/BULL은 약감점).
-            mr_pts = 0
-            mr_tag = None
-            # 과매도 가점 우선 평가
-            if   _rsi_v < 30: mr_pts = max(mr_pts, 16); mr_tag = "과매도 반등"
-            elif _rsi_v < 40: mr_pts = max(mr_pts, 9);  mr_tag = mr_tag or "RSI 저점권"
-            # RSI/BB 과열 페널티 (regime-gated)
-            _oh_pts, _oh_tag = _meanrev_overheat_penalty(_rsi_v, _bb_pos, _reg)
-            if _oh_pts < 0 and _oh_pts < mr_pts:
-                mr_pts = _oh_pts
-                mr_tag = _oh_tag
-            # BB 하단 가점 (과매도 가점보다 강하면 덮어쓰기)
-            if _bb_pos < -0.7 and mr_pts < 14:
-                mr_pts = 14; mr_tag = "BB 하단"
-            # VWAP 살짝 눌림 보너스 (다른 신호 없을 때만)
-            if mr_pts == 0 and -0.03 <= _vwap_d <= 0.02:
-                mr_pts = 4; mr_tag = "VWAP 눌림"
-            elif _vwap_d > 0.07 and mr_pts > -6:
-                mr_pts = -6; mr_tag = "VWAP 과확장"
-
-            _e_score += mr_pts
-            if mr_tag and abs(mr_pts) >= 4:
-                _phrases.append(mr_tag)
-
-            # ── 2) TrendAlign 컴포지트 (MA 정배열 + Regime 통합) ────────
-            # MAAlign ↔ RegimeBull r=0.70 — 별도 가점 금지.
-            trend_pts = 0
-            trend_tag = None
-            # 스윕 최적: trend_strong=8 (10→8 과적합 방지)
-            if _ma_aligned and _reg in ("STRONG_BULL", "BULL"):
-                trend_pts = 8;  trend_tag = "강한 정배열"
-            elif _ma_aligned:
-                trend_pts = 5;  trend_tag = "정배열"
-            elif _reg == "STRONG_BEAR":
-                trend_pts = -15; trend_tag = "강한 약세장"
-            elif _reg == "BEAR":
-                trend_pts = -8;  trend_tag = "약세장"
-            _e_score += trend_pts
-            if trend_tag and abs(trend_pts) >= 6:
-                _phrases.append(trend_tag)
-
-            # ── 3) 독립 가점: 거래량 점프 (실질 수급 변화, 다른 신호와 무관) ─
-            if _vol_jump_up:
-                _e_score += 12; _phrases.append("거래량 점프")
-            elif _atr_squeeze and _ma_aligned:
-                _e_score += 4   # 변동성 수축은 약한 보조 신호로 축소
-
-            # ── 4) 독립 가점: 신고가 돌파 + 거래량 동반 ─────────────────
-            if _pivot and _s_conf:
-                _e_score += 10; _phrases.append("거래량 동반 돌파")
-
-            # ── 5) MACD (다른 신호에 정보 흡수, 가중치 절반) ────────────
-            if _macd_div == "BULLISH":
-                _e_score += 3
-            elif _macd_div == "BEARISH":
-                _e_score -= 4
-
-            # ── 6) 변동성 과대 (독립 페널티) ───────────────────────────
-            if _atr_p > 8.0:
-                _e_score -= 10; _phrases.append("변동성 과대")
-
-            # ── 7) 당일 등락 (독립 페널티/보너스) ──────────────────────
-            if   day_chg >  0.07: _e_score -= 10; _phrases.append("급등 추격 주의")
-            elif day_chg < -0.05: _e_score += 4;  _phrases.append("눌림 매수")
-
-            # ── 8) 종합 안전장치 ──────────────────────────────────────
-            if fail_safe_triggered: _e_score -= 15
-            if bear_cap_applied:    _e_score -= 10
-
-            entry_score = max(0, min(100, int(_e_score)))
-
-            # 팩터별 점수 분해 (프론트 시각화용)
-            _score_breakdown = {}
-            if mr_pts != 0: _score_breakdown["MeanRev"] = {"pts": mr_pts, "tag": mr_tag or ""}
-            if trend_pts != 0: _score_breakdown["Trend"] = {"pts": trend_pts, "tag": trend_tag or ""}
-            if _vol_jump_up: _score_breakdown["Volume"] = {"pts": 12, "tag": "거래량 점프"}
-            elif _atr_squeeze and _ma_aligned: _score_breakdown["Volume"] = {"pts": 4, "tag": "변동성 수축"}
-            if _pivot and _s_conf: _score_breakdown["Breakout"] = {"pts": 10, "tag": "돌파"}
-            if _macd_div == "BULLISH": _score_breakdown["MACD"] = {"pts": 3, "tag": "골든크로스"}
-            elif _macd_div == "BEARISH": _score_breakdown["MACD"] = {"pts": -4, "tag": "데드크로스"}
-            if _atr_p > 8.0: _score_breakdown["Volatility"] = {"pts": -10, "tag": "변동성 과대"}
-            if day_chg > 0.07: _score_breakdown["DayChg"] = {"pts": -10, "tag": "급등 추격"}
-            elif day_chg < -0.05: _score_breakdown["DayChg"] = {"pts": 4, "tag": "눌림 매수"}
-
-            # 상태 등급 — V5.1 스윕 최적 (KR: fire 13%, edge +1.08%p, win 55.5%)
-            if entry_score >= 50:
-                entry_status = "STRONG"; status_label = "진입 강함"
-            elif entry_score >= 30:
-                entry_status = "NEUTRAL"; status_label = "관망"
-            else:
-                entry_status = "AVOID"; status_label = "진입 부적합"
+            # 인라인 로직은 _compute_entry_status() 순수 함수로 추출됨
+            # (Stage 2 백테스트 호출 가능 · 동일 결정성 보장).
+            _es = _compute_entry_status(
+                mr=mr, vwap=vwap, atr=atr, regime=regime, mom=mom, vol_a=vol_a,
+                hist=hist, cur=cur, day_chg=day_chg,
+                fail_safe_triggered=fail_safe_triggered,
+                bear_cap_applied=bear_cap_applied,
+            )
+            entry_score = _es["score"]
+            entry_status = _es["status"]
+            status_label = _es["label"]
+            _phrases = _es["phrases"]
+            _score_breakdown = _es["breakdown"]
 
             # 한국어 한 줄 코멘트 — 우선순위 기반 핵심 1~2개 픽
             if _phrases:

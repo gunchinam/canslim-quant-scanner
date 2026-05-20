@@ -421,6 +421,23 @@ def api_scan():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/macro")
+def api_macro():
+    """GET /api/macro → 상단 신호등 띠용 거시 지표. /api/scan 과 완전 분리."""
+    try:
+        import macro
+        force = request.args.get("force") in ("1", "true", "yes")
+        return jsonify(macro.get_macro(force=force))
+    except Exception as e:
+        logging.warning("api_macro failed: %s", e)
+        return jsonify({
+            "signal": {"level": "unknown", "emoji": "⚪", "label": "정보없음"},
+            "indicators": {k: None for k in
+                           ("vix", "sp500", "kospi", "usdkrw", "kr_rate")},
+            "ts": None, "stale": True,
+        })
+
+
 @app.route("/api/search")
 def api_search():
     """GET /api/search?q=rf&market=KR → [{ticker, name}, ...] 이름/티커 부분매칭."""
@@ -728,6 +745,25 @@ def api_four_axis(ticker: str):
                     continue
             if hist is not None:
                 break
+
+        # yfinance가 KR 종목에 빈 데이터를 자주 반환 → FinanceDataReader 폴백
+        if (hist is None or hist.empty or len(hist) < min_rows) and market == "KR":
+            try:
+                import FinanceDataReader as fdr
+                from datetime import datetime, timedelta
+                code6 = _strip_kr_suffix(ticker).zfill(6)
+                start = (datetime.now() - timedelta(days=750)).strftime("%Y-%m-%d")
+                tried.append(f"FDR:{code6}")
+                fdr_df = _run_with_timeout(
+                    lambda: fdr.DataReader(code6, start),
+                    fetch_timeout_sec,
+                    f"four_axis FDR {code6}",
+                )
+                if fdr_df is not None and not fdr_df.empty and len(fdr_df) >= min_rows:
+                    keep = ["Open", "High", "Low", "Close", "Volume"]
+                    hist = fdr_df[keep].copy()
+            except Exception as exc:
+                logging.warning("four_axis FDR fallback failed: %s", exc)
 
         if hist is None or hist.empty or len(hist) < min_rows:
             rows = 0 if hist is None or hist.empty else len(hist)

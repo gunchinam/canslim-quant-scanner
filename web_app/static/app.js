@@ -497,76 +497,6 @@ function renderSectorList(groups, sectors) {
   list.innerHTML = html;
 }
 
-function _sectorHeatColor(avgScore) {
-  if (avgScore >= 70) return 'linear-gradient(135deg, #0f9f6e, #067647)';
-  if (avgScore >= 50) return 'linear-gradient(135deg, #43c98b, #229f6a)';
-  if (avgScore >= 30) return 'linear-gradient(135deg, #f4c95d, #e7a93b)';
-  return 'linear-gradient(135deg, #e35d6a, #b42318)';
-}
-
-function _selectSectorByName(sector) {
-  const buttons = document.querySelectorAll('#filter-list .sector-btn, #filter-list .sector-btn-all');
-  const btn = Array.from(buttons).find(el => el.textContent.trim() === sector) || null;
-  if (btn) {
-    selectSector(btn, sector);
-    return;
-  }
-  currentSector = sector;
-  setText('stat-sector', sector || '전체');
-  runScan();
-}
-
-function renderSectorHeatmap(stocks) {
-  const wrap = document.getElementById('sector-heatmap');
-  if (!wrap) return;
-
-  if (!Array.isArray(stocks) || stocks.length === 0) {
-    wrap.innerHTML = '<div class="sector-heatmap-empty">스캔 완료 후 섹터 히트맵을 표시합니다.</div>';
-    return;
-  }
-
-  const groups = new Map();
-  stocks.forEach(stock => {
-    const sector = (stock.Sector || '미분류').trim();
-    if (!groups.has(sector)) groups.set(sector, []);
-    groups.get(sector).push(stock);
-  });
-
-  const collator = new Intl.Collator('ko', { numeric: true, sensitivity: 'base' });
-  const cards = [...groups.entries()]
-    .map(([sector, rows]) => {
-      const avgScore = rows.reduce((sum, row) => sum + Number(row.TotalScore || 0), 0) / rows.length;
-      const avgMom3M = rows.reduce((sum, row) => sum + Number(row.Mom3M ?? row._Mom3M ?? 0), 0) / rows.length;
-      return { sector, count: rows.length, avgScore, avgMom3M };
-    })
-    .sort((a, b) => collator.compare(a.sector, b.sector));
-
-  wrap.innerHTML = cards.map(card => `
-    <button
-      type="button"
-      class="sector-heatmap-card"
-      title="평균 점수 ${card.avgScore.toFixed(1)}, 평균 3M 모멘텀 ${card.avgMom3M.toFixed(1)}%, 종목 ${card.count}개"
-      style="background:${_sectorHeatColor(card.avgScore)}"
-      onclick='selectHeatmapSector(${JSON.stringify(card.sector)})'>
-      <span class="sector-heatmap-name">${esc(card.sector)}</span>
-      <span class="sector-heatmap-score">${card.avgScore.toFixed(1)}</span>
-    </button>
-  `).join('');
-}
-
-function selectHeatmapSector(sector) {
-  _selectSectorByName(sector);
-}
-
-function toggleHeatmap() {
-  const wrap = document.getElementById('sector-heatmap-wrap');
-  const chevron = document.getElementById('heatmap-chevron');
-  if (!wrap) return;
-  const opening = !wrap.classList.contains('open');
-  wrap.classList.toggle('open', opening);
-  if (chevron) chevron.style.transform = opening ? 'rotate(180deg)' : '';
-}
-
 function _searchBaseStocks() {
   return _scanStocks.length ? _scanStocks : allStocks;
 }
@@ -664,12 +594,8 @@ function _scopedStocks() {
   return scoped;
 }
 
-// 필터/정렬을 다시 적용해 히트맵+테이블을 일관되게 갱신
 function _refreshFilteredView() {
   updateCompareActions();
-  // 히트맵은 표와 동일한 필터 범위를 따라야 함 (전체로 새지 않게)
-  renderSectorHeatmap(_scopedStocks());
-  // 테이블은 검색만 적용해 넘기면 내부에서 퀵필터/원라이너를 재적용 (멱등)
   renderStockTable(_applySearchFilter(_searchBaseStocks()));
 }
 
@@ -2854,7 +2780,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initSort();
     ensureCompareHeader();
     updateCompareActions();
-    renderSectorHeatmap([]);
     document.getElementById('btn-scan')?.addEventListener('click', runScan);
     loadSectors();
     runScan();

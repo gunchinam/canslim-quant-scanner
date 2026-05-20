@@ -328,65 +328,6 @@ html, body {
   padding: 4px 14px 8px;
 }
 
-.sector-heatmap-wrap {
-  padding: 0 12px 12px;
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease, padding 0.15s ease;
-}
-.sector-heatmap-wrap.open {
-  max-height: 800px;
-  padding: 0 12px 12px;
-}
-
-.sector-heatmap-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-  gap: 8px;
-}
-
-.sector-heatmap-empty {
-  padding: 14px 10px;
-  border: 1px dashed var(--border);
-  border-radius: 12px;
-  color: var(--text-tertiary);
-  font-size: 12px;
-  text-align: center;
-  background: var(--surface-page);
-}
-
-.sector-heatmap-card {
-  min-height: 60px;
-  padding: 10px 10px 9px;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px;
-  color: #fff;
-  cursor: pointer;
-  transition: transform var(--duration-fast), box-shadow var(--duration-fast), opacity var(--duration-fast);
-  box-shadow: 0 8px 18px rgba(15,23,42,0.14);
-}
-
-.sector-heatmap-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 22px rgba(15,23,42,0.18);
-}
-
-.sector-heatmap-name {
-  display: block;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.25;
-  word-break: keep-all;
-}
-
-.sector-heatmap-score {
-  display: block;
-  margin-top: 6px;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.3px;
-}
-
 #filter-list { display: flex; flex-direction: column; gap: 0; }
 
 /* 전체 스캔 버튼 */
@@ -833,6 +774,10 @@ td.score-col {
      balance가 켜져 있으면 브라우저가 한국어 어절 경계를 무시하고
      임의로 다시 나눠 한 줄평이 어색하게 갈라질 수 있다. */
 }
+/* 길이별 폰트 스케일 — 브라우저 임의 줄바꿈 방지 */
+.dp-oneliner-poster[data-len="md"] { font-size: clamp(22px, 4.5vw, 36px); }
+.dp-oneliner-poster[data-len="sm"] { font-size: clamp(18px, 3.5vw, 28px); }
+.dp-oneliner-poster[data-len="xs"] { font-size: clamp(15px, 3vw, 22px); }
 .dp-oneliner-poster::before,
 .dp-oneliner-poster::after {
   content: '';
@@ -1570,19 +1515,6 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   <div class="content">
     <!-- Sidebar: Sector List -->
     <aside class="sidebar">
-      <div class="sidebar-title" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleHeatmap()">
-        섹터 히트맵
-        <svg id="heatmap-chevron" width="12" height="12" viewBox="0 0 24 24"
-             fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
-             style="transition:transform 0.3s;">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-      </div>
-      <div class="sector-heatmap-wrap" id="sector-heatmap-wrap">
-        <div id="sector-heatmap" class="sector-heatmap-grid">
-          <div class="sector-heatmap-empty">스캔 완료 후 섹터 히트맵을 표시합니다.</div>
-        </div>
-      </div>
       <div id="filter-list">
         <div style="padding:20px 10px;color:var(--text-tertiary);font-size:12px;">로딩 중...</div>
       </div>
@@ -1943,6 +1875,35 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   background: var(--accent, #3b82f6); color: #fff; border: none;
   border-radius: 8px; padding: 8px 14px; font-weight: 700; cursor: pointer; font-size: 13px;
 }
+#chat-admin-btn {
+  background: none; border: none; cursor: pointer; font-size: 14px;
+  opacity: .7; transition: opacity .15s; padding: 0 0 0 8px; line-height: 1;
+}
+#chat-admin-btn:hover { opacity: 1; }
+#chat-admin-bar {
+  display: none; padding: 6px 10px; gap: 6px; border-bottom: 1px solid var(--border, #e5e7eb);
+  background: var(--surface-page, #f9fafb); align-items: center;
+}
+#chat-admin-bar.open { display: flex; }
+#chat-admin-bar input {
+  flex: 1; border: 1px solid var(--border, #ddd); border-radius: 6px;
+  padding: 5px 8px; font-size: 12px; outline: none;
+  background: var(--surface-card, #fff); color: var(--text-primary);
+}
+#chat-admin-bar button {
+  background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px 4px;
+}
+.msg .admin-actions { display: none; margin-left: 4px; }
+.admin-mode .msg .admin-actions { display: inline; }
+.msg .admin-actions button {
+  background: none; border: none; cursor: pointer; font-size: 11px;
+  opacity: .5; padding: 0 2px; color: var(--text-tertiary);
+}
+.msg .admin-actions button:hover { opacity: 1; color: #ef4444; }
+#chat-messages .announce {
+  background: #fef3c7; color: #92400e; padding: 6px 10px; border-radius: 8px;
+  font-size: 12px; font-weight: 600; text-align: center;
+}
 @media (max-width: 480px) {
   #chat-panel { width: calc(100vw - 24px); right: 12px; bottom: 84px; }
   #chat-toggle { bottom: 16px; right: 16px; width: 48px; height: 48px; font-size: 20px; }
@@ -1957,6 +1918,12 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   <div id="chat-header">
     <span>익명 토론방</span>
     <span class="online" id="chat-online">0명 접속</span>
+    <button id="chat-admin-btn" title="관리자 로그인">🔒</button>
+  </div>
+  <div id="chat-admin-bar">
+    <input id="admin-announce-input" placeholder="공지사항 입력..." maxlength="500">
+    <button id="admin-announce-btn" title="공지 전송">📢</button>
+    <button id="admin-clear-btn" title="전체 삭제">🗑️</button>
   </div>
   <div id="chat-messages"></div>
   <div id="chat-input-wrap">
@@ -1977,7 +1944,12 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   const sendBtn= document.getElementById('chat-send');
   const badge  = document.getElementById('chat-badge');
   const onlineEl = document.getElementById('chat-online');
-  let myNick = '', isOpen = false, unread = 0;
+  const adminBtn = document.getElementById('chat-admin-btn');
+  const adminBar = document.getElementById('chat-admin-bar');
+  const announceInput = document.getElementById('admin-announce-input');
+  const announceBtn = document.getElementById('admin-announce-btn');
+  const clearBtn = document.getElementById('admin-clear-btn');
+  let myNick = '', isOpen = false, unread = 0, isAdmin = false;
 
   const socket = io({ transports: ['websocket','polling'] });
 
@@ -1991,11 +1963,17 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   function scrollBottom() {
     requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; });
   }
-  function addMsg(nick, msg, ts) {
+  function addMsg(nick, msg, ts, id) {
     const el = document.createElement('div');
     el.className = 'msg';
+    if (id) el.dataset.id = id;
+    el.dataset.nick = nick;
     const isMe = nick === myNick;
-    el.innerHTML = `<span class="nick${isMe?' me':''}">${escHtml(nick)}</span>${escHtml(msg)}<span class="time">${fmtTime(ts)}</span>`;
+    let html = `<span class="nick${isMe?' me':''}">${escHtml(nick)}</span>${escHtml(msg)}<span class="time">${fmtTime(ts)}</span>`;
+    html += `<span class="admin-actions"><button class="del-btn" title="삭제">&times;</button><button class="ban-btn" title="차단">🚫</button></span>`;
+    el.innerHTML = html;
+    el.querySelector('.del-btn').onclick = () => socket.emit('admin_delete', { id: Number(el.dataset.id) });
+    el.querySelector('.ban-btn').onclick = () => socket.emit('admin_ban', { nick: el.dataset.nick });
     msgs.appendChild(el);
     scrollBottom();
     if (!isOpen) { unread++; badge.textContent = unread > 99 ? '99+' : unread; badge.style.display = 'flex'; }
@@ -2007,14 +1985,68 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
     msgs.appendChild(el);
     scrollBottom();
   }
+  function addAnnounce(msg, ts) {
+    const el = document.createElement('div');
+    el.className = 'announce';
+    el.innerHTML = '📢 ' + escHtml(msg) + (ts ? `<span class="time" style="margin-left:8px">${fmtTime(ts)}</span>` : '');
+    msgs.appendChild(el);
+    scrollBottom();
+  }
 
   socket.on('init', (data) => {
     myNick = data.nick;
     onlineEl.textContent = data.online + '명 접속';
-    data.history.forEach(m => addMsg(m.nick, m.msg, m.ts));
+    data.history.forEach(m => {
+      if (m.nick === '공지') addAnnounce(m.msg, m.ts);
+      else addMsg(m.nick, m.msg, m.ts, m.id);
+    });
   });
-  socket.on('chat', (data) => { addMsg(data.nick, data.msg, data.ts); });
+  socket.on('chat', (data) => { addMsg(data.nick, data.msg, data.ts, data.id); });
   socket.on('system', (data) => { addSys(data.msg); onlineEl.textContent = data.online + '명 접속'; });
+  socket.on('announce', (data) => { addAnnounce(data.msg, data.ts); });
+  socket.on('msg_deleted', (data) => {
+    const el = msgs.querySelector('.msg[data-id="' + data.id + '"]');
+    if (el) el.remove();
+  });
+  socket.on('chat_cleared', () => { msgs.innerHTML = ''; addSys('채팅이 초기화되었습니다.'); });
+  socket.on('banned', () => { addSys('관리자에 의해 채팅이 차단되었습니다.'); input.disabled = true; sendBtn.disabled = true; });
+  socket.on('unbanned', () => { addSys('채팅 차단이 해제되었습니다.'); input.disabled = false; sendBtn.disabled = false; });
+  socket.on('system_private', (data) => { addSys(data.msg); });
+  socket.on('admin_ok', (data) => {
+    if (data.ok) {
+      isAdmin = true;
+      adminBtn.textContent = '🔓';
+      adminBar.classList.add('open');
+      msgs.classList.add('admin-mode');
+      addSys('관리자 모드 활성화');
+    } else {
+      addSys('비밀번호가 틀립니다.');
+    }
+  });
+
+  adminBtn.addEventListener('click', () => {
+    if (isAdmin) {
+      isAdmin = false;
+      adminBtn.textContent = '🔒';
+      adminBar.classList.remove('open');
+      msgs.classList.remove('admin-mode');
+      return;
+    }
+    const pw = prompt('관리자 비밀번호:');
+    if (pw) socket.emit('admin_login', { pw });
+  });
+  announceBtn.addEventListener('click', () => {
+    const v = announceInput.value.trim();
+    if (!v) return;
+    socket.emit('admin_announce', { msg: v });
+    announceInput.value = '';
+  });
+  announceInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); announceBtn.click(); }
+  });
+  clearBtn.addEventListener('click', () => {
+    if (confirm('모든 채팅 기록을 삭제하시겠습니까?')) socket.emit('admin_clear', {});
+  });
 
   function send() {
     const v = input.value.trim();

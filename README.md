@@ -1,18 +1,20 @@
 # canslim-quant-scanner
 
-> CAN SLIM 원칙, 퀀트 팩터, 진입 타이밍 점수를 한 화면에 묶은 미국/한국 주식 스캐너.
+> "좋은 회사인가"와 "지금 들어갈 자리인가"를 동시에 답하는 미국/한국 주식 스캐너.
+>
+> CAN SLIM 원칙 + 퀀트 팩터 + 진입 타이밍 점수를 한 화면에 묶어, 스캔부터 진입 판단까지 한 곳에서 끝냅니다.
 
 ![home](docs/post_images/01_home.png)
 
 ## Features
 
-- CAN SLIM 스타일의 종목 평가와 점수화
-- 미국/한국 주식 스캔
-- 종목별 상세 해설과 원라이너 코멘트
-- 진입가, 손절가, 목표가를 포함한 진입 타이밍 카드
-- 거시 지표를 요약하는 상단 매크로 스트립
-- `/settings`에서 로컬 API 설정 관리
-- `/healthz` 헬스체크와 Render/Oracle 배포 문서 포함
+- **CAN SLIM 기반 종목 평가** — 실적, 수급, 모멘텀을 종합 점수로 환산
+- **미국 + 한국 주식 동시 스캔** — Yahoo Finance · KIS · DART · Finnhub 데이터 통합
+- **진입 타이밍 카드** — 진입가, 손절가, 목표가를 한눈에 제시
+- **한줄평 코멘트** — 주갤 커뮤니티 톤의 2,600+ 구문 풀에서 종목별 한 줄 평가
+- **매크로 스트립** — 금리, 환율, VIX 등 거시 지표를 상단에 실시간 요약
+- **실시간 채팅** — WebSocket 기반 익명 채팅으로 종목 토론
+- **로컬 API 관리** — `/settings`에서 API 키 설정, `/healthz`로 서버 상태 확인
 
 ## Current UI
 
@@ -23,7 +25,6 @@
 현재 홈 화면에는 다음이 반영되어 있습니다.
 
 - 상단 매크로 스트립: 시장 상태, 금리, 환율, VIX 같은 거시 지표를 빠르게 확인
-- 접이식 섹터 히트맵: 좌측에서 섹터 흐름을 먼저 보고 종목으로 내려갈 수 있음
 - 스캔 테이블: 종합 점수, 진입 상태, 브로커 목표가, 핵심 이유를 한 줄로 요약
 
 ### 종목 상세 화면
@@ -77,27 +78,28 @@
 - Windows, macOS, Linux
 - 선택 사항: KIS, DART, Finnhub, Telegram 등 외부 API
 
-### Install
+### 로컬 실행
 
 ```bash
 git clone https://github.com/gunchinam/canslim-quant-scanner.git
 cd canslim-quant-scanner
 pip install -r requirements.txt
-```
-
-### Run
-
-```bash
 python -m web_app.app
 ```
 
-Windows에서는 배치 파일로 실행할 수도 있습니다.
+브라우저에서 `http://127.0.0.1:5000`으로 접속하면 됩니다.
 
-```bat
-run_quant_nexus.bat
+### Docker 실행
+
+```bash
+# .env 파일에 API 키 설정 (선택)
+cp .env.example .env
+
+# 빌드 & 실행
+docker compose up --build
 ```
 
-브라우저에서 `http://127.0.0.1:5000`으로 접속하면 됩니다.
+`http://localhost:8000`으로 접속합니다.
 
 ## Configuration
 
@@ -109,17 +111,22 @@ run_quant_nexus.bat
 
 ## Deployment
 
+### Docker (권장)
+
+```bash
+docker compose up -d --build
+```
+
+- **포트**: 8000 (docker-compose.yml에서 변경 가능)
+- **환경변수**: `.env` 파일에서 API 키 주입
+- **영속 데이터**: `app-data`, `yfinance-cache` 볼륨으로 자동 관리
+- **헬스체크**: 30초 간격 자동 확인, 실패 시 5회까지 재시작
+
 ### Render
 
 - `render.yaml` 포함
 - 시작 명령: `gunicorn --bind 0.0.0.0:$PORT wsgi:app`
 - 운영 환경에서는 실제 비밀값을 Render 환경변수로 넣는 편이 맞음
-
-주의할 점:
-
-- `/settings`가 쓰는 `config.json`은 Render 재배포 시 영속 저장소가 아님
-- Render에서는 필요하지 않으면 백그라운드 SWING 스캐너를 끄는 편이 안전함
-- 필요할 때만 `ENABLE_SWING_SCANNER=true` 사용
 
 ### Oracle Cloud
 

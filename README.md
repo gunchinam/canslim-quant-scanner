@@ -1,82 +1,68 @@
-# canslim-quant-scanner
+<div align="center">
 
-> "좋은 회사인가"와 "지금 들어갈 자리인가"를 동시에 답하는 미국/한국 주식 스캐너.
->
-> CAN SLIM 원칙 + 퀀트 팩터 + 진입 타이밍 점수를 한 화면에 묶어, 스캔부터 진입 판단까지 한 곳에서 끝냅니다.
+# (.)(.) 검색기
 
-![home](docs/post_images/01_home.png)
+**CAN SLIM + Quant Factor + Entry Timing**
 
-## Features
+"좋은 회사인가"와 "지금 들어갈 자리인가"를 동시에 답하는<br>
+미국/한국 주식 스캐너
 
-- **CAN SLIM 기반 종목 평가** — 실적, 수급, 모멘텀을 종합 점수로 환산
-- **미국 + 한국 주식 동시 스캔** — Yahoo Finance · KIS · DART · Finnhub 데이터 통합
-- **진입 타이밍 카드** — 진입가, 손절가, 목표가를 한눈에 제시
-- **한줄평 코멘트** — 주갤 커뮤니티 톤의 2,600+ 구문 풀에서 종목별 한 줄 평가
-- **매크로 스트립** — 금리, 환율, VIX 등 거시 지표를 상단에 실시간 요약
-- **실시간 채팅** — WebSocket 기반 익명 채팅으로 종목 토론
-- **로컬 API 관리** — `/settings`에서 API 키 설정, `/healthz`로 서버 상태 확인
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776ab?logo=python&logoColor=white)](https://python.org)
+[![Flask](https://img.shields.io/badge/Flask-SocketIO-000?logo=flask)](https://flask.palletsprojects.com)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ed?logo=docker&logoColor=white)](https://docker.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## Current UI
+<br>
 
-### 홈 화면
+<img src="docs/post_images/01_home.png" width="860" alt="Scanner Home">
 
-![home-ui](docs/post_images/01_home.png)
+</div>
 
-현재 홈 화면에는 다음이 반영되어 있습니다.
+---
 
-- 상단 매크로 스트립: 시장 상태, 금리, 환율, VIX 같은 거시 지표를 빠르게 확인
-- 스캔 테이블: 종합 점수, 진입 상태, 브로커 목표가, 핵심 이유를 한 줄로 요약
+## 주요 기능
 
-### 종목 상세 화면
+| 기능 | 설명 |
+|------|------|
+| **CAN SLIM 종목 평가** | 실적 성장, 수급, 모멘텀을 5개 전략으로 종합 점수화 |
+| **US + KR 동시 스캔** | Yahoo Finance, KIS, DART, Finnhub 데이터 통합 |
+| **진입 타이밍 카드** | 진입가, 손절가, 목표가를 한눈에 제시 |
+| **한줄평 코멘트** | 주갤 커뮤니티 톤의 2,600+ 구문 풀에서 종목별 한 줄 평가 |
+| **매크로 스트립** | VIX, 환율, 금리, KOSPI, S&P500 실시간 요약 |
+| **실시간 채팅** | WebSocket 익명 채팅 + 관리자 기능 (공지, 차단, 삭제) |
+| **퀵필터** | 워치리스트, 진입 임박, 감시 매수, 신고가, RSI, 단타 신호 |
+| **종목 비교** | 체크박스로 선택 후 종목 간 점수·차트·한줄평 비교 |
 
-![detail-ui](docs/post_images/02_detail_nvda.png)
+---
 
-상세 화면은 예전보다 "무슨 행동을 해야 하는지"가 먼저 보이도록 정리했습니다.
+## 스크린샷
 
-- 진입 타이밍 카드가 `결론 / 행동 / 더보기` 구조로 정리됨
-- `진입가 / 손절 / 목표가1`를 먼저 보여주고 나머지는 접어서 표시
-- 종합 점수와 진입 타이밍을 함께 보는 2축 사분면 추가
-- 별점 영역은 차트 타이밍용, 종합 점수는 회사/종목 평가용으로 역할을 분리
+### 스캔 결과
 
-### 종목 비교 화면
+<img src="docs/post_images/01_home.png" width="860" alt="Home">
 
-![compare-ui](docs/post_images/03_compare_nvda_msft_amzn.png)
+상단 매크로 스트립으로 시장 상태를 확인하고, 종합 점수·진입 상태·증권사 목표가·핵심 이유를 한 줄로 스캔합니다.
 
-비교 화면에서는 종목 간 점수와 톤 차이를 빠르게 볼 수 있습니다.
+### 종목 상세
 
-### 설정 화면
+<img src="docs/post_images/02_detail.png" width="860" alt="Detail">
 
-![settings-ui](docs/post_images/04_settings.png)
+진입 타이밍 카드 → 차트 → 점수 분해 순서로, "무슨 행동을 해야 하는지"가 먼저 보입니다.
 
-`/settings`에서는 로컬 `config.json` 기반으로 API 키와 토큰을 저장할 수 있습니다.
+### 설정
 
-### 헬스체크
+<img src="docs/post_images/04_settings.png" width="860" alt="Settings">
 
-![healthz-ui](docs/post_images/05_healthz.png)
+`/settings`에서 API 키와 토큰을 브라우저에서 바로 관리합니다.
 
-배포 후에는 `/healthz`로 서버 상태를 빠르게 확인할 수 있습니다.
-
-## Entry Timing
-
-이 프로젝트의 진입 타이밍 점수는 "좋은 회사인가"와 "지금 들어갈 자리인가"를 분리해서 봅니다.
-
-- 종합 점수: 회사/종목의 전반적 질과 매력도
-- 진입 타이밍: 지금 매수해도 되는 자리인지
-
-현재 UI에서는 이 차이를 더 명확하게 보여주기 위해 다음을 반영했습니다.
-
-- 진입 카드 헤드라인을 더 크게 표시
-- 보조 사유를 별도 줄로 분리
-- 가격 액션에서 가장 중요한 3개 숫자만 먼저 노출
-- 점수 분해와 AgentQuant 근거는 펼쳤을 때만 확인
+---
 
 ## Quick Start
 
-### Requirements
+### 요구 사항
 
 - Python 3.11+
-- Windows, macOS, Linux
-- 선택 사항: KIS, DART, Finnhub, Telegram 등 외부 API
+- Windows / macOS / Linux
 
 ### 로컬 실행
 
@@ -87,29 +73,40 @@ pip install -r requirements.txt
 python -m web_app.app
 ```
 
-브라우저에서 `http://127.0.0.1:5000`으로 접속하면 됩니다.
+`http://127.0.0.1:5000`으로 접속합니다.
 
 ### Docker 실행
 
 ```bash
-# .env 파일에 API 키 설정 (선택)
-cp .env.example .env
-
-# 빌드 & 실행
+cp .env.example .env    # API 키 설정 (선택)
 docker compose up --build
 ```
 
 `http://localhost:8000`으로 접속합니다.
 
-## Configuration
+---
 
-- 로컬 설정 화면: `/settings`
-- 로컬 설정 파일: `config.json`
-- 공개용 예시 파일: `config.example.json`
+## 설정
 
-실제 API 키, 토큰, 계좌번호는 공개 저장소에 넣지 않는 전제로 동작합니다.
+| 방법 | 경로 |
+|------|------|
+| 웹 UI | `/settings` |
+| 파일 | `config.json` (`.gitignore` 대상) |
+| 환경변수 | `.env` 또는 Docker 환경변수 |
 
-## Deployment
+외부 API는 선택 사항입니다. 없어도 Yahoo Finance 기반 핵심 스캔은 동작합니다.
+
+| API | 용도 |
+|-----|------|
+| **KIS** (한국투자증권) | KR 실시간 시세 |
+| **DART** | KR 공시·재무제표 |
+| **Finnhub** | US 뉴스·실적 캘린더 |
+| **Naver** | KR 증권사 목표가 (키 불필요) |
+| **Telegram** | 알림 전송 |
+
+---
+
+## 배포
 
 ### Docker (권장)
 
@@ -117,35 +114,49 @@ docker compose up --build
 docker compose up -d --build
 ```
 
-- **포트**: 8000 (docker-compose.yml에서 변경 가능)
-- **환경변수**: `.env` 파일에서 API 키 주입
-- **영속 데이터**: `app-data`, `yfinance-cache` 볼륨으로 자동 관리
-- **헬스체크**: 30초 간격 자동 확인, 실패 시 5회까지 재시작
+- 포트 `8000` (docker-compose.yml에서 변경 가능)
+- `.env` 파일로 API 키 주입
+- `app-data`, `yfinance-cache` 볼륨으로 영속 데이터 관리
+- 30초 간격 헬스체크, 실패 시 자동 재시작
 
 ### Render
 
 - `render.yaml` 포함
 - 시작 명령: `gunicorn --bind 0.0.0.0:$PORT wsgi:app`
-- 운영 환경에서는 실제 비밀값을 Render 환경변수로 넣는 편이 맞음
 
 ### Oracle Cloud
 
 - [Oracle Cloud 가이드](deploy/ORACLE_CLOUD.md)
 - [초기 세팅 스크립트](deploy/setup-oracle.sh)
 
-## Public Repo Notes
+---
 
-- 실제 비밀값은 `.env` 또는 로컬 `config.json`에만 저장
-- `config.example.json`만 커밋하고 `config.json`은 커밋하지 않음
-- 토큰 캐시, 로컬 UI 상태, 데이터 산출물은 `.gitignore`로 제외
-- `data/`, `*.parquet`, `.kis_token_cache.json`, `_*.json` 같은 로컬 산출물은 공개 제외
+## 채팅 관리자
 
-## Tests
+실시간 채팅에 관리자 기능이 내장되어 있습니다.
+
+- 채팅 패널의 🔒 아이콘 → 비밀번호 입력으로 관리자 모드 진입
+- 기본 비밀번호: `admin1234` (환경변수 `CHAT_ADMIN_PW`로 변경)
+- 메시지 삭제, 사용자 차단, 공지사항, 전체 삭제 지원
+
+---
+
+## 테스트
 
 ```bash
-pytest tests/test_entry_status_v2.py tests/test_entry_status_v3.py
+pytest tests/
 ```
+
+---
+
+## 보안
+
+- 실제 비밀값은 `.env` 또는 `config.json`에만 저장
+- `config.json`, 토큰 캐시, 데이터 산출물은 `.gitignore` 대상
+- `config.example.json`만 커밋
+
+---
 
 ## License
 
-[MIT License](LICENSE)
+[MIT](LICENSE)

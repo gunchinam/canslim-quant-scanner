@@ -10,8 +10,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY web_app/ ./web_app/
-COPY vendor/ ./vendor/
 COPY *.py ./
+
+# vendor/AgentQuant은 .gitignore 대상 — 있으면 복사, 없으면 무시
+# (agentquant_signal.py가 import 실패 시 graceful fallback)
+RUN mkdir -p vendor
 
 RUN mkdir -p web_app/cache_v19 web_app/snapshots data
 

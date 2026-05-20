@@ -878,6 +878,199 @@ def _compute_entry_status(
     }
 
 
+def _compute_entry_status_v2(
+    *,
+    mr: dict,
+    vwap: dict,
+    atr: dict,
+    regime: dict,
+    mom: dict,
+    vol_a: dict,
+    hist,
+    cur: float,
+    day_chg: float,
+    fail_safe_triggered: bool = False,
+    bear_cap_applied: bool = False,
+) -> dict:
+    """EntryStatus v2 — 백테스트 증거기반 재설계.
+
+    검증: KOSPI100+S&P500 top100, 26주/78주 walk-forward 백테스트.
+      26주: baseline IC +0.0127 (t=0.38) — FAIL
+      78주: baseline IC -0.0072 — 부호 뒤집힘
+
+    v2 설계 원칙:
+      - 26w·78w 양쪽에서 양수 edge였던 시그널에만 가중 (pivot×s_conf, vol_jump_up, atr_squeeze, rsi_oversold)
+      - ma_aligned(78w 음수), macd_bull(양쪽 음수), bb_upper(78w 음수) → 양수 가중 제거
+      - mean-reversion + 거래량 동반 돌파 중심으로 재구성
+      - 추세 강도 가산점 제거(증거 부재). 약세장 페널티는 유지(78w에서 약함, 26w에서 강함, 평균 음수).
+    """
+    _e_score = 50
+    _phrases: list[str] = []
+
+    _rsi_v = mr.get("rsi", 50.0)
+    _bb_pos = mr.get("bb_position", 0.0)
+    _macd_div = mr.get("macd_divergence", "NONE")
+    _vwap_d = vwap.get("distance", 0.0)
+    _atr_p = atr.get("atr_percent", 0.0)
+    _reg = regime.get("regime", "SIDEWAYS")
+    _pivot = mom.get("pivot_breakout", False)
+    _s_conf = vol_a.get("s_confirmed", False)
+
+    _ma_aligned = False
+    _vol_jump_up = False
+    _atr_squeeze = False
+    try:
+        _c = hist["Close"]
+        _v = hist["Volume"]
+        _o = hist["Open"]
+        if len(_c) >= 200:
+            _sma50  = float(_c.rolling(50).mean().iloc[-1])
+            _sma200 = float(_c.rolling(200).mean().iloc[-1])
+            _ma_aligned = bool(cur > _sma50 > _sma200)
+        if len(_v) >= 20:
+            _vol_avg20 = float(_v.rolling(20).mean().iloc[-1])
+            _vol_jump_up = bool(
+                float(_v.iloc[-1]) > _vol_avg20 * 2.0
+                and float(_c.iloc[-1]) > float(_o.iloc[-1])
+            )
+        if len(_c) >= 30 and _atr_p > 0:
+            h_, l_, c_ = hist["High"], hist["Low"], hist["Close"]
+            tr = pd.concat([
+                (h_ - l_).abs(),
+                (h_ - c_.shift()).abs(),
+                (l_ - c_.shift()).abs(),
+            ], axis=1).max(axis=1)
+            atr_series = (tr.rolling(14).mean() / c_) * 100
+            _atr_avg30 = float(atr_series.rolling(30).mean().iloc[-1])
+            _atr_squeeze = bool(_atr_p < _atr_avg30 * 0.8)
+    except Exception:
+        pass
+
+    breakdown: dict = {}
+
+    # 1) 거래량 동반 돌파 — 양쪽 시계에서 가장 안정적 양수 (edge +0.008 / +0.0015)
+    if _pivot and _s_conf:
+        _e_score += 12
+        _phrases.append("거래량 동반 돌파")
+        breakdown["Breakout"] = {"pts": 12, "tag": "거래량 동반 돌파"}
+
+    # 2) 거래량 점프 — 양쪽 시계 양수 (edge +0.0038 / +0.0038)
+    if _vol_jump_up:
+        _e_score += 10
+        _phrases.append("거래량 점프")
+        breakdown["Volume"] = {"pts": 10, "tag": "거래량 점프"}
+
+    # 3) RSI 과매도 — regime-conditional 가중 (factor 성능이 regime에 의존)
+    #    BULL/STRONG_BULL에선 mean-reversion 약함 → 작은 가중
+    #    SIDEWAYS/BEAR에선 mean-reversion 강함 (78w 데이터) → 큰 가중
+    _trending = _reg in ("BULL", "STRONG_BULL")
+    mr_pts = 0
+    mr_tag = None
+    if _rsi_v < 30:
+        mr_pts = 5 if _trending else 12
+        mr_tag = "과매도 반등"
+    elif _rsi_v < 40:
+        mr_pts = 3 if _trending else 6
+        mr_tag = "RSI 저점권"
+
+    # 3-b) RSI 과열 페널티 (Stage 1 유지 — regime gate)
+    if _rsi_v >= 70:
+        if _trending:
+            mr_pts = -3
+            mr_tag = "RSI 과열(추세 유지)"
+        else:
+            mr_pts = -10
+            mr_tag = "RSI 과열"
+    if _bb_pos > 0.95 and not _trending:
+        if mr_pts > -8:
+            mr_pts = -8
+            mr_tag = "BB 상단 과확장"
+
+    if mr_pts != 0:
+        _e_score += mr_pts
+        if abs(mr_pts) >= 4 and mr_tag:
+            _phrases.append(mr_tag)
+        breakdown["MeanRev"] = {"pts": mr_pts, "tag": mr_tag or ""}
+
+    # 3-c) MA 정배열 — trending regime에서만 가산 (26w 양수, 78w 음수의 평균)
+    #     BULL 환경 한정으로 +5 (26w +0.0017 edge 회복, 78w 영향 최소)
+    if _ma_aligned and _trending:
+        _e_score += 5
+        breakdown["Trend"] = {"pts": 5, "tag": "추세 정배열"}
+
+    # 4) 변동성 수축 — 양쪽 양수 (edge +0.0007 / +0.0061)
+    if _atr_squeeze:
+        _e_score += 4
+        breakdown["Squeeze"] = {"pts": 4, "tag": "변동성 수축"}
+
+    # 5) 변동성 과대 페널티
+    if _atr_p > 8.0:
+        _e_score -= 6
+        _phrases.append("변동성 과대")
+        breakdown["Volatility"] = {"pts": -6, "tag": "변동성 과대"}
+
+    # 6) 약세장 페널티
+    if _reg == "STRONG_BEAR":
+        _e_score -= 12
+        _phrases.append("강한 약세장")
+        breakdown["Regime"] = {"pts": -12, "tag": "강한 약세장"}
+    elif _reg == "BEAR":
+        _e_score -= 6
+        breakdown["Regime"] = {"pts": -6, "tag": "약세장"}
+
+    # 7) MACD 베어 페널티만 유지 (BULL은 양쪽 시계에서 음수 edge라 제거)
+    if _macd_div == "BEARISH":
+        _e_score -= 3
+        breakdown["MACD"] = {"pts": -3, "tag": "데드크로스"}
+
+    # 8) 당일 급등 추격 페널티 (눌림 매수 가산점은 증거 부재로 제거)
+    if day_chg > 0.07:
+        _e_score -= 8
+        _phrases.append("급등 추격 주의")
+        breakdown["DayChg"] = {"pts": -8, "tag": "급등 추격"}
+
+    # 9) 안전장치
+    if fail_safe_triggered:
+        _e_score -= 15
+    if bear_cap_applied:
+        _e_score -= 10
+
+    entry_score = max(0, min(100, int(_e_score)))
+
+    if entry_score >= 55:
+        status = "STRONG"; label = "진입 강함"
+    elif entry_score >= 25:
+        status = "NEUTRAL"; label = "관망"
+    else:
+        status = "AVOID"; label = "진입 부적합"
+
+    return {
+        "score": entry_score,
+        "status": status,
+        "label": label,
+        "phrases": _phrases,
+        "breakdown": breakdown,
+        "signals": {
+            "ma_aligned": _ma_aligned,
+            "vol_jump_up": _vol_jump_up,
+            "atr_squeeze": _atr_squeeze,
+            "mr_pts": mr_pts, "mr_tag": mr_tag,
+            "trend_pts": 0, "trend_tag": None,
+            "rsi": _rsi_v, "bb_pos": _bb_pos, "vwap_d": _vwap_d,
+            "atr_p": _atr_p, "regime": _reg,
+            "macd_div": _macd_div, "pivot": _pivot, "s_conf": _s_conf,
+            "version": "v2",
+        },
+    }
+
+
+def _compute_entry_status_dispatch(**kwargs) -> dict:
+    """Feature flag dispatcher — ENTRY_SCORE_V2=1이면 v2 사용."""
+    if os.getenv("ENTRY_SCORE_V2", "0") == "1":
+        return _compute_entry_status_v2(**kwargs)
+    return _compute_entry_status(**kwargs)
+
+
 def rate_limit(max_per_second: float):
     """호출 빈도를 제한하는 데코레이터 (스레드 안전)."""
     min_interval = 1.0 / max_per_second
@@ -5339,7 +5532,7 @@ class QuantNexusApp:
             # ── 진입 타이밍 신호 (Entry Timing · V5.1_TUNED) ────────────
             # 인라인 로직은 _compute_entry_status() 순수 함수로 추출됨
             # (Stage 2 백테스트 호출 가능 · 동일 결정성 보장).
-            _es = _compute_entry_status(
+            _es = _compute_entry_status_dispatch(
                 mr=mr, vwap=vwap, atr=atr, regime=regime, mom=mom, vol_a=vol_a,
                 hist=hist, cur=cur, day_chg=day_chg,
                 fail_safe_triggered=fail_safe_triggered,
@@ -8570,6 +8763,7 @@ class QuantNexusApp:
         "ADI": "아나로그 디바이스",
         "ADM": "아처 대니얼스",
         "ADP": "ADP",
+        "AEHR": "에어테스트",
         "AEM": "애그니코 이글",
         "AEO": "아메리칸 이글",
         "AEP": "아메리칸 일렉트릭",
@@ -8886,6 +9080,7 @@ class QuantNexusApp:
         "LDOS": "레이도스",
         "LEA": "리어",
         "LEN": "레나",
+        "LEU": "센트러스 에너지",
         "LH": "래버코프",
         "LHX": "L3 해리스",
         "LI": "리오토",
@@ -9007,6 +9202,7 @@ class QuantNexusApp:
         "PH": "파커하니핀",
         "PHM": "풀티그룹",
         "PINS": "핀터레스트",
+        "PL": "플래닛 랩스",
         "PKG": "패키징코프",
         "PLD": "프로로지스",
         "PLTK": "플레이티카",
@@ -10446,6 +10642,10 @@ class QuantNexusApp:
         "RDFN": "온라인 부동산 중개 플랫폼",
         "SES":  "리튬메탈 배터리 · UAM · EV",
         "GRRR": "AI 비전 · 스마트시티 · 영상분석",
+        # ── 2026-05-20 핫 종목 추가 ──────────────────────────
+        "AEHR": "SiC 웨이퍼 번인 테스트 장비",
+        "LEU":  "HALEU 우라늄 농축 · SMR 연료",
+        "PL":   "초소형 위성 군집 · 지구 관측",
     }
 
     # ─────────────────────────────────────────────────────────────────────
@@ -10497,7 +10697,7 @@ class QuantNexusApp:
                                        "STM","SWKS","TXN","WOLF"],
 
                 # 반도체 장비·소재·검사
-                "Semicon Equipment":  ["ACLS","AEIS","AMAT","ASML","AZTA","CAMT","COHU","ENTG",
+                "Semicon Equipment":  ["ACLS","AEHR","AEIS","AMAT","ASML","AZTA","CAMT","COHU","ENTG",
                                        "FORM","ICHR","KLAC","KLIC","LRCX","MKSI","NVMI","ONTO","UCTT","VECO"],
 
                 # 메모리·스토리지·패키징
@@ -10538,7 +10738,7 @@ class QuantNexusApp:
                 # 항공우주·방산 (지정학 리스크 고조, 국방예산 급증)
                 "Aerospace & Defense":["ACHR","ASTS","AXON","BA","BAH","BWXT","CACI","CW",
                                        "GD","HII","HWM","JOBY","KTOS","LDOS","LHX","LMT",
-                                       "LPTH","LUNR","NOC","RKLB","RTX","SAIC","TDG","TXT"],
+                                       "LPTH","LUNR","NOC","PL","RKLB","RTX","SAIC","TDG","TXT"],
 
                 # 전력 인프라·그리드 (AI 데이터센터 전력 수요 폭증)
                 "Power Grid & Infra": ["AYI","EME","ETN","GEV","GNRC","HON","HUBB",
@@ -10568,7 +10768,7 @@ class QuantNexusApp:
                                        "NEE","NOVA","NXT","PLUG","RUN","SEDG","STEM"],
 
                 # 원자력·우라늄·SMR (AI 전력 수요 → 원전 르네상스)
-                "Nuclear & Uranium":  ["BWXT","BWX","CCJ","CEG","DNN","NNE","OKLO",
+                "Nuclear & Uranium":  ["BWXT","BWX","CCJ","CEG","DNN","LEU","NNE","OKLO",
                                        "SMR","TLN","UEC","UUUU","VST"],
 
                 # 유틸리티

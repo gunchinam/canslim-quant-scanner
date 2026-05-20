@@ -168,6 +168,155 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
     threading.Thread(target=_worker, daemon=True).start()
 
 
+# ── 캐시 메타데이터 (stale-data UX 헤더용) ─────────────────────────────────
+def _scan_cache_meta(market: str) -> tuple[int | None, str | None]:
+    """cache_v19/ 디렉토리에서 해당 market 캐시 파일들의 최고령(가장 오래된) 분 + 가장 최신 mtime ISO 반환.
+    실패/없음 시 (None, None).
+    """
+    try:
+        from datetime import datetime, timezone
+        cache_dir = os.path.join(_BASE, "cache_v19")
+        if not os.path.isdir(cache_dir):
+            return (None, None)
+        # KR 캐시 파일은 `005930_KS__...pkl` 같은 형태 — `_KS`/`_KQ` 키워드 필터
+        if market == "KR":
+            patterns = ("_KS__", "_KQ__")
+        elif market == "US":
+            patterns = ("__",)  # KR suffix 제외
+        else:
+            patterns = ("__",)
+        now = time.time()
+        oldest_age_sec = 0.0
+        newest_mtime = 0.0
+        count = 0
+        for fn in os.listdir(cache_dir):
+            if not fn.endswith(".pkl"):
+                continue
+            if market == "KR":
+                if not any(p in fn for p in patterns):
+                    continue
+            elif market == "US":
+                if any(p in fn for p in ("_KS__", "_KQ__")):
+                    continue
+            try:
+                mt = os.path.getmtime(os.path.join(cache_dir, fn))
+            except OSError:
+                continue
+            age = now - mt
+            if age > oldest_age_sec:
+                oldest_age_sec = age
+            if mt > newest_mtime:
+                newest_mtime = mt
+            count += 1
+        if count == 0:
+            return (None, None)
+        cache_age_min = int(oldest_age_sec // 60)
+        as_of_iso = datetime.fromtimestamp(newest_mtime, tz=timezone.utc).isoformat()
+        return (cache_age_min, as_of_iso)
+    except Exception:
+        return (None, None)
+
+
+# ── KR 캐시 워밍 (서버 기동 시 + 30분 주기, multi-process safe) ────────────
+_KR_WARMUP_LOCK_PATH = os.path.join(_BASE, "cache_v19", ".warmer.lock")
+_kr_warmup_started = False
+_kr_warmup_lock = threading.Lock()
+
+
+def _acquire_warmer_file_lock():
+    """non-blocking 파일 잠금 획득. 성공 시 (file_handle, 'win'|'posix'), 실패 시 None.
+    반환된 핸들은 워밍 종료까지 open 상태 유지 필요 (finally에서 release+close)."""
+    try:
+        os.makedirs(os.path.dirname(_KR_WARMUP_LOCK_PATH), exist_ok=True)
+        fh = open(_KR_WARMUP_LOCK_PATH, "a+b")
+    except OSError as e:
+        logging.warning("warmer lock open failed: %s", e)
+        return None
+    try:
+        if os.name == "nt":
+            import msvcrt
+            try:
+                msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+                return (fh, "win")
+            except OSError:
+                fh.close()
+                return None
+        else:
+            import fcntl
+            try:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return (fh, "posix")
+            except OSError:
+                fh.close()
+                return None
+    except Exception as e:
+        logging.warning("warmer lock acquire failed: %s", e)
+        try:
+            fh.close()
+        except Exception:
+            pass
+        return None
+
+
+def _release_warmer_file_lock(handle) -> None:
+    if not handle:
+        return
+    fh, kind = handle
+    try:
+        if kind == "win":
+            import msvcrt
+            try:
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+            except OSError:
+                pass
+        else:
+            import fcntl
+            try:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+    finally:
+        try:
+            fh.close()
+        except Exception:
+            pass
+
+
+def _kr_warmup_loop(interval_sec: int = 1800) -> None:
+    """KR 전체 스캔을 주기적으로 BG 실행. 파일잠금으로 multi-process duplication 방지."""
+    while True:
+        handle = _acquire_warmer_file_lock()
+        if handle is None:
+            logging.info("KR warm-up skipped: another worker holds lock")
+        else:
+            try:
+                logging.info("KR warm-up started")
+                try:
+                    adapter_cls = _get_scan_adapter_cls()
+                    adapter = adapter_cls(market="KR", strategy="BALANCED")
+                    # 워머는 Semaphore(4)로 throttle: scan_all max_workers=4 로 호출
+                    results = adapter.scan_all(max_workers=4)
+                    logging.info("KR warm-up done: %d tickers", len(results) if results else 0)
+                except Exception as e:
+                    logging.warning("KR warm-up failed: %s", e)
+            finally:
+                _release_warmer_file_lock(handle)
+        time.sleep(interval_sec)
+
+
+def _start_kr_warmup_once() -> None:
+    global _kr_warmup_started
+    with _kr_warmup_lock:
+        if _kr_warmup_started:
+            return
+        _kr_warmup_started = True
+    if os.environ.get("DISABLE_KR_WARMUP", "").strip() in ("1", "true", "yes"):
+        logging.info("KR warm-up disabled by env DISABLE_KR_WARMUP")
+        return
+    threading.Thread(target=_kr_warmup_loop, daemon=True, name="kr-warmup").start()
+
+
 def _get_config_int(name: str, default: int, minimum: int | None = None, maximum: int | None = None) -> int:
     raw = os.environ.get(name)
     try:
@@ -387,12 +536,18 @@ def api_scan():
         except (TypeError, ValueError):
             aq_top = 0
         results = []
-        if market == "US":
+        warming_in_progress = False
+        if market in ("US", "KR"):
             results = adapter.scan_sector(sector, prefer_cache=True, cache_only=True) if sector else adapter.scan_all(prefer_cache=True, cache_only=True)
             if results:
                 _refresh_scan_background(market, strategy, sector)
-            else:
+            elif market == "US":
+                # US는 캐시 미스 시 동기 풀 스캔 fallback
                 results = adapter.scan_sector(sector) if sector else adapter.scan_all()
+            else:
+                # KR: 첫 배포·캐시 전체 미스 → BG 워밍만 트리거하고 빈 응답 반환
+                _refresh_scan_background(market, strategy, sector)
+                warming_in_progress = True
         else:
             results = adapter.scan_sector(sector) if sector else adapter.scan_all()
         # 히스토리 델타 주석/스냅샷 저장
@@ -415,7 +570,18 @@ def api_scan():
                 results = _apply_aq_fusion(results, market, top_n=aq_top)
             except Exception as ae:
                 logging.warning("aq fusion failed: %s", ae)
-        return jsonify(results)
+        # Stale-data UX 헤더 (non-breaking: 본문은 array 유지)
+        resp = jsonify(results)
+        try:
+            cache_age_min, as_of_iso = _scan_cache_meta(market)
+            if cache_age_min is not None:
+                resp.headers["X-Cache-Age-Min"] = str(cache_age_min)
+            if as_of_iso:
+                resp.headers["X-As-Of"] = as_of_iso
+            resp.headers["X-Warming-In-Progress"] = "true" if warming_in_progress else "false"
+        except Exception:
+            pass
+        return resp
     except Exception as e:
         logging.exception("api_scan")
         return jsonify({"error": str(e)}), 500
@@ -1093,6 +1259,12 @@ def api_us_insight(ticker: str):
 
 # SocketIO 초기화 (gunicorn / 직접 실행 모두 대응)
 socketio.init_app(app)
+
+# KR 캐시 워밍 시작 (gunicorn import 시점에도 트리거; file-lock으로 중복 방지)
+try:
+    _start_kr_warmup_once()
+except Exception as _e:
+    logging.warning("KR warm-up bootstrap failed: %s", _e)
 
 if __name__ == "__main__":
     debug = (os.environ.get("FLASK_DEBUG") or "0").strip().lower() in ("1", "true", "yes")

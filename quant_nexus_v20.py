@@ -1178,11 +1178,19 @@ class DataCache:
 
     def set(self, ticker: str, data: dict):
         path = self._path(ticker)
+        tmp = path + ".tmp"
         try:
-            with open(path, "wb") as f:
+            with open(tmp, "wb") as f:
                 pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+            os.replace(tmp, path)
         except Exception as e:
             logging.error(f"[Cache] 저장 실패({ticker}): {e}")
+        finally:
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
 
     def clear(self):
         for filename in os.listdir(self.cache_dir):
@@ -4449,8 +4457,8 @@ class QuantNexusApp:
             # _path()의 replace 규칙("."->"_", "/"->"_")과 충돌하지 않도록
             # 구분자로 "__" (이중 언더스코어)를 사용한다.
             strategy_key = f"{ticker}__{self._scan_strategy}"
-            # rate-limit 회피: 캐시 TTL 30분으로 연장
-            cached = self.cache.get(strategy_key, max_age_minutes=30)
+            # rate-limit 회피: 캐시 TTL 4시간 (KR 풀스캔 부하 경감)
+            cached = self.cache.get(strategy_key, max_age_minutes=240)
             if cached:
                 with self._stats_lock:
                     self.stats["cache_hits"] += 1
@@ -4507,13 +4515,11 @@ class QuantNexusApp:
 
             try:
                 info = stock.info or {}
-                if not info:
-                    if self._scan_market != "US":
-                        time.sleep(0.3)
-                        info = stock.info or {}
             except Exception as _e:
                 logging.warning(f"[yf.info] {ticker} 실패: {_e}")
-                # fast_info fallback: 기본 시가총액·가격만
+                info = {}
+            if not info:
+                # info 빈 경우 즉시 fast_info fallback (KR 전용 retry+sleep 제거)
                 try:
                     fi = stock.fast_info
                     info = {

@@ -1,106 +1,135 @@
-#!/bin/bash
-# Oracle Cloud Always Free ARM 인스턴스 초기 세팅 스크립트
-# 사용법: ssh ubuntu@<IP> 접속 후
-#   curl -sSL https://raw.githubusercontent.com/gunchinam/canslim-quant-scanner/main/deploy/setup-oracle.sh | bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-set -e
+REPO_URL="${REPO_URL:-https://github.com/gunchinam/canslim-quant-scanner.git}"
+APP_NAME="${APP_NAME:-canslim-quant-scanner}"
+SERVICE_NAME="${SERVICE_NAME:-scanner}"
+PORT="${PORT:-5000}"
+WORKER_CLASS="${WORKER_CLASS:-geventwebsocket.gunicorn.workers.GeventWebSocketWorker}"
 
-echo "=== 1. 시스템 업데이트 ==="
-sudo apt update && sudo apt upgrade -y
-
-echo "=== 2. Python 3.11+ 설치 ==="
-sudo apt install -y python3 python3-pip python3-venv git nginx certbot python3-certbot-nginx
-
-echo "=== 3. 프로젝트 클론 ==="
-cd /home/ubuntu
-if [ -d "canslim-quant-scanner" ]; then
-    cd canslim-quant-scanner && git pull
-else
-    git clone https://github.com/gunchinam/canslim-quant-scanner.git
-    cd canslim-quant-scanner
+if [[ "${EUID}" -eq 0 ]]; then
+  echo "Run this script as the default cloud user with sudo access, not as root."
+  exit 1
 fi
 
-echo "=== 4. 가상환경 + 의존성 설치 ==="
+OS_ID=""
+OS_LIKE=""
+if [[ -r /etc/os-release ]]; then
+  # shellcheck disable=SC1091
+  source /etc/os-release
+  OS_ID="${ID:-}"
+  OS_LIKE="${ID_LIKE:-}"
+fi
+
+HOME_DIR="${HOME:-/home/${USER}}"
+APP_DIR="${APP_DIR:-${HOME_DIR}/${APP_NAME}}"
+
+install_packages() {
+  if command -v dnf >/dev/null 2>&1; then
+    sudo dnf -y update
+    sudo dnf -y install python3 python3-pip python3-devel git nginx certbot python3-certbot-nginx
+  elif command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update
+    sudo apt-get upgrade -y
+    sudo apt-get install -y python3 python3-pip python3-venv git nginx certbot python3-certbot-nginx
+  else
+    echo "Unsupported package manager. Install Python, git, nginx, and certbot manually."
+    exit 1
+  fi
+}
+
+echo "==> Updating packages"
+install_packages
+
+echo "==> Fetching repository"
+mkdir -p "${HOME_DIR}"
+cd "${HOME_DIR}"
+if [[ -d "${APP_DIR}/.git" ]]; then
+  cd "${APP_DIR}"
+  git pull origin main
+else
+  git clone "${REPO_URL}" "${APP_DIR}"
+  cd "${APP_DIR}"
+fi
+
+echo "==> Creating virtual environment"
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-echo "=== 5. 환경변수 설정 ==="
-if [ ! -f .env ]; then
-    cat > .env << 'ENVEOF'
-# API 키 (필요시 입력)
+echo "==> Creating local environment file if missing"
+if [[ ! -f .env ]]; then
+  cat > .env <<'EOF'
 FINNHUB_API_KEY=
 KIS_APP_KEY=
 KIS_APP_SECRET=
 KIS_ACCOUNT=
-ENVEOF
-    echo ".env 파일 생성됨 — nano .env 로 API 키를 입력하세요"
+EOF
+  echo "Created .env. Fill in API keys before using live data sources."
 fi
 
-echo "=== 6. systemd 서비스 등록 ==="
-sudo tee /etc/systemd/system/scanner.service > /dev/null << 'SVCEOF'
+echo "==> Writing systemd unit"
+sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" >/dev/null <<EOF
 [Unit]
 Description=Stock Scanner Web App
 After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/canslim-quant-scanner
-Environment=PATH=/home/ubuntu/canslim-quant-scanner/venv/bin:/usr/bin
-ExecStart=/home/ubuntu/canslim-quant-scanner/venv/bin/gunicorn \
-    --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker \
-    --workers 2 --threads 4 \
-    --bind 127.0.0.1:5000 \
-    --timeout 120 \
-    web_app.app:app
+User=${USER}
+WorkingDirectory=${APP_DIR}
+Environment=PATH=${APP_DIR}/venv/bin:/usr/bin
+ExecStart=${APP_DIR}/venv/bin/gunicorn --worker-class ${WORKER_CLASS} --workers 1 --threads 4 --bind 127.0.0.1:${PORT} --timeout 120 web_app.app:app
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-SVCEOF
+EOF
 
-sudo systemctl daemon-reload
-sudo systemctl enable scanner
-sudo systemctl start scanner
-
-echo "=== 7. Nginx 리버스 프록시 ==="
-sudo tee /etc/nginx/sites-available/scanner > /dev/null << 'NGXEOF'
+echo "==> Writing nginx site"
+sudo tee /etc/nginx/sites-available/scanner >/dev/null <<EOF
 server {
     listen 80;
     server_name _;
 
     location / {
-        proxy_pass http://127.0.0.1:5000;
+        proxy_pass http://127.0.0.1:${PORT};
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_read_timeout 86400;
     }
 }
-NGXEOF
+EOF
 
-sudo ln -sf /etc/nginx/sites-available/scanner /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/scanner /etc/nginx/sites-enabled/scanner
 sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t && sudo systemctl restart nginx
+sudo nginx -t
 
-echo "=== 8. 방화벽 오픈 ==="
-sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
-sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
-sudo netfilter-persistent save 2>/dev/null || true
+echo "==> Enabling services"
+sudo systemctl daemon-reload
+sudo systemctl enable "${SERVICE_NAME}"
+sudo systemctl restart "${SERVICE_NAME}"
+sudo systemctl restart nginx
 
-echo ""
-echo "========================================="
-echo "  세팅 완료!"
-echo "  http://<서버IP> 로 접속 가능"
-echo ""
-echo "  업데이트: cd canslim-quant-scanner && git pull && sudo systemctl restart scanner"
-echo "  로그 확인: sudo journalctl -u scanner -f"
-echo "  API 키 설정: nano .env && sudo systemctl restart scanner"
-echo "========================================="
+if command -v firewall-cmd >/dev/null 2>&1; then
+  sudo firewall-cmd --permanent --add-service=http || true
+  sudo firewall-cmd --permanent --add-port="${PORT}"/tcp || true
+  sudo firewall-cmd --reload || true
+fi
+
+echo "==> Optional firewall note"
+echo "Open TCP 80 in OCI security rules. Also allow 22 from your IP for SSH."
+
+echo "==> Done"
+echo "Check status with:"
+echo "  sudo systemctl status ${SERVICE_NAME} --no-pager"
+echo "  sudo journalctl -u ${SERVICE_NAME} -f"
+echo "Then open:"
+echo "  http://<PUBLIC_IP>/healthz"

@@ -3746,6 +3746,11 @@ def _raw_bucket(d: dict) -> str:
     if leader and score >= 60:
         return "SECTOR_LEADER"
     if mom12 >= 50 and (per <= 0 or per >= 80):
+        # 추세 4축 컨펌 + 점수 견조하면 '꿈값 차트' 아니라 모멘텀 리더.
+        # 비트코인 마이너처럼 PER 음수/극값인 종목이 실제로는 강한 추세를
+        # 그리고 있을 때 cynical STORY_STOCK 톤이 안 맞는 문제 보정.
+        if entry in ("STRONG", "GREEN") and score >= 60:
+            return "MOMENTUM_LEADER"
         return "STORY_STOCK"
     # 성장이 멀티플을 정당화하면 버블이 아니다 → 버블 판정보다 먼저 본다
     if per >= 30 and eps_g >= 20 and mom12 >= 20:
@@ -3773,6 +3778,8 @@ def _raw_bucket(d: dict) -> str:
         return "EARNINGS_BEAT"
     # 극단 모멘텀 (12M 100%+) — 위 펀더 버킷에 안 걸린 경우
     if mom12 >= 100:
+        if entry in ("STRONG", "GREEN") and score >= 60:
+            return "MOMENTUM_LEADER"
         return "STORY_STOCK"
 
     # 추세성 — 위 모든 펀더 버킷 이후

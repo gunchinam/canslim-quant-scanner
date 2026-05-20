@@ -4710,10 +4710,21 @@ class QuantNexusApp:
             day_chg = safe_div(cur - prev, prev)
 
             # ── 유동성 체크 (Low Liquidity Gate) ───────────────────
+            # 임계치 상향(2026-05): "관심 없는 종목" 제외 — US $1M→$20M, KR 5억→100억.
+            # EXCLUDE 기준은 그 1/2 (US $10M, KR 50억) 이하 — 스캔에서 아예 제외.
             avg_vol_20 = float(hist["Volume"].tail(20).mean()) if len(hist) >= 20 else float(hist["Volume"].mean())
             avg_dollar_vol = avg_vol_20 * cur
             _is_kr = self._scan_market == "KR"
-            low_liquidity = avg_dollar_vol < (500_000_000 if _is_kr else 1_000_000)
+            _liq_cap_thr = 20_000_000_000 if _is_kr else 20_000_000
+            _liq_exclude_thr = 10_000_000_000 if _is_kr else 10_000_000
+            low_liquidity = avg_dollar_vol < _liq_cap_thr
+            if avg_dollar_vol < _liq_exclude_thr:
+                # 관심 없는 종목(거래대금 매우 낮음) — 스캔 결과에서 제외
+                logging.info(
+                    f"[LiqGate] {ticker} excluded: avg_dollar_vol={avg_dollar_vol:,.0f} "
+                    f"< thr={_liq_exclude_thr:,.0f}"
+                )
+                return None
 
             # ── KIS 실시간 현재가 보완 (KR 종목·KIS 설정 시) ──────
             if _is_kr and _KIS_OK and _kis_api is not None:

@@ -42,6 +42,7 @@ sca_debug.log
 # === 작업 파일 (개인 메모/캡처) ===
 _*.py
 _*.txt
+_*.json
 _*.png
 !__init__.py
 _pemco_caps/
@@ -61,6 +62,8 @@ scalping_backtest_trades.csv
 tools/
 vendor/
 .swing_scanner.pid
+data/
+*.parquet
 
 # === Claude/AI 도구 부속 ===
 .claude/

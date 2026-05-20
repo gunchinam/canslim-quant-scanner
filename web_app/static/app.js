@@ -68,6 +68,12 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
+// 서버 wrap_oneliner()가 넣은 \n을 <br>로. esc() 이후에만 치환하므로
+// HTML 주입 위험 없음.
+function olHtml(s) {
+  return esc(s).replace(/\r\n|\r|\n/g, '<br>');
+}
+
 function scoreClass(score) {
   if (score >= 70) return 'score-high';
   if (score >= 50) return 'score-mid';
@@ -116,6 +122,53 @@ const _ENTRY_COLOR = { STRONG: 'green', NEUTRAL: 'yellow', AVOID: 'red',
 const _ENTRY_ICON  = { STRONG: '🟢', NEUTRAL: '🟡', AVOID: '🔴',
                        GREEN: '🟢', YELLOW: '🟡', RED: '🔴' };
 
+// 종합점수(Y) × 진입 타이밍(X) 2축 사분면 배지
+function _renderQuadrant(d) {
+  const card = document.getElementById('dp-quadrant-card');
+  const host = document.getElementById('dp-quadrant');
+  if (!card || !host) return;
+  const ts = (d.TotalScore != null) ? Number(d.TotalScore) : null;
+  const es = (d.EntryScore != null) ? Number(d.EntryScore) : null;
+  if (ts == null || Number.isNaN(ts) || es == null || Number.isNaN(es)) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  const clamp = v => Math.max(0, Math.min(100, v));
+  const X = clamp(es), Y = clamp(ts);
+  const TX = 50, TY = 60;                       // 진입 STRONG≥50 · 종합 '좋은 회사' 60
+  const PW = 200, PH = 150, P = 8;
+  const plotW = PW - P * 2, plotH = PH - P * 2;
+  const px = P + (X / 100) * plotW;
+  const py = P + (1 - Y / 100) * plotH;          // y 반전: 위 = 높은 종합
+  const tx = P + (TX / 100) * plotW;
+  const ty = P + (1 - TY / 100) * plotH;
+  const goodCo = Y >= TY, goodTime = X >= TX;
+  let label, desc, col;
+  if (goodCo && goodTime)       { label = '좋은 회사 · 좋은 타이밍'; desc = '지금이 바로 그 자리';        col = '#16A34A'; }
+  else if (goodCo && !goodTime) { label = '좋은 회사 · 나쁜 타이밍'; desc = '좋은 종목, 진입은 눌림 대기'; col = '#D97706'; }
+  else if (!goodCo && goodTime) { label = '약한 회사 · 단타 구간';   desc = '타이밍만 좋음 — 짧게';        col = '#2563EB'; }
+  else                          { label = '약한 회사 · 나쁜 타이밍'; desc = '관심 보류 권장';             col = '#DC2626'; }
+  const op = (on) => on ? 0.16 : 0.05;
+  host.innerHTML = `
+  <svg viewBox="0 0 ${PW} ${PH}" style="width:100%;height:auto;display:block;">
+    <rect x="${tx}" y="${P}" width="${P + plotW - tx}" height="${ty - P}" fill="#16A34A" opacity="${op(goodCo && goodTime)}"/>
+    <rect x="${P}" y="${P}" width="${tx - P}" height="${ty - P}" fill="#D97706" opacity="${op(goodCo && !goodTime)}"/>
+    <rect x="${tx}" y="${ty}" width="${P + plotW - tx}" height="${P + plotH - ty}" fill="#2563EB" opacity="${op(!goodCo && goodTime)}"/>
+    <rect x="${P}" y="${ty}" width="${tx - P}" height="${P + plotH - ty}" fill="#DC2626" opacity="${op(!goodCo && !goodTime)}"/>
+    <line x1="${tx}" y1="${P}" x2="${tx}" y2="${P + plotH}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"/>
+    <line x1="${P}" y1="${ty}" x2="${P + plotW}" y2="${ty}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"/>
+    <rect x="${P}" y="${P}" width="${plotW}" height="${plotH}" fill="none" stroke="var(--border)" stroke-width="1"/>
+    <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="6" fill="${col}" stroke="#fff" stroke-width="2"/>
+  </svg>
+  <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-tertiary);margin-top:2px;">
+    <span>← 진입 타이밍 나쁨</span><span>좋음 →</span>
+  </div>
+  <div style="margin-top:8px;font-size:13px;font-weight:700;color:${col};">${esc(label)}</div>
+  <div style="font-size:11px;color:var(--text-secondary);margin-top:1px;">${esc(desc)} · 종합 ${Math.round(Y)} / 진입 ${Math.round(X)}</div>
+  `;
+}
+
 function _renderEntryCard(d) {
   const card = document.getElementById('dp-entry-card');
   if (!card) return;
@@ -127,7 +180,17 @@ function _renderEntryCard(d) {
   const phrase = d.EntryPhrase || '—';
   const plan = d.EntryPlan || {};
   setText('dp-entry-icon', ico);
-  setText('dp-entry-phrase', phrase);
+  // 액션(헤드라인) ↔ 근거(보조) 분리.
+  // 우선 백엔드 파생필드(headline_action/one_reason)를 그대로 표시.
+  // 구버전 캐시 스캔(파생필드 없음)만 "관망 · BB 과확장 · …" 문자열을 분해.
+  const _pp = phrase.split(' · ');
+  const _headline = plan.headline_action || _pp[0] || phrase;
+  const _reason = plan.one_reason || _pp.slice(1).filter(Boolean).slice(0, 2).join(' · ');
+  setText('dp-entry-phrase', _headline);
+  const _subEl = document.getElementById('dp-entry-subreason');
+  if (_subEl) _subEl.textContent = _reason;
+  const _phEl = document.getElementById('dp-entry-phrase');
+  if (_phEl) _phEl.style.color = cls === 'green' ? 'var(--success)' : cls === 'red' ? 'var(--destructive)' : cls === 'yellow' ? 'var(--brand)' : 'var(--text-primary)';
   setText('dp-entry-score', score != null ? String(score) : '—');
   const fill = document.getElementById('dp-entry-bar-fill');
   if (fill) fill.style.width = (score != null ? Math.max(0, Math.min(100, score)) : 0) + '%';
@@ -174,6 +237,45 @@ function _renderEntryCard(d) {
       smEl.innerHTML = methodKo + (wrText ? `<span style="color:${wr >= 60 ? 'var(--success)' : wr >= 40 ? 'var(--brand)' : 'var(--destructive)'};font-weight:700;">${wrText}</span>` : '');
     } else {
       smEl.textContent = '—';
+    }
+  }
+  // 신뢰도 밴드 — 승률 + R:R 괴리를 1개 배지로 추상화 (탭하면 원수치)
+  const confEl  = document.getElementById('dp-entry-confidence');
+  const confRaw = document.getElementById('dp-entry-conf-raw');
+  if (confEl) {
+    const wr    = (plan.win_rate != null && plan.win_rate > 0) ? plan.win_rate : null;
+    const rr    = (plan.rr     != null && Number.isFinite(plan.rr)     && plan.rr > 0)     ? plan.rr     : null;
+    const rrNow = (plan.rr_now != null && Number.isFinite(plan.rr_now) && plan.rr_now > 0) ? plan.rr_now : null;
+    let band = null;  // 'hi' | 'mid' | 'lo'
+    // 우선 백엔드 파생필드 confidence_band ("낮음"/"보통"/"높음")를 신뢰.
+    const _cb = { '낮음': 'lo', '보통': 'mid', '높음': 'hi' }[plan.confidence_band];
+    if (_cb) {
+      band = _cb;
+    } else if (plan.confidence_band == null && (wr != null || rr != null)) {
+      // 구버전 캐시 스캔(파생필드 없음)만 클라이언트에서 재계산
+      const lowWr = wr != null && wr < 40;
+      const lowRr = (rrNow != null && rrNow < 1.5) || (rr != null && rr < 1.5);
+      const hiWr  = wr != null && wr >= 55;
+      const hiRr  = rr != null && rr >= 2.5 && (rrNow == null || rrNow >= 2.0);
+      if (lowWr || lowRr)      band = 'lo';
+      else if (hiWr && hiRr)   band = 'hi';
+      else                     band = 'mid';
+    }
+    if (band) {
+      confEl.textContent = { hi: '신뢰도 높음', mid: '신뢰도 보통', lo: '신뢰도 낮음' }[band];
+      confEl.className = 'ev-conf ' + band;
+      confEl.style.display = '';
+      const parts = [];
+      if (wr != null) parts.push(`승률 ${Math.min(100, Math.max(0, wr)).toFixed(0)}%`);
+      if (rr != null) parts.push(`손익비 ${rr.toFixed(1)}:1${(rrNow != null && Math.abs(rrNow - rr) > 0.05) ? ` (현재 ${rrNow.toFixed(1)})` : ''}`);
+      if (confRaw) {
+        confRaw.textContent = parts.length ? parts.join('   ·   ') : '원수치 없음';
+        confRaw.style.display = 'none';
+      }
+      confEl.onclick = () => { if (confRaw) confRaw.style.display = (confRaw.style.display === 'none' ? '' : 'none'); };
+    } else {
+      confEl.style.display = 'none';
+      if (confRaw) confRaw.style.display = 'none';
     }
   }
   // 점수 분해 바 차트
@@ -226,6 +328,34 @@ function _renderEntryCard(d) {
       aqRow.style.display = 'none';
     }
   }
+  // 밀도 모드 적용 (기본 compact: 더보기존 접힘, 사용자 선택 localStorage 유지)
+  _applyEntryDensity();
+}
+
+// 진입 카드 밀도 모드 — compact(요약 3존) | full(전체).
+// 기본 compact: 다수 사용자는 진입·손절·목표가1 + 결론이면 결정 가능.
+// 고급 사용자가 펼치면 그 선택을 기억(= 향후 A/B 기준값).
+function _entryDensityMode() {
+  try { return localStorage.getItem('entryCardDensity') === 'full' ? 'full' : 'compact'; }
+  catch (e) { return 'compact'; }
+}
+function _applyEntryDensity() {
+  const det = document.getElementById('dp-entry-detail');
+  if (!det) return;
+  const full = _entryDensityMode() === 'full';
+  det.classList.toggle('open', full);
+  const tog = document.getElementById('dp-entry-density-toggle');
+  if (tog) {
+    const ar = tog.querySelector('.arrow');
+    const lb = tog.querySelector('.dt-label');
+    if (ar) ar.textContent = full ? '▲' : '▼';
+    if (lb) lb.textContent = full ? '간단히 보기' : '상세 분석';
+  }
+}
+function _toggleEntryDensity() {
+  const next = _entryDensityMode() === 'full' ? 'compact' : 'full';
+  try { localStorage.setItem('entryCardDensity', next); } catch (e) {}
+  _applyEntryDensity();
 }
 
 function _entryLight(stock) {
@@ -427,6 +557,15 @@ function selectHeatmapSector(sector) {
   _selectSectorByName(sector);
 }
 
+function toggleHeatmap() {
+  const wrap = document.getElementById('sector-heatmap-wrap');
+  const chevron = document.getElementById('heatmap-chevron');
+  if (!wrap) return;
+  const opening = !wrap.classList.contains('open');
+  wrap.classList.toggle('open', opening);
+  if (chevron) chevron.style.transform = opening ? 'rotate(180deg)' : '';
+}
+
 function toggleGroup(headerBtn) {
   const body    = headerBtn.nextElementSibling;
   const chevron = headerBtn.querySelector('.sector-group-chevron');
@@ -462,7 +601,18 @@ async function runScan() {
     if (currentSector) p.set('sector', currentSector);
 
     const res    = await fetch(`/api/scan?${p}`);
-    const stocks = await res.json();
+    let payload;
+    try {
+      payload = await res.json();
+    } catch (_parseErr) {
+      const raw = await res.text().catch(() => '');
+      throw new Error(raw || `HTTP ${res.status}`);
+    }
+    if (!res.ok) {
+      const msg = payload && typeof payload === 'object' ? payload.error : '';
+      throw new Error(msg || `HTTP ${res.status}`);
+    }
+    const stocks = payload;
     allStocks    = Array.isArray(stocks) ? stocks : [];
     const visibleTickers = new Set(allStocks.map(s => s.Ticker));
     _compareSet = new Set([..._compareSet].filter(ticker => visibleTickers.has(ticker)));
@@ -888,7 +1038,7 @@ function populateDetail(d) {
   const ol = document.getElementById('detail-oneliner');
   if (ol) {
     if (d.OneLiner) {
-      ol.innerHTML = esc(d.OneLiner) + (d.OneLinerData ? `<span class="oneliner-data">${esc(d.OneLinerData)}</span>` : '');
+      ol.innerHTML = olHtml(d.OneLiner) + (d.OneLinerData ? `<span class="oneliner-data">${esc(d.OneLinerData)}</span>` : '');
       ol.setAttribute('data-tag', d.OneLinerTag || '');
       ol.style.display = '';
     } else {
@@ -1292,6 +1442,13 @@ async function openDetail(ticker) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    // 한줄평은 시드(score/RSI 양자화 + 시간 회전)에 따라 매번 달라질 수 있다.
+    // 스캐너에서 본 한줄평이 패널 열 때 잠깐 보였다가 API 응답 도착 시 다른 문구로
+    // 바뀌는 깜빡임을 막기 위해, 같은 버킷이면 스캐너 한줄평을 그대로 유지한다.
+    if (cached && cached.OneLinerTag && cached.OneLinerTag === data.OneLinerTag) {
+      if (cached.OneLiner) data.OneLiner = cached.OneLiner;
+      if (cached.OneLinerData != null) data.OneLinerData = cached.OneLinerData;
+    }
     _populatePanelDetail(data, /* skipFourAxis */ true);
   } catch (e) {
     if (seq !== _detailSeq) return;
@@ -1466,6 +1623,9 @@ function _populatePanelDetail(d, skipFourAxis) {
   // 진입 타이밍 카드
   _renderEntryCard(d);
 
+  // 종합×진입 2축 사분면 배지
+  _renderQuadrant(d);
+
   // 기술·재무 탭
   _renderTechTab(d);
   _renderFinanceTab(d);
@@ -1492,7 +1652,7 @@ function _populatePanelDetail(d, skipFourAxis) {
   const haikuEl = document.getElementById('dp-fa-haiku');
   if (haikuEl) {
     if (d.OneLiner) {
-      haikuEl.innerHTML = esc(d.OneLiner) + (d.OneLinerData ? `<span class="oneliner-data">${esc(d.OneLinerData)}</span>` : '');
+      haikuEl.innerHTML = olHtml(d.OneLiner) + (d.OneLinerData ? `<span class="oneliner-data">${esc(d.OneLinerData)}</span>` : '');
       haikuEl.setAttribute('data-tag', d.OneLinerTag || '');
       haikuEl.style.display = '';
     } else {
@@ -2689,8 +2849,84 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-scan')?.addEventListener('click', runScan);
     loadSectors();
     runScan();
+    loadMacro();
+    setInterval(loadMacro, 15 * 60 * 1000);
   }
 });
+
+// ── 매크로 신호등 띠 ────────────────────────────────────────────────────────
+
+const _MACRO_DEFS = [
+  { key: 'vix',     label: 'VIX',      fixed: 2, invert: true  },
+  { key: 'usdkrw',  label: '원/달러',  fixed: 1, invert: true  },
+  { key: 'kospi',   label: 'KOSPI',    fixed: 2, invert: false },
+  { key: 'sp500',   label: 'S&P500',   fixed: 2, invert: false },
+  { key: 'kr_rate', label: '기준금리', fixed: 2, invert: false, suffix: '%' },
+];
+
+async function loadMacro() {
+  const strip = document.getElementById('macro-strip');
+  if (!strip) return;  // 스캐너 페이지에만 존재
+  try {
+    const res = await fetch('/api/macro');
+    const d = await res.json();
+    renderMacro(d);
+  } catch (e) {
+    console.warn('loadMacro failed', e);
+  }
+}
+
+function renderMacro(d) {
+  const sigEl = document.getElementById('macro-signal');
+  const itemsEl = document.getElementById('macro-items');
+  const metaEl = document.getElementById('macro-meta');
+  if (!sigEl || !itemsEl || !metaEl) return;
+
+  const sig = d.signal || { level: 'unknown', emoji: '⚪', label: '정보없음' };
+  sigEl.className = 'macro-signal ' + (sig.level || 'unknown');
+  sigEl.innerHTML = `${sig.emoji || '⚪'} <span>${esc(sig.label || '')}</span>`;
+
+  const ind = d.indicators || {};
+  const parts = [];
+  _MACRO_DEFS.forEach((def, i) => {
+    const cell = ind[def.key];
+    if (i > 0) parts.push('<span class="macro-sep"></span>');
+    if (!cell || cell.value == null) {
+      parts.push(
+        `<span class="macro-item"><span class="mi-label">${esc(def.label)}</span>` +
+        `<span class="mi-val">—</span></span>`
+      );
+      return;
+    }
+    const val = Number(cell.value).toLocaleString('ko-KR', {
+      minimumFractionDigits: def.fixed, maximumFractionDigits: def.fixed,
+    }) + (def.suffix || '');
+    let chgHtml = '';
+    if (cell.change_pct != null) {
+      const c = Number(cell.change_pct);
+      const dir = c > 0.005 ? 'up' : (c < -0.005 ? 'down' : 'flat');
+      const arrow = dir === 'up' ? '▲' : (dir === 'down' ? '▼' : '­');
+      chgHtml = `<span class="mi-chg ${dir}">${arrow}${Math.abs(c).toFixed(2)}%</span>`;
+    }
+    parts.push(
+      `<span class="macro-item"><span class="mi-label">${esc(def.label)}</span>` +
+      `<span class="mi-val">${esc(val)}</span>${chgHtml}</span>`
+    );
+  });
+  itemsEl.innerHTML = parts.join('');
+
+  let meta = '';
+  if (d.ts) {
+    const t = new Date(d.ts);
+    if (!isNaN(t)) {
+      const mins = Math.max(0, Math.round((Date.now() - t.getTime()) / 60000));
+      meta = mins <= 0 ? '방금 갱신' : `${mins}분 전 갱신`;
+    }
+  }
+  metaEl.innerHTML =
+    (d.stale ? '<span class="macro-stale-badge">⚠ 이전 값</span>' : '') +
+    (meta ? `<span>${esc(meta)}</span>` : '');
+}
 
 // ── 공유 카드 ──────────────────────────────────────────────────────────────
 
@@ -2766,7 +3002,7 @@ async function loadComparePage(tickers) {
             ${_compareMetricRow('ROE', roe)}
             ${_compareMetricRow('EntryStatus', entry)}
           </div>
-          <div class="compare-oneliner">${esc(detail.OneLiner || '요약 코멘트 없음')}${detail.OneLinerData ? `<span class="oneliner-data">${esc(detail.OneLinerData)}</span>` : ''}</div>
+          <div class="compare-oneliner">${olHtml(detail.OneLiner || '요약 코멘트 없음')}${detail.OneLinerData ? `<span class="oneliner-data">${esc(detail.OneLinerData)}</span>` : ''}</div>
         </div>
       `;
     } catch (err) {

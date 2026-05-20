@@ -805,8 +805,10 @@ html, body {
   border-radius: 14px;
   box-shadow: 6px 6px 0 #1a1a1a;
   overflow: hidden;
+  /* 줄바꿈은 서버 wrap_oneliner()가 구문 경계에서 결정(<br>). text-wrap:
+     balance는 한국어 어절 구조를 무시하고 어색하게 끊어 제거. keep-all은
+     좁은 화면에서 한 줄이 또 넘칠 때의 폴백으로 유지. */
   word-break: keep-all;
-  text-wrap: balance;
 }
 .hero-oneliner::before,
 .hero-oneliner::after {
@@ -1068,15 +1070,8 @@ html, body {
         </div>
         <div style="margin-top:8px; display:flex; flex-direction:column; gap:8px; font-size:12px; color:var(--text-secondary);">
           <div>현재가 <strong id="detail-price">—</strong> <span id="detail-day-chg" style="font-size:11px;font-weight:700;margin-left:4px;"></span></div>
-          <div id="detail-main-box" style="padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:color-mix(in srgb, var(--brand) 6%, var(--card));">
-            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-              <span style="font-size:11px; font-weight:800; color:var(--brand);">메인 목표가</span>
-              <span style="font-size:10px; color:var(--text-tertiary);">현재 점수 계산 기준</span>
-            </div>
-            <div>섹터 밸류에이션 <span style="font-size:10px;color:var(--text-tertiary);">(섹터별 라우팅: PB / PE / SOTP / DCF)</span> <strong id="detail-nomura-target">—</strong> <span id="detail-nomura-upside" style="font-size:11px;font-weight:700;margin-left:2px;"></span> <span id="detail-nomura-method" style="font-size:10px;color:var(--text-tertiary);margin-left:4px;"></span></div>
-          </div>
-          <div id="detail-aux-box" style="padding:10px 12px; border:1px dashed var(--border); border-radius:12px; background:var(--bg-tertiary);">
-            <div id="detail-aux-label" style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">보조 검증값</div>
+          <div id="detail-aux-box" style="padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--bg-tertiary);">
+            <div id="detail-aux-label" style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">목표가</div>
             <div id="detail-dcf-line">DCF 적정가 <strong id="detail-target">—</strong> <span id="detail-dcf-upside" style="font-size:11px;font-weight:700;margin-left:2px;"></span> <span id="detail-target-src" style="font-size:10px;color:var(--text-tertiary);margin-left:4px;"></span></div>
             <div id="detail-broker-line" style="margin-top:4px;">
               <div style="display:flex; align-items:baseline; gap:6px; flex-wrap:wrap;">
@@ -1121,22 +1116,41 @@ html, body {
           .entry-card.green  { border-left-color:#16A34A; }
           .entry-card.yellow { border-left-color:#F59E0B; }
           .entry-card.red    { border-left-color:#DC2626; }
-          /* 상단: 판단 요약 */
-          .entry-verdict { padding:14px 16px 10px; }
-          .entry-bar { position:relative; height:8px; background:var(--bg-tertiary); border-radius:6px; overflow:hidden; margin-top:6px; }
+          /* ① 결론존 */
+          .entry-verdict { padding:14px 16px 12px; }
+          .ev-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+          .ev-left { display:flex; align-items:flex-start; gap:10px; min-width:0; }
+          .ev-left > .ev-ico { font-size:24px; line-height:1.1; flex-shrink:0; }
+          .ev-eyebrow { font-size:11px; color:var(--text-tertiary); font-weight:600; }
+          /* word-break:keep-all → 한국어 단어 중간 줄바꿈 방지 */
+          .ev-headline { font-size:20px; font-weight:800; color:var(--text-primary); line-height:1.2; margin-top:2px; word-break:keep-all; }
+          .ev-sub-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:3px; }
+          .ev-subreason { font-size:11px; color:var(--text-tertiary); font-weight:500; }
+          .ev-conf { font-size:10px; font-weight:700; padding:1px 7px; border-radius:100px; cursor:pointer; white-space:nowrap; }
+          .ev-conf.lo  { color:#DC2626; background:#DC262618; }
+          .ev-conf.mid { color:#F59E0B; background:#F59E0B18; }
+          .ev-conf.hi  { color:#16A34A; background:#16A34A18; }
+          .ev-conf-raw { font-size:11px; color:var(--text-secondary); margin-top:8px; padding:6px 10px; background:var(--bg-tertiary); border-radius:6px; }
+          .ev-score { text-align:right; flex-shrink:0; }
+          .ev-score .ev-score-num { font-size:28px; font-weight:800; color:var(--text-primary); line-height:1; }
+          .ev-score-max { font-size:12px; color:var(--text-tertiary); font-weight:500; }
+          .entry-bar { position:relative; height:8px; background:var(--bg-tertiary); border-radius:6px; overflow:hidden; margin-top:8px; }
           .entry-bar-fill { position:absolute; left:0; top:0; height:100%; background:linear-gradient(90deg,#DC2626 0%,#F59E0B 50%,#16A34A 100%); border-radius:6px; transition:width .3s; }
-          /* 중단: 가격 플랜 */
-          .entry-prices { padding:10px 16px; border-top:1px solid var(--border); background:var(--bg-tertiary); }
-          .entry-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; font-size:13px; }
-          .entry-grid .lbl { color:var(--text-tertiary); font-size:12px; margin-bottom:2px; display:block; }
-          .entry-grid .val { font-weight:700; color:var(--text-primary); font-size:14px; }
-          .entry-meta-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:6px 16px; margin-top:10px; font-size:12px; }
+          /* ② 행동존 — 진입가 강조 / 손절·목표가1 보조 */
+          .entry-prices { padding:12px 16px; border-top:1px solid var(--border); background:var(--bg-tertiary); }
+          .act-grid { display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:12px; align-items:end; }
+          .act-grid .lbl { display:block; color:var(--text-tertiary); font-size:11px; margin-bottom:3px; }
+          .act-primary .val-big { font-size:22px; font-weight:800; color:var(--text-primary); }
+          .act-primary .disc { font-size:12px; color:var(--brand); font-weight:700; margin-left:3px; white-space:nowrap; }
+          .act-sec .val { font-size:15px; font-weight:700; }
+          /* ③ 더보기존 (토글) */
+          .entry-detail { padding:0 16px; max-height:0; overflow:hidden; transition:max-height .3s ease, padding .3s ease; }
+          .entry-detail.open { max-height:800px; padding:12px 16px; border-top:1px solid var(--border); }
+          .entry-meta-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px 16px; font-size:12px; margin-bottom:12px; }
           .entry-meta-grid .meta-lbl { color:var(--text-tertiary); font-size:11px; }
           .entry-meta-grid .meta-val { font-weight:600; color:var(--text-secondary); }
-          /* 하단: 상세 (토글) */
-          .entry-detail { padding:0 16px; max-height:0; overflow:hidden; transition:max-height .3s ease, padding .3s ease; }
-          .entry-detail.open { max-height:500px; padding:10px 16px; border-top:1px solid var(--border); }
-          .entry-detail-toggle { display:flex; align-items:center; justify-content:center; padding:6px; font-size:11px; color:var(--text-tertiary); cursor:pointer; border-top:1px solid var(--border); user-select:none; gap:4px; }
+          .ed-sec-title { font-size:11px; color:var(--text-tertiary); font-weight:600; margin-bottom:6px; }
+          .entry-detail-toggle { display:flex; align-items:center; justify-content:center; padding:7px; font-size:11px; color:var(--text-tertiary); cursor:pointer; border-top:1px solid var(--border); user-select:none; gap:4px; }
           .entry-detail-toggle:hover { background:var(--bg-tertiary); }
           /* 점수 분해 바 */
           .bd-row { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-size:11px; }
@@ -1148,59 +1162,56 @@ html, body {
           .bd-pts { width:36px; font-weight:700; font-size:11px; }
         </style>
 
-        <!-- ① 판단 요약 -->
+        <!-- ① 결론존 — 액션 + 점수 + 신뢰도 -->
         <div class="entry-verdict">
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span id="dp-entry-icon" style="font-size:24px;">⚪</span>
-              <div>
-                <div style="font-size:11px; color:var(--text-tertiary); font-weight:600;">📈 진입 타이밍</div>
-                <div id="dp-entry-phrase" style="font-size:15px; font-weight:700; color:var(--text-primary); margin-top:1px;">—</div>
+          <div class="ev-top">
+            <div class="ev-left">
+              <span id="dp-entry-icon" class="ev-ico">⚪</span>
+              <div style="min-width:0;">
+                <div class="ev-eyebrow">📈 진입 타이밍</div>
+                <div id="dp-entry-phrase" class="ev-headline">—</div>
+                <div class="ev-sub-row">
+                  <span id="dp-entry-subreason" class="ev-subreason"></span>
+                  <span id="dp-entry-confidence" class="ev-conf" style="display:none;"></span>
+                </div>
               </div>
             </div>
-            <div style="text-align:right;">
-              <span id="dp-entry-score" style="font-size:28px; font-weight:800; color:var(--text-primary); line-height:1;">—</span>
-              <span style="font-size:12px; color:var(--text-tertiary); font-weight:500;">/ 100</span>
+            <div class="ev-score">
+              <span id="dp-entry-score" class="ev-score-num">—</span><span class="ev-score-max">/ 100</span>
             </div>
           </div>
           <div class="entry-bar"><div id="dp-entry-bar-fill" class="entry-bar-fill" style="width:0%;"></div></div>
-          <!-- 핵심 태그 -->
-          <div id="dp-entry-tags" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:8px;"></div>
+          <div id="dp-entry-conf-raw" class="ev-conf-raw" style="display:none;"></div>
         </div>
 
-        <!-- ② 가격 플랜 -->
+        <!-- ② 행동존 — 진입가 / 손절 / 목표가1 -->
         <div class="entry-prices">
-          <div class="entry-grid">
-            <div>
+          <div class="act-grid">
+            <div class="act-primary">
               <span class="lbl">진입가 (풀백)</span>
-              <span class="val" id="dp-entry-px-entry">—</span>
-              <span id="dp-entry-discount" style="font-size:11px; color:var(--brand); font-weight:700; margin-left:2px;"></span>
+              <span class="val-big" id="dp-entry-px-entry">—</span><span id="dp-entry-discount" class="disc"></span>
             </div>
-            <div>
+            <div class="act-sec">
               <span class="lbl">손절</span>
               <span class="val" id="dp-entry-px-stop" style="color:var(--destructive);">—</span>
             </div>
-            <div>
+            <div class="act-sec">
               <span class="lbl">목표가1 <span style="font-size:10px;color:var(--text-tertiary);">(T1)</span></span>
               <span class="val" id="dp-entry-px-t1" style="color:var(--success);">—</span>
             </div>
-            <div>
-              <span class="lbl">목표가2 <span style="font-size:10px;color:var(--text-tertiary);">(T2)</span></span>
-              <span class="val" id="dp-entry-px-t2" style="color:var(--success);">—</span>
-            </div>
           </div>
+        </div>
+
+        <!-- ③ 더보기존 (토글) -->
+        <div id="dp-entry-detail" class="entry-detail">
           <div class="entry-meta-grid">
+            <div><span class="meta-lbl">목표가2 (T2)</span> <span class="meta-val" id="dp-entry-px-t2" style="color:var(--success);">—</span></div>
             <div><span class="meta-lbl">유형</span> <span class="meta-val" id="dp-entry-type">—</span></div>
             <div><span class="meta-lbl">손익비</span> <span class="meta-val" id="dp-entry-rr" style="font-weight:700;">—</span></div>
             <div><span class="meta-lbl">손절기준</span> <span class="meta-val" id="dp-entry-stop-method">—</span></div>
             <div><span class="meta-lbl">현재가</span> <span class="meta-val" id="dp-entry-current" style="color:var(--text-tertiary);">—</span></div>
           </div>
-        </div>
-
-        <!-- ③ 상세 (토글) -->
-        <div id="dp-entry-detail" class="entry-detail">
-          <!-- 점수 분해 -->
-          <div style="font-size:11px; color:var(--text-tertiary); font-weight:600; margin-bottom:6px;">점수 구성 (base 40)</div>
+          <div class="ed-sec-title">점수 구성 (base 40)</div>
           <div id="dp-entry-breakdown"></div>
           <!-- AgentQuant -->
           <div id="dp-aq-row" style="display:none; margin-top:10px; padding-top:8px; border-top:1px dashed var(--border); font-size:11px; color:var(--text-secondary);">
@@ -1213,8 +1224,8 @@ html, body {
             <div id="dp-aq-reasons" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; font-size:10px;"></div>
           </div>
         </div>
-        <div class="entry-detail-toggle" onclick="document.getElementById('dp-entry-detail').classList.toggle('open'); this.querySelector('.arrow').textContent = document.getElementById('dp-entry-detail').classList.contains('open') ? '▲' : '▼';">
-          <span class="arrow">▼</span> 상세 분석
+        <div class="entry-detail-toggle" id="dp-entry-density-toggle" onclick="_toggleEntryDensity()">
+          <span class="arrow">▼</span> <span class="dt-label">상세 분석</span>
         </div>
       </div>
     </div>

@@ -56,9 +56,6 @@ if "%NEED_INSTALL%"=="1" (
     )
 )
 
-echo [run_quant_nexus] Launching SWING-MOM scan alert (background) ...
-start /b %PYEXE% "%PROJ_DIR%swing_scan\scripts\swing_mom_scan_alert.py"
-
 echo [run_quant_nexus] Launching Flask web app (http://localhost:5000) ...
 start /b cmd /c "timeout /t 2 >nul && start http://localhost:5000"
 %PYEXE% "%PROJ_DIR%web_app\app.py" %*

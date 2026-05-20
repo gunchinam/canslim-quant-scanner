@@ -23,9 +23,67 @@ html, body {
 /* ── App Shell ─────────────────────────────────────────────── */
 .app-shell {
   display: grid;
-  grid-template-rows: 60px auto 1fr;
+  grid-template-rows: 60px auto auto 1fr;
   height: 100vh;
   overflow: hidden;
+}
+
+/* ── Macro Strip (신호등 띠) ───────────────────────────────── */
+.macro-strip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 24px;
+  height: 38px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  z-index: 90;
+}
+.macro-strip::-webkit-scrollbar { display: none; }
+.macro-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  padding: 3px 12px;
+  border-radius: 999px;
+  letter-spacing: -0.3px;
+}
+.macro-signal.stable  { background: rgba(0,192,115,0.12);  color: #00A862; }
+.macro-signal.caution { background: rgba(255,176,32,0.15);  color: #C77700; }
+.macro-signal.danger  { background: rgba(245,63,63,0.13);   color: #E03131; }
+.macro-signal.unknown { background: var(--surface-page);    color: var(--text-tertiary); }
+.macro-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--text-secondary);
+}
+.macro-item .mi-label { font-weight: 600; color: var(--text-tertiary); }
+.macro-item .mi-val   { font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.macro-item .mi-chg   { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.macro-item .mi-chg.up   { color: #E03131; }
+.macro-item .mi-chg.down { color: #1971C2; }
+.macro-item .mi-chg.flat { color: var(--text-tertiary); }
+.macro-sep { width: 1px; height: 16px; background: var(--border); flex: none; }
+.macro-meta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.macro-stale-badge {
+  background: rgba(255,176,32,0.18);
+  color: #C77700;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 1px 7px;
 }
 
 /* ── TopBar ────────────────────────────────────────────────── */
@@ -271,6 +329,13 @@ html, body {
 }
 
 .sector-heatmap-wrap {
+  padding: 0 12px 12px;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, padding 0.15s ease;
+}
+.sector-heatmap-wrap.open {
+  max-height: 800px;
   padding: 0 12px 12px;
 }
 
@@ -908,11 +973,15 @@ td.score-col {
 .entry-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; font-size:13px; }
 .entry-grid .lbl { color:var(--text-tertiary); font-size:12px; margin-bottom:2px; display:block; }
 .entry-grid .val { font-weight:700; color:var(--text-primary); font-size:14px; }
+/* 3존 스파이크: 행동존 = 진입/손절/목표가1 3숫자, 진입가 시각 강조 */
+.entry-grid-3 { grid-template-columns:1.4fr 1fr 1fr; align-items:end; }
+.entry-grid-3 .eg-primary .lbl { color:var(--brand); font-weight:700; }
+.entry-grid-3 .eg-primary .val { font-size:20px; }
 .entry-meta-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:6px 16px; margin-top:10px; font-size:12px; }
 .entry-meta-grid .meta-lbl { color:var(--text-tertiary); font-size:11px; }
 .entry-meta-grid .meta-val { font-weight:600; color:var(--text-secondary); }
 .entry-detail { padding:0 16px; max-height:0; overflow:hidden; transition:max-height .3s ease, padding .3s ease; }
-.entry-detail.open { max-height:500px; padding:10px 16px; border-top:1px solid var(--border); }
+.entry-detail.open { max-height:900px; padding:10px 16px; border-top:1px solid var(--border); }
 .entry-detail-toggle { display:flex; align-items:center; justify-content:center; padding:6px; font-size:11px; color:var(--text-tertiary); cursor:pointer; border-top:1px solid var(--border); user-select:none; gap:4px; }
 .entry-detail-toggle:hover { background:var(--bg-tertiary,var(--surface-muted)); }
 .bd-row { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-size:11px; }
@@ -1461,6 +1530,13 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
     <span class="topbar-date" id="topbar-date"></span>
   </header>
 
+  <!-- Macro Strip (신호등 띠) -->
+  <div class="macro-strip" id="macro-strip">
+    <span class="macro-signal unknown" id="macro-signal">⚪ <span>로딩…</span></span>
+    <div id="macro-items" style="display:flex;align-items:center;gap:14px;"></div>
+    <span class="macro-meta" id="macro-meta"></span>
+  </div>
+
   <!-- Stats Bar -->
   <div class="stats-bar">
     <div class="stat-item">
@@ -1492,8 +1568,15 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   <div class="content">
     <!-- Sidebar: Sector List -->
     <aside class="sidebar">
-      <div class="sidebar-title">섹터</div>
-      <div class="sector-heatmap-wrap">
+      <div class="sidebar-title" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleHeatmap()">
+        섹터 히트맵
+        <svg id="heatmap-chevron" width="12" height="12" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+             style="transition:transform 0.3s;">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </div>
+      <div class="sector-heatmap-wrap" id="sector-heatmap-wrap">
         <div id="sector-heatmap" class="sector-heatmap-grid">
           <div class="sector-heatmap-empty">스캔 완료 후 섹터 히트맵을 표시합니다.</div>
         </div>
@@ -1520,13 +1603,12 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
               <th class="right sortable" data-sort="Price">현재가 <span class="sort-arrow"></span></th>
               <th class="right sortable" data-sort="DayChg">등락 <span class="sort-arrow"></span></th>
               <th class="right sortable" data-sort="RSI">RSI <span class="sort-arrow"></span></th>
-              <th class="right sortable" data-sort="TargetUpside" title="현재 점수 계산에 사용되는 메인 목표가 대비 상승여력 — 기본은 섹터 밸류에이션, 없으면 DCF 폴백">메인 목표가↑ <span class="sort-arrow"></span></th>
               <th class="right sortable" data-sort="BrokerTarget" title="증권사 컨센서스 목표가 — KR: 네이버 증권 국내 증권사 평균 / US: Yahoo Finance Analyst Mean Target">증권사 목표가 <span class="sort-arrow"></span></th>
               <th class="reason-col">핵심 이유</th>
             </tr>
           </thead>
           <tbody id="stock-list">
-            <tr><td colspan="14" class="state-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</td></tr>
+            <tr><td colspan="13" class="state-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</td></tr>
           </tbody>
         </table>
       </div>
@@ -1572,14 +1654,14 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
       <div id="dp-fouraxis-loading" style="text-align:center;padding:40px;color:var(--text-tertiary);display:none;">차트 생성 중...</div>
       <div id="dp-fouraxis-error"   style="text-align:center;padding:24px;color:var(--destructive);display:none;"></div>
       <div id="dp-fouraxis-header" style="display:none;padding:14px 20px 8px;">
-        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px;font-weight:600;">📈 지금 사기 좋은 타이밍인가? <span style="font-weight:400;color:var(--text-tertiary);">— 차트의 4가지 신호만 평가</span></div>
+        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px;font-weight:600;">📈 지금 사기 좋은 타이밍인가? <span style="font-weight:400;color:var(--text-tertiary);">— 별점 = 아래 ‘진입 타이밍’ 점수를 별로 표시한 것 (같은 값)</span></div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
           <span id="dp-fa-phase" style="font-size:15px;font-weight:700;color:var(--text-primary);"></span>
           <span id="dp-fa-stars" style="font-size:16px;color:var(--warning);"></span>
           <span id="dp-fa-stars-meaning" style="font-size:12px;color:var(--text-secondary);font-weight:600;"></span>
         </div>
         <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:8px;line-height:1.5;background:var(--bg-tertiary);padding:6px 10px;border-radius:6px;">
-          💡 별점은 <b>지금 진입해도 될지</b>만 봅니다. 회사의 펀더멘털이나 가치는 아래의 <b>종합점수</b>가 따로 평가해요. 그래서 ★5인데 종합점수가 낮을 수도 있어요(차트는 좋지만 회사는 비싸거나 약함).
+          💡 <b>별점 = 진입 타이밍</b>이에요. 아래 ‘📈 진입 타이밍’ 카드의 점수를 별 1~5개로 바꾼 것뿐이라 <b>같은 값</b>입니다. <b>이 회사가 좋은 회사인지</b>는 옆의 <b>종합점수</b>가 따로 봐요. 그래서 “★는 낮은데 종합점수는 높음” = 좋은 회사지만 지금은 들어갈 때가 아님, 일 수 있어요. 아래 추세·모멘텀·변동성·수급(/5)은 차트 상태를 보는 참고 신호예요.
         </div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
           <div class="dp-axis-item"><div class="dp-axis-label">추세<div style="font-size:9px;font-weight:500;color:var(--text-tertiary);margin-top:1px;">(이동평균 기울기·정렬)</div></div><div class="dp-axis-val"><span id="dp-fa-trend-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-trend-verdict"></div></div>
@@ -1617,6 +1699,13 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           </svg>
         </div>
 
+        <!-- 종합×진입 2축 사분면 배지 -->
+        <div id="dp-quadrant-card" class="dp-metrics-card" style="display:none; padding:14px 16px;">
+          <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;margin-bottom:1px;">🧭 회사 가치 × 진입 타이밍</div>
+          <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:8px;">이 종목이 어느 칸에 있는지 한눈에 — 위로 갈수록 좋은 회사, 오른쪽일수록 좋은 타이밍</div>
+          <div id="dp-quadrant"></div>
+        </div>
+
         <div class="dp-metrics-card">
           <div class="dp-metric-row">
             <span class="dp-metric-label">현재가</span>
@@ -1625,16 +1714,6 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           <div class="dp-metric-row">
             <span class="dp-metric-label">등락률</span>
             <span id="dp-day-chg" class="dp-metric-val">—</span>
-          </div>
-          <div class="dp-metric-row" id="dp-target-row">
-            <span class="dp-metric-label">
-              메인 목표가
-              <span id="dp-target-src" class="dp-metric-sublabel"></span>
-            </span>
-            <span style="display:flex;align-items:baseline;gap:6px;">
-              <span id="dp-target" class="dp-metric-val">—</span>
-              <span id="dp-dcf-upside" style="font-size:12px;font-weight:700;"></span>
-            </span>
           </div>
           <div class="dp-metric-row">
             <span class="dp-metric-label">
@@ -1658,14 +1737,15 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
         <!-- 진입 타이밍 카드 -->
         <div id="dp-entry-card" class="card entry-card" style="padding:0; overflow:hidden;">
-          <!-- ① 판단 요약 -->
+          <!-- ① 결론존: 액션 문구 + 점수 -->
           <div class="entry-verdict">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
               <div style="display:flex; align-items:center; gap:8px;">
                 <span id="dp-entry-icon" style="font-size:24px;">⚪</span>
                 <div>
                   <div style="font-size:11px; color:var(--text-tertiary); font-weight:600;">📈 진입 타이밍</div>
-                  <div id="dp-entry-phrase" style="font-size:15px; font-weight:700; color:var(--text-primary); margin-top:1px;">—</div>
+                  <div id="dp-entry-phrase" style="font-size:18px; font-weight:800; color:var(--text-primary); line-height:1.15; margin-top:1px;">—</div>
+                  <div id="dp-entry-subreason" style="font-size:11px; color:var(--text-tertiary); font-weight:500; margin-top:2px;"></div>
                 </div>
               </div>
               <div style="text-align:right;">
@@ -1674,13 +1754,12 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
               </div>
             </div>
             <div class="entry-bar"><div id="dp-entry-bar-fill" class="entry-bar-fill" style="width:0%;"></div></div>
-            <div id="dp-entry-tags" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:8px;"></div>
           </div>
-          <!-- ② 가격 플랜 -->
+          <!-- ② 행동존: 진입/손절/목표가1 3숫자만 -->
           <div class="entry-prices">
-            <div class="entry-grid">
-              <div>
-                <span class="lbl">진입가 (풀백)</span>
+            <div class="entry-grid entry-grid-3">
+              <div class="eg-primary">
+                <span class="lbl">진입가</span>
                 <span class="val" id="dp-entry-px-entry">—</span>
                 <span id="dp-entry-discount" style="font-size:11px; color:var(--brand); font-weight:700; margin-left:2px;"></span>
               </div>
@@ -1689,24 +1768,21 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
                 <span class="val" id="dp-entry-px-stop" style="color:var(--destructive);">—</span>
               </div>
               <div>
-                <span class="lbl">목표가1 <span style="font-size:10px;color:var(--text-tertiary);">(T1)</span></span>
+                <span class="lbl">목표가1</span>
                 <span class="val" id="dp-entry-px-t1" style="color:var(--success);">—</span>
               </div>
-              <div>
-                <span class="lbl">목표가2 <span style="font-size:10px;color:var(--text-tertiary);">(T2)</span></span>
-                <span class="val" id="dp-entry-px-t2" style="color:var(--success);">—</span>
-              </div>
             </div>
-            <div class="entry-meta-grid">
+          </div>
+          <!-- ③ 더보기존 (토글): 나머지 전부 -->
+          <div id="dp-entry-detail" class="entry-detail">
+            <div class="entry-meta-grid" style="margin-top:0;">
+              <div><span class="meta-lbl">목표가2</span> <span class="meta-val" id="dp-entry-px-t2" style="color:var(--success);">—</span></div>
               <div><span class="meta-lbl">유형</span> <span class="meta-val" id="dp-entry-type">—</span></div>
               <div><span class="meta-lbl">손익비</span> <span class="meta-val" id="dp-entry-rr" style="font-weight:700;">—</span></div>
               <div><span class="meta-lbl">손절기준</span> <span class="meta-val" id="dp-entry-stop-method">—</span></div>
               <div><span class="meta-lbl">현재가</span> <span class="meta-val" id="dp-entry-current" style="color:var(--text-tertiary);">—</span></div>
             </div>
-          </div>
-          <!-- ③ 상세 (토글) -->
-          <div id="dp-entry-detail" class="entry-detail">
-            <div style="font-size:11px; color:var(--text-tertiary); font-weight:600; margin-bottom:6px;">점수 구성 (base 40)</div>
+            <div style="font-size:11px; color:var(--text-tertiary); font-weight:600; margin:10px 0 6px;">점수 구성 (base 40)</div>
             <div id="dp-entry-breakdown"></div>
             <div id="dp-aq-row" style="display:none; margin-top:10px; padding-top:8px; border-top:1px dashed var(--border); font-size:11px; color:var(--text-secondary);">
               <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">

@@ -1,61 +1,104 @@
 # -*- coding: utf-8 -*-
-"""실시간 익명 채팅 — Flask-SocketIO + SQLite."""
-import hashlib, os, random, sqlite3, time, threading
-from flask_socketio import SocketIO, emit
+"""Realtime anonymous chat backed by SQLite.
 
-socketio = SocketIO(cors_allowed_origins="*")  # async_mode 자동감지: gevent(서버) / threading(로컬)
+This module degrades gracefully when `flask_socketio` is unavailable so the
+rest of the Flask app can still boot and serve scan APIs.
+"""
+
+import logging
+import os
+import random
+import sqlite3
+import threading
+import time
+
+try:
+    from flask_socketio import SocketIO, emit
+    socketio = SocketIO(cors_allowed_origins="*")
+except Exception as e:
+    logging.warning("flask_socketio unavailable; chat disabled: %s", e)
+
+    def emit(*_args, **_kwargs):
+        return None
+
+    class _SocketIODummy:
+        def init_app(self, app, *args, **kwargs):
+            app.logger.warning("SocketIO disabled; chat features are unavailable.")
+
+        def on(self, *_args, **_kwargs):
+            def _decorator(fn):
+                return fn
+            return _decorator
+
+        def run(self, app, *args, **kwargs):
+            kwargs.pop("allow_unsafe_werkzeug", None)
+            app.run(*args, **kwargs)
+
+    socketio = _SocketIODummy()
+
 
 _DB_PATH = os.path.join(os.path.dirname(__file__), "..", "chat.db")
 _db_lock = threading.Lock()
 
-# ── 랜덤 닉네임 생성 ─────────────────────────────────────────────────
 _ADJ = [
-    "급등하는", "폭락하는", "횡보하는", "눌림목의", "돌파하는",
-    "존버하는", "풀매수한", "손절한", "물타는", "익절한",
-    "갭상한", "역배열", "정배열", "눌림의", "쌍바닥",
-    "상한가", "하한가", "데드캣", "골든크로스", "데크의",
-    "배당받는", "공매도한", "추격매수", "분할매수", "기다리는",
+    "급등노리는",
+    "차분한",
+    "눌림보는",
+    "돌파추적",
+    "관망중인",
+    "분할매수",
+    "추세추종",
+    "모멘텀찾는",
 ]
+
 _NOUN = [
-    "개미", "세력", "작전주", "슈퍼개미", "큰손",
-    "단타충", "장투러", "차트쟁이", "뉴비", "고수",
-    "주린이", "코린이", "영끌러", "빚투러", "가치투자자",
-    "모멘텀러", "스윙러", "스캘퍼", "퀀트", "AI봇",
-    "외인", "기관", "사모펀드", "헤지펀드", "개미왕",
+    "트레이더",
+    "투자자",
+    "고수",
+    "개미",
+    "차트러",
+    "스캐너",
+    "매매러",
+    "관찰자",
 ]
+
 
 def _random_nick() -> str:
     return f"{random.choice(_ADJ)}{random.choice(_NOUN)}"
 
-# ── DB ────────────────────────────────────────────────────────────────
+
 def _get_db():
     conn = sqlite3.connect(_DB_PATH)
-    conn.execute("""CREATE TABLE IF NOT EXISTS messages (
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ts REAL NOT NULL,
         sid TEXT NOT NULL,
         nick TEXT NOT NULL,
         msg TEXT NOT NULL
-    )""")
+    )"""
+    )
     conn.commit()
     return conn
 
-# 시작 시 테이블 생성
+
 _get_db().close()
 
-# sid → nickname 매핑
 _nicks: dict[str, str] = {}
 _online: int = 0
 _online_lock = threading.Lock()
+
 
 def _recent_messages(limit=50) -> list[dict]:
     with _db_lock:
         conn = _get_db()
         rows = conn.execute(
-            "SELECT ts, nick, msg FROM messages ORDER BY id DESC LIMIT ?", (limit,)
+            "SELECT ts, nick, msg FROM messages ORDER BY id DESC LIMIT ?",
+            (limit,),
         ).fetchall()
         conn.close()
     return [{"ts": r[0], "nick": r[1], "msg": r[2]} for r in reversed(rows)]
+
 
 def _save_message(sid: str, nick: str, msg: str):
     with _db_lock:
@@ -67,10 +110,11 @@ def _save_message(sid: str, nick: str, msg: str):
         conn.commit()
         conn.close()
 
-# ── SocketIO 이벤트 ───────────────────────────────────────────────────
+
 @socketio.on("connect")
 def on_connect():
     from flask import request
+
     global _online
     sid = request.sid
     nick = _random_nick()
@@ -78,14 +122,14 @@ def on_connect():
     with _online_lock:
         _online += 1
         cnt = _online
-    # 최근 메시지 전송
     emit("init", {"nick": nick, "history": _recent_messages(), "online": cnt})
-    # 입장 알림
     emit("system", {"msg": f"{nick} 입장", "online": cnt}, broadcast=True)
+
 
 @socketio.on("disconnect")
 def on_disconnect():
     from flask import request
+
     global _online
     sid = request.sid
     nick = _nicks.pop(sid, "?")
@@ -94,9 +138,11 @@ def on_disconnect():
         cnt = _online
     emit("system", {"msg": f"{nick} 퇴장", "online": cnt}, broadcast=True)
 
+
 @socketio.on("chat")
 def on_chat(data):
     from flask import request
+
     sid = request.sid
     nick = _nicks.get(sid, "익명")
     msg = (data.get("msg") or "").strip()

@@ -105,17 +105,16 @@ def test_consistency_cases():
 
 
 def test_oneliner_data_numeric_for_strong_signal():
-    # E1: SOLID 구간(고득점 치환 회피) 강신호 → 수치(B) 채택
-    # score 60(SOLID)이면 raw 버킷 유지 — TRUE_VALUE 그대로.
+    # E1: 강신호 종목 → 수치(B) 라인 채택. SOLID 구간(score 60) + 깊은 가치 +
+    # 큰 ROE/EPS 성장 + 큰 모멘텀으로 _signal_strength 가 게이트(3.0) 초과.
     d = {"Ticker": "TV1", "TotalScore": 60,
-         "_PER": 8, "_ROE": 0.20, "_EPSGrowth": 0.15}
+         "_PER": 5, "_ROE": 0.30, "_EPSGrowth": 0.50, "Mom12M": 0.45}
+    assert ol._signal_strength(d) >= ol._SIGNAL_GATE
     bucket = ol._bucket(d)
     out = ol.get_oneliner_data(d, bucket)
-    # 강신호일 때는 수치 라인(주가수익비율/자본수익률/이익성장 중 하나) 또는
-    # 폴백 플레이버 라인이라도 28자 안에 들어와야 한다.
+    # _data_tag 가 채워지는 버킷이면 수치 표현이 들어가고, 아니면 플레이버 폴백.
+    # 어느 쪽이든 28자 이내.
     assert out and len(out) <= ol._DATA_MAX_LEN, (bucket, out)
-    # 신호강도가 게이트 넘으면 _data_tag가 결과를 내야 함
-    assert ol._signal_strength(d) >= ol._SIGNAL_GATE
 
 
 def test_oneliner_data_no_buy_cta_in_negative_buckets():

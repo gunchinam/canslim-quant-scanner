@@ -8,6 +8,7 @@ let currentMarket   = 'US';
 let currentStrategy = 'BALANCED';
 let currentSector   = '';   // '' = 전체
 let allStocks       = [];   // 마지막 스캔 결과 캐시
+let _scanStocks     = [];   // 검색/필터 기준이 되는 전체 스캔 결과
 let _cachedGroups   = {};   // loadSectors 결과 보관 (sidebar 재렌더용)
 let _cachedSectors  = {};   // loadSectors 결과 보관
 let _sortKey        = 'TotalScore';  // 현재 정렬 키 (기본: 복합 점수)
@@ -566,6 +567,10 @@ function toggleHeatmap() {
   if (chevron) chevron.style.transform = opening ? 'rotate(180deg)' : '';
 }
 
+function _searchBaseStocks() {
+  return _scanStocks.length ? _scanStocks : allStocks;
+}
+
 function toggleGroup(headerBtn) {
   const body    = headerBtn.nextElementSibling;
   const chevron = headerBtn.querySelector('.sector-group-chevron');
@@ -614,6 +619,7 @@ async function runScan() {
     }
     const stocks = payload;
     allStocks    = Array.isArray(stocks) ? stocks : [];
+    _scanStocks  = allStocks;
     const visibleTickers = new Set(allStocks.map(s => s.Ticker));
     _compareSet = new Set([..._compareSet].filter(ticker => visibleTickers.has(ticker)));
     _refreshFilteredView();
@@ -650,7 +656,7 @@ function _applyQuickFilter(stocks) {
 
 // 표가 실제로 보여주는 것과 동일한 필터 결과(검색 → 퀵필터 → 원라이너 버킷)
 function _scopedStocks() {
-  let scoped = _applySearchFilter(allStocks);
+  let scoped = _applySearchFilter(_searchBaseStocks());
   scoped = _applyQuickFilter(scoped);
   if (_oneLinerFilter) {
     scoped = scoped.filter(s => (s.OneLinerTag || '') === _oneLinerFilter);
@@ -664,7 +670,7 @@ function _refreshFilteredView() {
   // 히트맵은 표와 동일한 필터 범위를 따라야 함 (전체로 새지 않게)
   renderSectorHeatmap(_scopedStocks());
   // 테이블은 검색만 적용해 넘기면 내부에서 퀵필터/원라이너를 재적용 (멱등)
-  renderStockTable(_applySearchFilter(allStocks));
+  renderStockTable(_applySearchFilter(_searchBaseStocks()));
 }
 
 function _applySearchFilter(stocks) {
@@ -916,7 +922,6 @@ function _selectSuggestion(ticker) {
 }
 
 async function _lookupTicker(ticker) {
-  setStockListMsg(`'${esc(ticker)}' 조회 중…`);
   try {
     const p = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
     const res = await fetch(`/api/ticker/${encodeURIComponent(ticker)}?${p}`);
@@ -929,8 +934,7 @@ async function _lookupTicker(ticker) {
       setStockListMsg(`'${esc(ticker)}' 종목을 찾을 수 없습니다.`);
       return;
     }
-    allStocks = [data];
-    _refreshFilteredView();
+    openDetail(data.Ticker);
   } catch (err) {
     console.error('search lookup failed:', err);
     setStockListMsg('검색 실패. 서버 상태를 확인하세요.');
@@ -980,7 +984,7 @@ function initSearch() {
   inp.addEventListener('input', () => {
     const q = inp.value.trim();
     // 스캔 결과 내 필터
-    if (allStocks.length) _refreshFilteredView();
+    if (_searchBaseStocks().length) _refreshFilteredView();
     // 자동완성 제안
     clearTimeout(_searchTimer);
     if (q.length < 1) { _hideSuggest(); return; }
@@ -1005,6 +1009,11 @@ function initSearch() {
     _hideSuggest();
     const raw = inp.value.trim();
     if (!raw) return;
+    const localMatches = _applySearchFilter(_searchBaseStocks());
+    if (localMatches.length > 0) {
+      _refreshFilteredView();
+      return;
+    }
     _lookupTicker(raw.toUpperCase());
   });
 
@@ -2677,7 +2686,7 @@ function initFilterChips() {
       document.querySelectorAll('#filter-chips .chip').forEach(c => {
         c.classList.toggle('active', (c.dataset.filter || 'all') === nextFilter);
       });
-      if (allStocks.length) _refreshFilteredView();
+      if (_searchBaseStocks().length) _refreshFilteredView();
     });
   });
 }
@@ -2729,7 +2738,7 @@ function initSort() {
       if (_sortDir === -1) th.classList.add('desc');
 
       if (_sortDir === 0 || !allStocks.length) {
-        if (allStocks.length) _refreshFilteredView();
+        if (_searchBaseStocks().length) _refreshFilteredView();
         return;
       }
       const sorted = [...allStocks].sort((a, b) => {

@@ -33,7 +33,7 @@ class ScanAdapter:
         # ── analyze_ticker가 사용하는 속성 (QuantNexusApp 인터페이스 호환) ──
         self.cache          = _qn.DataCache()
         self.engine         = _qn.WallStreetQuantStrategies()
-        self.vix_value      = 20.0
+        self.vix_value      = self._fetch_vol_index(market)
         self._scan_strategy = strategy
         self._scan_market   = market
         self._stats_lock    = threading.Lock()
@@ -66,6 +66,23 @@ class ScanAdapter:
         self._build_sectors()
 
     # ── 내부 초기화 ───────────────────────────────────────────────────────
+
+    @staticmethod
+    def _fetch_vol_index(market: str) -> float:
+        """VIX(US) / VKOSPI(KR) 종가. 실패 시 20.0 fallback.
+
+        KR도 동일한 vix_value 슬롯을 쓰지만 의미는 VKOSPI다 — 점수계의 VIX
+        smooth band(12~45)는 두 지수의 전형 범위(11~45)와 호환된다.
+        """
+        try:
+            import yfinance as _yf
+            sym = "^VIX" if market == "US" else "^VKOSPI"
+            v = _yf.Ticker(sym).history(period="5d")
+            if not v.empty:
+                return float(v["Close"].iloc[-1])
+        except Exception as e:
+            logging.warning("[Adapter] vol index fetch failed (%s): %s", market, e)
+        return 20.0
 
     def _build_sectors(self) -> None:
         raw = self.kr_sectors if self._market == "KR" else self.us_sectors
@@ -153,6 +170,7 @@ class ScanAdapter:
                         results.append(r)
                 except Exception as e:
                     logging.error("scan_sector error: %s", e)
+        self._attach_sector_residual(results)
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         return results
 
@@ -182,5 +200,28 @@ class ScanAdapter:
                         results.append(r)
                 except Exception as e:
                     logging.error("scan_all [%s] error: %s", ticker, e)
+        self._attach_sector_residual(results)
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         return results
+
+    @staticmethod
+    def _attach_sector_residual(rows: list[dict]) -> None:
+        """각 종목의 TotalScore에서 동일 섹터 평균을 차감한 값을 추가.
+
+        Fama-French 스타일 sector-neutral residual — 섹터 전체 강세에 묻혀
+        진짜 alpha가 보이지 않는 문제를 보정한다. TotalScore는 그대로 두고
+        SectorResidual 필드만 부착해 UI 차원에서 선택적으로 활용한다.
+        """
+        from collections import defaultdict
+        bucket: dict[str, list[float]] = defaultdict(list)
+        for r in rows:
+            s = r.get("Sector") or ""
+            ts = r.get("TotalScore")
+            if isinstance(ts, (int, float)):
+                bucket[s].append(float(ts))
+        means = {s: (sum(v) / len(v)) for s, v in bucket.items() if v}
+        for r in rows:
+            s = r.get("Sector") or ""
+            ts = r.get("TotalScore")
+            if isinstance(ts, (int, float)) and s in means:
+                r["SectorResidual"] = round(float(ts) - means[s], 2)

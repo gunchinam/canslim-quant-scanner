@@ -658,6 +658,39 @@ def safe_get(val, default=0):
     return val
 
 
+def _smooth_lerp(x: float, x_lo: float, x_hi: float, y_lo: float, y_hi: float) -> float:
+    """Piecewise-linear smooth interpolation. Replaces hard threshold cliffs.
+    x ≤ x_lo → y_lo, x ≥ x_hi → y_hi, else linear blend."""
+    if x_hi <= x_lo:
+        return y_lo
+    if x <= x_lo:
+        return y_lo
+    if x >= x_hi:
+        return y_hi
+    t = (x - x_lo) / (x_hi - x_lo)
+    return y_lo + t * (y_hi - y_lo)
+
+
+def _smooth_band(x: float, anchors: list) -> float:
+    """Multi-anchor piecewise-linear interpolation.
+    anchors = [(x0, y0), (x1, y1), ...] sorted by x. Returns smooth y at given x."""
+    if not anchors:
+        return 0.0
+    if x <= anchors[0][0]:
+        return anchors[0][1]
+    if x >= anchors[-1][0]:
+        return anchors[-1][1]
+    for i in range(len(anchors) - 1):
+        x0, y0 = anchors[i]
+        x1, y1 = anchors[i + 1]
+        if x0 <= x <= x1:
+            if x1 == x0:
+                return y0
+            t = (x - x0) / (x1 - x0)
+            return y0 + t * (y1 - y0)
+    return anchors[-1][1]
+
+
 def _normalize_div_yield(dy):
     """yfinance dividendYield는 티커마다 % 또는 decimal로 들어와서 통일이 안 됨.
     1.0 초과면 %로 보고 100으로 나눠서 decimal로 정규화."""
@@ -919,6 +952,7 @@ def _compute_entry_status_v2(
     _ma_aligned = False
     _vol_jump_up = False
     _atr_squeeze = False
+    _degraded = False
     try:
         _c = hist["Close"]
         _v = hist["Volume"]
@@ -943,19 +977,22 @@ def _compute_entry_status_v2(
             atr_series = (tr.rolling(14).mean() / c_) * 100
             _atr_avg30 = float(atr_series.rolling(30).mean().iloc[-1])
             _atr_squeeze = bool(_atr_p < _atr_avg30 * 0.8)
-    except Exception:
-        pass
+    except Exception as _ex:
+        import logging as _lg
+        _lg.warning("entry_status_v2 derived signals degraded: %s", _ex)
+        _degraded = True
 
     breakdown: dict = {}
 
-    # 1) 거래량 동반 돌파 — 양쪽 시계에서 가장 안정적 양수 (edge +0.008 / +0.0015)
-    if _pivot and _s_conf:
+    # 1) 거래량 동반 돌파 — 양쪽 시계 양수. vol_jump와 mutex (double-count 차단).
+    _breakout_active = bool(_pivot and _s_conf)
+    if _breakout_active:
         _e_score += 12
         _phrases.append("거래량 동반 돌파")
         breakdown["Breakout"] = {"pts": 12, "tag": "거래량 동반 돌파"}
 
-    # 2) 거래량 점프 — 양쪽 시계 양수 (edge +0.0038 / +0.0038)
-    if _vol_jump_up:
+    # 2) 거래량 점프 — pivot+s_conf와 mutex
+    if _vol_jump_up and not _breakout_active:
         _e_score += 10
         _phrases.append("거래량 점프")
         breakdown["Volume"] = {"pts": 10, "tag": "거래량 점프"}
@@ -1023,8 +1060,14 @@ def _compute_entry_status_v2(
         _e_score -= 3
         breakdown["MACD"] = {"pts": -3, "tag": "데드크로스"}
 
-    # 8) 당일 급등 추격 페널티 (눌림 매수 가산점은 증거 부재로 제거)
-    if day_chg > 0.07:
+    # 8) 당일 급등 추격 페널티 — ATR-normalized (종목별 변동성 보정)
+    _daychg_trigger = False
+    if _atr_p > 0:
+        # day_chg가 ATR의 1.5σ 이상이면 페널티 (atr_p는 %, day_chg는 fraction → 100배 단위 통일)
+        _daychg_trigger = bool((day_chg * 100.0) / _atr_p > 1.5)
+    else:
+        _daychg_trigger = bool(day_chg > 0.07)
+    if _daychg_trigger:
         _e_score -= 8
         _phrases.append("급등 추격 주의")
         breakdown["DayChg"] = {"pts": -8, "tag": "급등 추격"}
@@ -1060,15 +1103,119 @@ def _compute_entry_status_v2(
             "atr_p": _atr_p, "regime": _reg,
             "macd_div": _macd_div, "pivot": _pivot, "s_conf": _s_conf,
             "version": "v2",
+            "degraded": _degraded,
         },
     }
 
 
-def _compute_entry_status_dispatch(**kwargs) -> dict:
-    """Feature flag dispatcher — ENTRY_SCORE_V2=1이면 v2 사용."""
-    if os.getenv("ENTRY_SCORE_V2", "0") == "1":
-        return _compute_entry_status_v2(**kwargs)
-    return _compute_entry_status(**kwargs)
+# ──────────────────────────────────────────────────────────────────────
+# v3 Hysteresis & Persistence (월가 패널 P0-1)
+# ──────────────────────────────────────────────────────────────────────
+
+_ENTRY_STATUS_CACHE: dict = {}
+
+
+def _apply_status_hysteresis(
+    ticker: str,
+    score: int,
+    prev_score: int | None = None,
+    prev_status: str | None = None,
+    consecutive: int = 0,
+    *,
+    strong_in: int = 55,
+    strong_out: int = 50,
+    avoid_in: int = 25,
+    avoid_out: int = 30,
+    persistence: int = 2,
+) -> tuple[str, str, int]:
+    """Hysteresis + N-day persistence — flip-flop 차단.
+
+    - STRONG 진입: score>=strong_in AND prev_score>=strong_out AND consecutive>=persistence
+    - STRONG 유지: prev_status=STRONG AND score>=strong_out
+    - AVOID 진입: score<avoid_in AND consecutive>=persistence
+    - AVOID 유지: prev_status=AVOID AND score<=avoid_out
+    Returns (status, label, new_consecutive).
+    """
+    in_strong = score >= strong_in
+    in_avoid = score < avoid_in
+
+    if prev_status == "STRONG":
+        if score >= strong_out:
+            cons = consecutive + 1 if in_strong else 0
+            return "STRONG", "진입 강함", cons
+    if prev_status == "AVOID":
+        if score <= avoid_out:
+            cons = consecutive + 1 if in_avoid else 0
+            return "AVOID", "진입 부적합", cons
+
+    if in_strong:
+        cons = consecutive + 1 if prev_status != "STRONG" else 1
+        if (prev_score is not None and prev_score >= strong_out and cons >= persistence) \
+                or consecutive + 1 >= persistence:
+            return "STRONG", "진입 강함", cons
+        return "NEUTRAL", "관망(진입 대기)", cons
+    if in_avoid:
+        cons = consecutive + 1 if prev_status != "AVOID" else 1
+        if cons >= persistence:
+            return "AVOID", "진입 부적합", cons
+        return "NEUTRAL", "관망(이탈 대기)", cons
+
+    return "NEUTRAL", "관망", 0
+
+
+def _percentile_rank(scores: dict) -> dict:
+    """Universe 내 cross-sectional percentile rank (동률 평균 rank). 0.0~1.0."""
+    if not scores:
+        return {}
+    items = sorted(scores.items(), key=lambda kv: kv[1])
+    n = len(items)
+    if n == 1:
+        return {items[0][0]: 1.0}
+    ranks: dict = {}
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and items[j + 1][1] == items[i][1]:
+            j += 1
+        avg_rank = (i + j) / 2.0
+        pct = avg_rank / (n - 1)
+        for k in range(i, j + 1):
+            ranks[items[k][0]] = round(pct, 6)
+        i = j + 1
+    return ranks
+
+
+def _apply_hysteresis_to_result(ticker: str, result: dict) -> dict:
+    """캐시된 직전 상태로 hysteresis 적용. ENTRY_HYSTERESIS=0이면 skip."""
+    if os.getenv("ENTRY_HYSTERESIS", "1") == "0":
+        return result
+    score = int(result.get("score", 50))
+    prev = _ENTRY_STATUS_CACHE.get(ticker, {})
+    status, label, cons = _apply_status_hysteresis(
+        ticker, score,
+        prev_score=prev.get("score"),
+        prev_status=prev.get("status"),
+        consecutive=int(prev.get("consecutive", 0)),
+    )
+    result = dict(result)
+    result["status"] = status
+    result["label"] = label
+    _ENTRY_STATUS_CACHE[ticker] = {
+        "score": score, "status": status, "consecutive": cons,
+    }
+    return result
+
+
+def _compute_entry_status_dispatch(*, ticker: str | None = None, **kwargs) -> dict:
+    """Feature flag dispatcher — v2 default (regime-conditional). ENTRY_SCORE_V1=1로 legacy 복귀.
+    ENTRY_HYSTERESIS=1 (default) + ticker 전달 시 hysteresis 적용."""
+    if os.getenv("ENTRY_SCORE_V1", "0") == "1":
+        result = _compute_entry_status(**kwargs)
+    else:
+        result = _compute_entry_status_v2(**kwargs)
+    if ticker and os.getenv("ENTRY_HYSTERESIS", "1") != "0":
+        result = _apply_hysteresis_to_result(ticker, result)
+    return result
 
 
 def rate_limit(max_per_second: float):
@@ -2049,8 +2196,11 @@ class WallStreetQuantStrategies:
             elif result["ad"] == -1:         score -= 10
             if result["obv_trend"] == "BULLISH": score += 8
             else:                            score -= 5
-            if result["mfi"] < 20:           score += 10
-            elif result["mfi"] > 80:         score -= 10
+            score += _smooth_band(result["mfi"], [
+                (10.0, 12.0), (20.0, 10.0), (35.0, 3.0),
+                (50.0, 0.0),
+                (65.0, -3.0), (80.0, -10.0), (90.0, -12.0),
+            ])
 
             result["score"] = score
             if score >= 15:   result["signal"] = "ACCUMULATION"
@@ -5056,11 +5206,10 @@ class QuantNexusApp:
             # ════════════════════════════════════════════════════════════
             # STEP 7 — VIX 조정 (base가 이미 [0,100]이므로 곱셈 범위 축소)
             # ════════════════════════════════════════════════════════════
-            if self.vix_value < 15:       vix_m = 1.04
-            elif self.vix_value > 35:     vix_m = 0.80
-            elif self.vix_value > 30:     vix_m = 0.86
-            elif self.vix_value > 25:     vix_m = 0.93
-            else:                         vix_m = 1.0
+            vix_m = _smooth_band(self.vix_value, [
+                (12.0, 1.04), (15.0, 1.02), (20.0, 1.00),
+                (25.0, 0.93), (30.0, 0.86), (35.0, 0.80), (45.0, 0.75),
+            ])
             base = max(0.0, min(120.0, base * vix_m))
 
             # ════════════════════════════════════════════════════════════
@@ -5191,7 +5340,17 @@ class QuantNexusApp:
                 _vals = list(all_scores.values())
                 _avg = sum(_vals) / len(_vals)
                 _max = max(_vals)
-                composite_score = round(_avg * 0.6 + _max * 0.4, 1)
+                # Disagreement penalty: 전략간 점수 분산이 클수록 신뢰도 감소
+                # (Renaissance/Two Sigma 스타일 — 신호 일관성 가중)
+                if len(_vals) >= 2:
+                    _mean = _avg
+                    _var = sum((v - _mean) ** 2 for v in _vals) / len(_vals)
+                    _std = _var ** 0.5
+                else:
+                    _std = 0.0
+                _disagreement_penalty = min(8.0, 0.5 * _std)
+                composite_score = round(_avg * 0.6 + _max * 0.4 - _disagreement_penalty, 1)
+                composite_score = max(0.0, composite_score)
                 final = composite_score  # 표시되는 TotalScore 로 사용
 
             # ════════════════════════════════════════════════════════════

@@ -142,12 +142,26 @@ def wrap_oneliner(text: str) -> str:
         if not words[i] or not words[i - 1] or _is_dep_head(words[i])
     }
 
+    total_chars = left_chars[-1]
+    # 자연 경계라도 (1) 한쪽이 1어절뿐이거나 (2) 한쪽 글자 수가 전체의
+    # 25% 미만이면 외톨이 한 줄("매수하면 / 안 되는…", "관심종목에서 /
+    # 빼는 게 익절인…")이 되어 포스터 균형이 무너진다. 그 경우 자연
+    # 경계를 포기하고 결속·균형을 함께 보는 폴백 픽커에 맡긴다
+    # (반환 None → 다음 단계로 fall through).
+    def _is_balanced(b: int) -> bool:
+        if b == 1 or b == n - 1:
+            return False
+        left = left_chars[b - 1]
+        right = total_chars - left
+        return min(left, right) * 4 >= total_chars
+
     def _pick(cands):
         valid = [b for b in cands
                  if 1 <= b <= n - 1 and b not in forbidden]
         if not valid:
             return None
-        return min(valid, key=lambda b: abs(left_chars[b - 1] - half))
+        best = min(valid, key=lambda b: abs(left_chars[b - 1] - half))
+        return best if _is_balanced(best) else None
 
     def _pick_cohesive(cands):
         """폴백: 좌우 균형 + 한국어 구문 결속 비용이 최소인 경계.
@@ -167,11 +181,20 @@ def wrap_oneliner(text: str) -> str:
             R = words[b].rstrip(",")
             imbalance = abs(left_chars[b - 1] - half)
             c = imbalance
-            # 외톨이 줄(한 어절짜리) 회피 — 1어절만 떨어진 줄은 거의
-            # 항상 어색하다. 자연 경계 보너스(-25)보다 작게 두어
-            # '연결어미 뒤지만 외톨이'면 보너스가 이기게 한다.
+            # 외톨이 줄(한 어절짜리) 회피 — 1어절만 떨어진 줄은 포스터
+            # 균형을 무너뜨려 거의 항상 어색하다("매수하면 / 안 되는
+            # 이유가 살 이유보다 한참 많음"). 자연 경계 보너스(-25)를
+            # 확실히 누르도록 +35로 둔다 — 연결어미라도 외톨이로
+            # 떨어질 자리면 다른 균형 잡힌 경계가 이긴다.
             if b == 1 or b == n - 1:
-                c += 18.0
+                c += 35.0
+            # 글자 균형 — 한쪽이 전체의 1/4 미만이면 어절 수가
+            # 외톨이가 아니더라도 시각적으로 매우 짧은 줄이 된다
+            # ("박으면 / 후회 단골임"처럼 끝부분 2어절만 떨어진
+            # 자리). 자연 경계 보너스(-25)도 누르도록 +35.
+            left = left_chars[b - 1]
+            if min(left, total_chars - left) * 4 < total_chars:
+                c += 35.0
             ends = lambda tails: any(L.endswith(t) for t in tails)
             is_conn = ends(_BREAK_AFTER_SUFFIXES)
             # 연결/종결 어미 뒤 = 자연 경계 → 강한 보너스
@@ -557,7 +580,6 @@ _PHRASES: dict[str, list[str]] = {
         "가치 대비 주가 갭이 아직 안 메워졌으니 여지 있음",
         "비수기 바닥 실적 기준으로 봐도 싼 편이라 성수기 기대됨",
         "실적 체질이 좋아지는 중인데 주가는 아직 반영 안 한 느낌임",
-        "받는 배당 감안하면 그 자체로 매력 있는 가격대임",
         "이 가격이면 줍는 게 맞다고 봄",
         "쌀 때 사두면 나중에 웃는 게 이런 부류 종목임",
         "남들 외면할 때 조용히 담아두면 결국 보상받는 자리임",
@@ -2310,6 +2332,13 @@ _METRIC_PHRASES: dict[tuple[str, str], list[str]] = {
         "돈 버는 솜씨가 판에서 최상위인데 시장이 아직 모름",
         "돈 잘 버는 알짜인데 값은 헐값이면 교과서적 줍줍감임",
     ],
+    # ── TRUE_VALUE: 배당 매력 (실제 배당 지급 종목만) ──
+    ("TRUE_VALUE", "high_dividend"): [
+        "받는 배당 감안하면 그 자체로 매력 있는 가격대임",
+        "배당이 또박또박 들어오니 들고 있는 동안 손해 볼 게 별로 없음",
+        "배당 챙기면서 기다리면 시간이 내 편 되는 종목임",
+        "배당으로 깔아주는 게 있어서 떨어져도 덜 아픈 자리임",
+    ],
     # ── OVERSOLD: 극단적 과매도 ──
     ("OVERSOLD", "deep_rsi"): [
         "팔 놈 다 팔아서 바닥 긁는 중이라 반등 노려볼 자리임",
@@ -3153,6 +3182,10 @@ def _metric_tags(d: dict) -> list[str]:
     if op_pct >= 25:
         tags.append("high_margin")
 
+    # 배당 (decimal: 0.01 == 1% 이상)
+    if _num(d.get("_DivYield")) > 0.01:
+        tags.append("high_dividend")
+
     # yfinance 수급/센티먼트 (US 종목)
     if d.get("_YF_Available"):
         short_pct = _num(d.get("_YF_ShortPctFloat"))
@@ -3335,11 +3368,20 @@ def _raw_bucket(d: dict) -> str:
     if dd_pct <= -25 and mom3 <= -8:
         return "FALLING_KNIFE"
 
-    # 위치성(RSI 극단) 먼저 — 트렌드 종목에서도 빠지면 안 됨
-    if rsi >= 75:
+    # 위치성(RSI 극단) — 단일 지표 단정 금지. 종합 확인 신호와 결합해야 과열·과매도.
+    # RSI 77이라도 추세·수급이 멀쩡하면 'still leading'이지 'overheated'가 아님.
+    # 과열 확인 = 단기 모멘텀 꺾임(mom3<=0) OR 고점 후퇴 시작(dd_pct<=-3).
+    if rsi >= 75 and (mom3 <= 0 or dd_pct <= -3):
         return "OVERBOUGHT"
-    if rsi <= 30 and roe >= 5:
+    if rsi >= 70 and mom3 <= -3 and dd_pct <= -5:
+        return "OVERBOUGHT"
+    # 과매도도 단독 단정 금지: 품질 + 모멘텀 안정 동반 시에만(낙하칼날과 구분)
+    if rsi <= 30 and roe >= 5 and mom3 >= -5:
         return "OVERSOLD"
+
+    # RSI 높은데 추세도 살아있고 모멘텀 꺾임 없음 → 과열 아님, 모멘텀리더로 흡수
+    if rsi >= 70 and mom12 >= 20 and mom3 > -3:
+        return "MOMENTUM_LEADER"
 
     # 강한 매수 (점수 기반)
     if score >= 80:
@@ -3355,9 +3397,9 @@ def _raw_bucket(d: dict) -> str:
     # 성장이 멀티플을 정당화하면 버블이 아니다 → 버블 판정보다 먼저 본다
     if per >= 30 and eps_g >= 20 and mom12 >= 20:
         return "EXPENSIVE_JUSTIFIED"
-    # 버블: 비싼데 성장으로 정당화가 안 됨. 일시적 mom3 음전만으로
-    # 단정하지 않는다(진짜 성장주가 잠깐 눌렸을 때 버블 오딱지 방지).
-    if per >= 40 and eps_g < 10:
+    # 버블: 비싼데 성장으로 정당화 X + 모멘텀 꺾임 확인. 종합 판단.
+    # 비싸도 추세가 살아있으면 버블 단정 회피(시장이 인정한 프리미엄).
+    if per >= 40 and eps_g < 10 and (mom3 <= 0 or dd_pct <= -5):
         return "BUBBLE"
     # 싸고 우량하면 성장이 평탄해도 가치주 (역성장만 아니면 트랩 아님)
     if 0 < per <= 15 and roe >= 15 and eps_g >= 0:

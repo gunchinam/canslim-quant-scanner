@@ -829,7 +829,9 @@ td.score-col {
   box-shadow: 6px 6px 0 #1a1a1a;
   overflow: hidden;
   word-break: keep-all;
-  text-wrap: balance;
+  /* 줄바꿈은 서버 wrap_oneliner()가 넣은 <br>만 따른다.
+     balance가 켜져 있으면 브라우저가 한국어 어절 경계를 무시하고
+     임의로 다시 나눠 한 줄평이 어색하게 갈라질 수 있다. */
 }
 .dp-oneliner-poster::before,
 .dp-oneliner-poster::after {

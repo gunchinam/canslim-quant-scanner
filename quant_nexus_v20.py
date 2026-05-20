@@ -5353,6 +5353,14 @@ class QuantNexusApp:
                 composite_score = max(0.0, composite_score)
                 final = composite_score  # 표시되는 TotalScore 로 사용
 
+            # v21 실험적 보강 — ENABLE_V21_FACTORS=1 환경변수 시 활성
+            try:
+                from factor_enhancements_v21 import enhance_score
+                _v21 = enhance_score(ticker, final)
+                final = _v21["final"]
+            except Exception:
+                pass
+
             # ════════════════════════════════════════════════════════════
             # STEP 11 — CAN SLIM 시그널 결정
             # ════════════════════════════════════════════════════════════

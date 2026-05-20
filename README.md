@@ -1,231 +1,144 @@
 # canslim-quant-scanner
 
-> CAN SLIM 원칙 + 13개 퀀트 팩터 + 백테스트 검증된 진입 타이밍 신호를 결합한
-> 미국·한국 주식 종목 스캐너.
+> CAN SLIM 원칙, 퀀트 팩터, 진입 타이밍 점수를 한 화면에 묶은 미국/한국 주식 스캐너.
 
-![main](docs/images/01_main.png)
+![home](docs/post_images/01_home.png)
 
----
+## Features
 
-## ✨ Features
+- CAN SLIM 스타일의 종목 평가와 점수화
+- 미국/한국 주식 스캔
+- 종목별 상세 해설과 원라이너 코멘트
+- 진입가, 손절가, 목표가를 포함한 진입 타이밍 카드
+- 거시 지표를 요약하는 상단 매크로 스트립
+- `/settings`에서 로컬 API 설정 관리
+- `/healthz` 헬스체크와 Render/Oracle 배포 문서 포함
 
-### 핵심
-- **CAN SLIM 7요소 채점** — 윌리엄 오닐의 검증된 7가지 기준 (C / A / N / S / L / I / M)
-- **13개 퀀트 팩터** — Fama-French, Carhart Momentum, Mean Reversion, Smart Money Flow,
-  Kalman Filter, Hurst Exponent, Stat Arb Z-Score 등
-- **백테스트 검증된 진입 타이밍** — `V4_HYBRID` 점수 함수 (3년 × 200종목 × 97k 시점 검증)
-- **5가지 전략 모드** — BALANCED / CAN_SLIM / MOMENTUM / VALUE / SCALPING
-- **ATR 기반 자동 매매가** — 매수 / 손절 / 1차 익절 / 2차 익절 자동 산출
-- **52개 섹터 필터** — 메가테크부터 광물·우라늄까지
+## Current UI
 
-### UI
-- Flask 기반 웹 대시보드 (`http://127.0.0.1:5000`)
-- 종목 클릭 시 상세 패널 — 21개 점수 항목 한국어 해설
-- 손그림풍 차트 렌더링 (`handdrawn_renderer.py`)
-- 어제 대비 점수/순위 변동 표시
+### 홈 화면
 
----
+![home-ui](docs/post_images/01_home.png)
 
-## 🎯 진입 타이밍 신호 (Entry Timing)
+현재 홈 화면에는 다음이 반영되어 있습니다.
 
-스캐너의 핵심 차별점. 단순히 "지금 좋은 종목"을 보여주는 게 아니라
-**"지금 들어갈 타이밍인가"** 를 점수로 답합니다.
+- 상단 매크로 스트립: 시장 상태, 금리, 환율, VIX 같은 거시 지표를 빠르게 확인
+- 접이식 섹터 히트맵: 좌측에서 섹터 흐름을 먼저 보고 종목으로 내려갈 수 있음
+- 스캔 테이블: 종합 점수, 진입 상태, 브로커 목표가, 핵심 이유를 한 줄로 요약
 
-### 등급
-| 등급 | 점수 | 의미 |
-|------|------|------|
-| 🟢 **GREEN** | ≥ 75 | 진입 좋음 — 백테 기준 +10일 평균 +2.60%, 승률 60% |
-| 🟡 **YELLOW** | 30 ~ 74 | 관망 — 신호 혼조 |
-| 🔴 **RED** | < 30 | 진입 부적합 — 과열/약세 |
+### 종목 상세 화면
 
-### 백테스트 결과 (US 100 + KR 100, 3년치, 97k obs)
+![detail-ui](docs/post_images/02_detail_nvda.png)
 
-| 점수 함수 | GREEN 비중 | GREEN +10d | edge vs baseline |
-|-----------|------------|------------|------------------|
-| V1_OLD (평균회귀) | 2.2% | +2.38% | +1.12% |
-| V2_NEW (추세추종) | 1.0% | +2.36% | +0.95% |
-| **★ V4_HYBRID (현재)** | **1.8%** | **+2.60%** | **+1.72%** |
-| V5_MOMENTUM_PIVOT | 0.8% | +1.93% | +0.55% |
+상세 화면은 예전보다 "무슨 행동을 해야 하는지"가 먼저 보이도록 정리했습니다.
 
-> Baseline = 전체 시점 무선택 평균 (+10d: +1.46%)
-> edge = GREEN 시점 +10d − RED 시점 +10d
+- 진입 타이밍 카드가 `결론 / 행동 / 더보기` 구조로 정리됨
+- `진입가 / 손절 / 목표가1`를 먼저 보여주고 나머지는 접어서 표시
+- 종합 점수와 진입 타이밍을 함께 보는 2축 사분면 추가
+- 별점 영역은 차트 타이밍용, 종합 점수는 회사/종목 평가용으로 역할을 분리
 
-### V4_HYBRID 공식 (요약)
-```
-베이스 50점
-+ RSI < 30           → +14 (과매도 반등)
-+ BB 하단            → +10
-+ VWAP 살짝 눌림     → +5
-+ MA 정배열 & 거래량 점프 → +14  ★ 핵심
-+ MA 정배열 & ATR 수축    → +6
-+ 신고가 + 거래량 동반    → +10
-+ MACD 골든 임박       → +6
-- RSI > 70           → -12
-- 약세장 / 강한 약세장 → -10 / -18
-- 급등 직후 추격 (>+7%) → -10
-```
+### 종목 비교 화면
 
-### 실제 화면
-스캔 결과 클릭 시 진입 카드가 표시됩니다.
+![compare-ui](docs/post_images/03_compare_nvda_msft_amzn.png)
 
-| YELLOW 사례 (구글) | RED 사례 (엔비디아) |
-|-------------------|-------------------|
-| ![yellow](docs/images/04_entry_card_yellow.png) | ![red](docs/images/05_entry_card_red.png) |
-| RSI 72 과열로 관망 권고 | 과열·MACD 약세로 추격 금지 |
+비교 화면에서는 종목 간 점수와 톤 차이를 빠르게 볼 수 있습니다.
 
-매수가/손절/1차익절/2차익절은 모두 ATR 기반 자동 계산.
+### 설정 화면
 
----
+![settings-ui](docs/post_images/04_settings.png)
 
-## 📊 화면
+`/settings`에서는 로컬 `config.json` 기반으로 API 키와 토큰을 저장할 수 있습니다.
 
-### 스캔 결과
-![scan](docs/images/02_scan_result.png)
+### 헬스체크
 
-### 종목 상세
-![detail](docs/images/03_detail.png)
+![healthz-ui](docs/post_images/05_healthz.png)
 
-각 점수 항목을 한국어로 풀어서 설명. 예:
-- *"C🔥 분기 실적이 2분기 연속 가속 성장 중이에요"*
-- *"N🚀 52주 최고가에서 2% 아래, 신고가 도전 중이에요"*
-- *"[M] STRONG_BULL ✅ — ADX 48"*
+배포 후에는 `/healthz`로 서버 상태를 빠르게 확인할 수 있습니다.
 
----
+## Entry Timing
 
-## 🚀 Quick Start
+이 프로젝트의 진입 타이밍 점수는 "좋은 회사인가"와 "지금 들어갈 자리인가"를 분리해서 봅니다.
 
-### 요구사항
-- Python 3.11 이상 (3.13 권장)
-- 인터넷 (yfinance / DART / KIS)
-- Windows / macOS / Linux 모두 동작
+- 종합 점수: 회사/종목의 전반적 질과 매력도
+- 진입 타이밍: 지금 매수해도 되는 자리인지
 
-### 설치
+현재 UI에서는 이 차이를 더 명확하게 보여주기 위해 다음을 반영했습니다.
+
+- 진입 카드 헤드라인을 더 크게 표시
+- 보조 사유를 별도 줄로 분리
+- 가격 액션에서 가장 중요한 3개 숫자만 먼저 노출
+- 점수 분해와 AgentQuant 근거는 펼쳤을 때만 확인
+
+## Quick Start
+
+### Requirements
+
+- Python 3.11+
+- Windows, macOS, Linux
+- 선택 사항: KIS, DART, Finnhub, Telegram 등 외부 API
+
+### Install
+
 ```bash
-git clone https://github.com/<your-name>/canslim-quant-scanner.git
+git clone https://github.com/gunchinam/canslim-quant-scanner.git
 cd canslim-quant-scanner
 pip install -r requirements.txt
 ```
 
-### 환경변수 설정 (선택)
+### Run
+
 ```bash
-cp .env.example .env
-# .env 편집하여 API 키 입력 (옵션)
+python -m web_app.app
 ```
 
-> **yfinance만 써도 미국 주식 스캔 가능.** KIS/DART 키는 한국 주식 + 공시 기능용.
+Windows에서는 배치 파일로 실행할 수도 있습니다.
 
-### 실행
-```bash
-# 웹 대시보드
-python -m web_app.app
-
-# 또는 (Windows)
+```bat
 run_quant_nexus.bat
 ```
 
-브라우저에서 `http://127.0.0.1:5000` 접속.
+브라우저에서 `http://127.0.0.1:5000`으로 접속하면 됩니다.
 
----
+## Configuration
 
-## 🔑 API 키 발급 (선택)
+- 로컬 설정 화면: `/settings`
+- 로컬 설정 파일: `config.json`
+- 공개용 예시 파일: `config.example.json`
 
-| API | 용도 | 발급처 | 비용 |
-|-----|------|--------|------|
-| **KIS** | 한국 주식 실시간 시세 | https://apiportal.koreainvestment.com/ | 무료 |
-| **DART** | 한국 기업 공시·재무 | https://opendart.fss.or.kr/ | 무료 (분 100건) |
-| **Telegram** | 진입 신호 알림 | @BotFather | 무료 |
-| **OpenAI** | 뉴스 요약 (선택) | https://platform.openai.com/ | 유료 |
+실제 API 키, 토큰, 계좌번호는 공개 저장소에 넣지 않는 전제로 동작합니다.
 
-자세한 설정은 `.env.example` 참고.
+## Deployment
 
----
+### Render
 
-## 📂 구조
+- `render.yaml` 포함
+- 시작 명령: `gunicorn --bind 0.0.0.0:$PORT wsgi:app`
+- 운영 환경에서는 실제 비밀값을 Render 환경변수로 넣는 편이 맞음
 
-```
-canslim-quant-scanner/
-├── quant_nexus_v20.py        # 메인 스코어링 엔진 (~7000 lines)
-├── web_app/                  # Flask 웹 대시보드
-│   ├── app.py
-│   ├── templates/scanner.html
-│   └── static/app.js
-├── backtest/                 # 백테스트 엔진
-│   ├── entry_timing_backtest.py
-│   ├── score_variants_test.py
-│   └── threshold_sweep.py
-├── handdrawn_renderer.py     # 손그림 차트 렌더러
-├── four_axis_analyzer.py     # 4축 분석 (가치/성장/모멘텀/품질)
-├── dart_api.py               # DART OpenAPI 클라이언트
-├── kis_api.py                # KIS OpenAPI 클라이언트
-├── kr_company_info.py        # 한국 종목 사전
-├── us_company_info.py        # 미국 종목 사전
-├── alert_rules.py            # 알림 규칙 엔진
-├── telegram_notifier.py
-└── tests/
-```
+주의할 점:
 
----
+- `/settings`가 쓰는 `config.json`은 Render 재배포 시 영속 저장소가 아님
+- Render에서는 필요하지 않으면 백그라운드 SWING 스캐너를 끄는 편이 안전함
+- 필요할 때만 `ENABLE_SWING_SCANNER=true` 사용
 
-## 🧪 백테스트 직접 돌리기
+### Oracle Cloud
 
-```bash
-# 1. 기본 백테 (entry timing OLD vs NEW)
-python backtest/entry_timing_backtest.py --period 3y --n-us 100 --n-kr 100
-
-# 2. 임계값 스윕
-python backtest/threshold_sweep.py
-
-# 3. 점수 함수 변종 비교 (V1~V6)
-python backtest/score_variants_test.py
-```
-
-캐시는 `backtest/cache/` 에 parquet으로 저장. 첫 실행만 느리고 그 다음부터 즉시.
-
----
-
-## ⚠️ 면책 조항
-
-- 본 소프트웨어가 산출하는 점수·신호·분석은 **교육 및 정보 제공 목적**입니다.
-- **투자 자문이 아닙니다.** 모든 투자 결정과 손익은 사용자 본인 책임입니다.
-- 과거 성과는 미래 수익을 보장하지 않습니다.
-- 백테스트 결과는 과거 데이터 기반이며 실제 시장 미체결·슬리피지를 반영하지 않습니다.
-
----
-
-## 📜 라이선스
+- [Oracle Cloud 가이드](deploy/ORACLE_CLOUD.md)
+- [초기 세팅 스크립트](deploy/setup-oracle.sh)
 
 ## Public Repo Notes
 
-- Keep real API keys, bot tokens, and account numbers only in `.env` or local `config.json`.
-- Commit `.env.example` and `config.example.json`, but never commit live credentials.
-- Token caches, local UI state, and files under `swing_scan/state/` are excluded from the public repo.
+- 실제 비밀값은 `.env` 또는 로컬 `config.json`에만 저장
+- `config.example.json`만 커밋하고 `config.json`은 커밋하지 않음
+- 토큰 캐시, 로컬 UI 상태, 데이터 산출물은 `.gitignore`로 제외
+- `data/`, `*.parquet`, `.kis_token_cache.json`, `_*.json` 같은 로컬 산출물은 공개 제외
+
+## Tests
+
+```bash
+pytest tests/test_entry_status_v2.py tests/test_entry_status_v3.py
+```
+
+## License
 
 [MIT License](LICENSE)
-
----
-
-## 🤝 기여
-
-이슈/PR 환영. 특히:
-- 새 퀀트 팩터 제안
-- 더 나은 점수 함수 백테 결과 (V7 이상)
-- 다른 시장(JP/HK/EU) 지원
-- 모바일 UI 개선
-
----
-
-## 📚 참고
-
-- 윌리엄 오닐, *How to Make Money in Stocks* (CAN SLIM 원전)
-- Fama & French, *Common risk factors in the returns on stocks and bonds* (1993)
-- Carhart, *On Persistence in Mutual Fund Performance* (1997)
-
----
-
-## Render Deployment
-
-- This repo includes `render.yaml` for a Render web service and uses `gunicorn --bind 0.0.0.0:$PORT wsgi:app`.
-- On Render, create a new Blueprint or Web Service from this repository.
-- Set any real API credentials in the Render dashboard as environment variables. Do not commit them.
-- The `/settings` page writes to local `config.json`, which is not persistent across Render redeploys or instance restarts. Use Render environment variables for production settings.
-- The background SWING scanner is disabled by default on Render. Set `ENABLE_SWING_SCANNER=true` only if you intentionally want that behavior in a suitable environment.

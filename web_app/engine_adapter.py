@@ -69,15 +69,14 @@ class ScanAdapter:
 
     @staticmethod
     def _fetch_vol_index(market: str) -> float:
-        """VIX(US) / VKOSPI(KR) 종가. 실패 시 20.0 fallback.
+        """VIX 종가. 실패 시 20.0 fallback.
 
-        KR도 동일한 vix_value 슬롯을 쓰지만 의미는 VKOSPI다 — 점수계의 VIX
-        smooth band(12~45)는 두 지수의 전형 범위(11~45)와 호환된다.
+        KR/US 모두 ^VIX를 사용한다 — 점수계의 VIX smooth band(12~45)는
+        양쪽 시장에 동일하게 적용되며, ^VKOSPI는 Yahoo Finance에서 제거됨.
         """
         try:
             import yfinance as _yf
-            sym = "^VIX" if market == "US" else "^VKOSPI"
-            v = _yf.Ticker(sym).history(period="5d")
+            v = _yf.Ticker("^VIX").history(period="5d")
             if not v.empty:
                 return float(v["Close"].iloc[-1])
         except Exception as e:

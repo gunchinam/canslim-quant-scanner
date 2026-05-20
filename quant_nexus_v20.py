@@ -421,146 +421,157 @@ CANSLIM = {
 #   [보조 퀀트]  mtf  drawdown  volume  rs  price_target  short_int  math
 #   [CAN SLIM]  cs_c(EPS가속)  cs_a(ROE)  cs_n(신고가)  cs_s(거래량)  cs_l(주도주)  cs_i(기관)
 #
+# patch-B2 (거버넌스): 가중치 변경 시 백테스트 sweep ID + Sharpe 인용 필수.
+#   형식: `# Source: sweeps/<YYYY>Q<n>_<mode>.csv, IS sharpe=X.X, OOS=Y.Y, n=Z`
+#   백테스트 없이 직관으로 조정 시 `# rationale-only, no backtest` 명시 강제.
+#   현재 값(2026Q2)은 patch-01 중복 제거 + R6 추세군 상한 반영. IC 측정(patch-04) 후 재캘리브레이션 예정.
+#   참고: Entry timing v5.1(line ~5127)은 "sweep 1080조합, sharpe +0.062" 인용 — 동등 수준 거버넌스 적용 목표.
 STRATEGY_WEIGHTS: dict[str, dict[str, float]] = {
 
     # ── BALANCED: 고른 분산, 어느 팩터도 과도하지 않음 ─────────────────
+    # NOTE(patch-01): cs_a/cs_s/cs_l/cs_i 중복 제거(P0) — 동일 raw score를
+    #   각각 fama_french/volume/rs/smart_money에 흡수.
     "BALANCED": {
-        # 기본 퀀트 (합 0.49)
+        # 기본 퀀트 (합 0.60 — 흡수분 +0.11)
         "momentum":       0.08,
-        "fama_french":    0.08,
+        "fama_french":    0.13,   # +0.05 (cs_a 흡수)
         "mean_reversion": 0.07,
         "quality":        0.10,
         "regime":         0.08,
-        "smart_money":    0.08,
-        # 보조 퀀트 (합 0.25 — sentiment 포함)
+        "smart_money":    0.10,   # +0.02 (cs_i 흡수)
+        # 보조 퀀트 (합 0.33 — sentiment 포함, volume/rs 흡수분 포함)
         "mtf":            0.04,
         "drawdown":       0.03,
-        "volume":         0.04,
-        "rs":             0.04,
+        "volume":         0.08,   # +0.04 (cs_s 흡수)
+        "rs":             0.08,   # +0.04 (cs_l 흡수)
         "price_target":   0.03,
         "short_int":      0.02,
         "math":           0.02,
         "sentiment":      0.03,
-        # CAN SLIM (합 0.26)
+        # CAN SLIM (합 0.11) — 독립 신호 cs_c·cs_n만 유지
         "cs_c":           0.06,
-        "cs_a":           0.05,
+        "cs_a":           0.00,   # 중복 제거 → fama_french 흡수
         "cs_n":           0.05,
-        "cs_s":           0.04,
-        "cs_l":           0.04,
-        "cs_i":           0.02,
+        "cs_s":           0.00,   # 중복 제거 → volume 흡수
+        "cs_l":           0.00,   # 중복 제거 → rs 흡수
+        "cs_i":           0.00,   # 중복 제거 → smart_money 흡수
         # 단타 팩터 (비활성)
         "orb": 0.0, "nr7": 0.0, "bb_revert": 0.0,
     },
 
     # ── MOMENTUM: 12개월 모멘텀·거래량·신고가 극대화 ────────────────────
+    # NOTE(patch-01): cs_a/cs_s/cs_l/cs_i 흡수.
     "MOMENTUM": {
-        # 기본 퀀트 (합 0.50)
+        # 기본 퀀트 (합 0.52)
         "momentum":       0.15,   # ★ 핵심
-        "fama_french":    0.05,
+        "fama_french":    0.07,   # +0.02 (cs_a 흡수)
         "mean_reversion": 0.04,
         "quality":        0.07,
         "regime":         0.11,   # 추세 방향 중시
-        "smart_money":    0.08,
-        # 보조 퀀트 (합 0.24 — sentiment 포함)
+        "smart_money":    0.09,   # +0.01 (cs_i 흡수)
+        # 보조 퀀트 (합 0.33 — sentiment 포함)
         "mtf":            0.05,   # 멀티타임프레임 모멘텀
         "drawdown":       0.02,
-        "volume":         0.06,   # ★ 거래량 돌파
-        "rs":             0.05,   # ★ 상대강도
+        "volume":         0.12,   # +0.06 (cs_s 흡수)
+        "rs":             0.08,   # +0.03 (cs_l 흡수)
         "price_target":   0.02,
         "short_int":      0.01,
         "math":           0.01,
         "sentiment":      0.02,
-        # CAN SLIM (합 0.26)
+        # CAN SLIM (합 0.14) — 독립 신호만
         "cs_c":           0.05,
-        "cs_a":           0.02,
+        "cs_a":           0.00,   # 중복 제거
         "cs_n":           0.09,   # ★★ 신고가·피벗 돌파
-        "cs_s":           0.06,   # ★ 거래량 확인
-        "cs_l":           0.03,
-        "cs_i":           0.01,
+        "cs_s":           0.00,   # 중복 제거
+        "cs_l":           0.00,   # 중복 제거
+        "cs_i":           0.00,   # 중복 제거
         "orb": 0.0, "nr7": 0.0, "bb_revert": 0.0,
     },
 
     # ── VALUE: 가치 팩터·ROE·저평가 극대화 ──────────────────────────────
+    # NOTE(patch-01): cs_a/cs_s/cs_l/cs_i 흡수.
     "VALUE": {
-        # 기본 퀀트 (합 0.53)
+        # 기본 퀀트 (합 0.65)
         "momentum":       0.04,
-        "fama_french":    0.17,   # ★★ Fama-French 가치 알파 핵심
+        "fama_french":    0.27,   # ★★ +0.10 (cs_a 흡수) — ROE 단일화
         "mean_reversion": 0.10,   # ★ 평균회귀 — 저평가 복귀
         "quality":        0.15,   # ★ 이익률·부채 품질
         "regime":         0.04,
-        "smart_money":    0.03,
-        # 보조 퀀트 (합 0.25 — sentiment 포함)
+        "smart_money":    0.05,   # +0.02 (cs_i 흡수)
+        # 보조 퀀트 (합 0.31 — sentiment 포함)
         "mtf":            0.02,
         "drawdown":       0.04,   # 리스크 관리
-        "volume":         0.02,
-        "rs":             0.02,
+        "volume":         0.04,   # +0.02 (cs_s 흡수)
+        "rs":             0.06,   # +0.04 (cs_l 흡수)
         "price_target":   0.07,   # ★ DCF 적정가 상승여력
         "short_int":      0.03,
         "math":           0.02,
         "sentiment":      0.03,
-        # CAN SLIM (합 0.22)
+        # CAN SLIM (합 0.04) — 독립 신호만
         "cs_c":           0.02,
-        "cs_a":           0.10,   # ★★ 연간 EPS·ROE 17%+ 핵심
+        "cs_a":           0.00,   # 중복 제거
         "cs_n":           0.02,
-        "cs_s":           0.02,
-        "cs_l":           0.04,
-        "cs_i":           0.02,
+        "cs_s":           0.00,   # 중복 제거
+        "cs_l":           0.00,   # 중복 제거
+        "cs_i":           0.00,   # 중복 제거
         "orb": 0.0, "nr7": 0.0, "bb_revert": 0.0,
     },
 
     # ── CAN_SLIM: 오닐 7원칙 집중 — C·A·L에 예산 집중 ──────────────────
+    # NOTE(patch-01): cs_a/cs_s/cs_l/cs_i 흡수. A/S/L 원칙은 보조 퀀트(fama_french/volume/rs)로 흡수되어 그대로 반영.
     "CAN_SLIM": {
-        # 기본 퀀트 (합 0.38)
+        # 기본 퀀트 (합 0.49)
         "momentum":       0.08,
-        "fama_french":    0.04,
+        "fama_french":    0.13,   # +0.09 (cs_a/A원칙 흡수)
         "mean_reversion": 0.03,
         "quality":        0.09,   # C·A 원칙 기저
         "regime":         0.10,   # M 원칙 (시장 방향)
-        "smart_money":    0.04,
-        # 보조 퀀트 (합 0.20 — sentiment 포함)
+        "smart_money":    0.06,   # +0.02 (cs_i 흡수)
+        # 보조 퀀트 (합 0.32 — sentiment 포함)
         "mtf":            0.03,
         "drawdown":       0.02,
-        "volume":         0.05,   # S 원칙 보조
-        "rs":             0.04,   # L 원칙 보조
+        "volume":         0.10,   # +0.05 (cs_s/S원칙 흡수)
+        "rs":             0.11,   # +0.07 (cs_l/L원칙 흡수)
         "price_target":   0.01,
         "short_int":      0.01,
         "math":           0.02,
         "sentiment":      0.02,
-        # CAN SLIM (합 0.42) — ★★ CAN SLIM 원칙에 예산 최대 배분
+        # CAN SLIM (합 0.19) — 독립 신호 cs_c·cs_n만 유지
         "cs_c":           0.12,   # ★★★ C: EPS 가속도
-        "cs_a":           0.09,   # ★★ A: 연간 ROE 17%+
+        "cs_a":           0.00,   # 중복 제거 → fama_french
         "cs_n":           0.07,   # ★ N: 신고가·피벗
-        "cs_s":           0.05,   # S: 거래량 확인
-        "cs_l":           0.07,   # ★★ L: RS 80+ 주도주
-        "cs_i":           0.02,   # I: 기관 수급
+        "cs_s":           0.00,   # 중복 제거 → volume
+        "cs_l":           0.00,   # 중복 제거 → rs
+        "cs_i":           0.00,   # 중복 제거 → smart_money
         "orb": 0.0, "nr7": 0.0, "bb_revert": 0.0,
     },
 
     # ── SCALPING: 단타/스윙 종목 스크리닝 — ORB·NR7·BB반등 집중 ────────
+    # NOTE(patch-01): cs_a/cs_s/cs_l/cs_i 흡수.
     "SCALPING": {
-        # 기본 퀀트 (합 0.28) — 단기 유효 팩터만 유지
+        # 기본 퀀트 (합 0.31) — 단기 유효 팩터만 유지
         "momentum":       0.06,
-        "fama_french":    0.01,
+        "fama_french":    0.02,   # +0.01 (cs_a 흡수)
         "mean_reversion": 0.05,
         "quality":        0.02,
         "regime":         0.06,
-        "smart_money":    0.08,   # ★ 수급 중시
-        # 보조 퀀트 (합 0.22)
+        "smart_money":    0.09,   # +0.01 (cs_i 흡수)
+        # 보조 퀀트 (합 0.29)
         "mtf":            0.03,
         "drawdown":       0.02,
-        "volume":         0.08,   # ★★ 거래량 핵심
-        "rs":             0.03,
+        "volume":         0.13,   # +0.05 (cs_s 흡수)
+        "rs":             0.06,   # +0.03 (cs_l 흡수)
         "price_target":   0.01,
         "short_int":      0.01,
         "math":           0.01,
         "sentiment":      0.03,
-        # CAN SLIM (합 0.18) — 최소 유지
+        # CAN SLIM (합 0.08) — 독립 신호만
         "cs_c":           0.03,
-        "cs_a":           0.01,
+        "cs_a":           0.00,   # 중복 제거
         "cs_n":           0.05,   # ★ 신고가 돌파
-        "cs_s":           0.05,   # ★ 거래량 확인
-        "cs_l":           0.03,
-        "cs_i":           0.01,
+        "cs_s":           0.00,   # 중복 제거
+        "cs_l":           0.00,   # 중복 제거
+        "cs_i":           0.00,   # 중복 제거
         # 단타 팩터 (합 0.32) — ★★★ 핵심
         "orb":            0.14,   # ★★★ 전일 고가 돌파
         "nr7":            0.10,   # ★★ 변동폭 압축 돌파
@@ -574,6 +585,17 @@ for _mode, _w in STRATEGY_WEIGHTS.items():
     assert abs(_total - 1.0) < 1e-4, (
         f"STRATEGY_WEIGHTS['{_mode}'] 합계={_total:.6f} ≠ 1.0 — "
         f"가중치 합이 1.0이 되도록 수정하세요."
+    )
+
+# R6: 추세군(momentum+mtf+drawdown+volume+rs+cs_n) 합 ≤ 0.55 강제.
+# 학계 근거: 단일 신호군(추세) 과집중 시 momentum crash(Daniel-Moskowitz 2016) 노출 증폭.
+# 추세 노출 상한 — 이를 넘기려면 의식적 결정 + 주석 근거 필요.
+_TREND_FACTORS = ("momentum", "mtf", "drawdown", "volume", "rs", "cs_n")
+for _mode, _w in STRATEGY_WEIGHTS.items():
+    _trend = round(sum(_w.get(f, 0.0) for f in _TREND_FACTORS), 6)
+    assert _trend <= 0.55 + 1e-4, (
+        f"STRATEGY_WEIGHTS['{_mode}'] 추세군 합={_trend:.4f} > 0.55 — "
+        f"R6 추세 노출 상한 위반. 가중치를 조정하거나 상한 변경 근거를 주석으로 명시하세요."
     )
 
 # ─── 열 툴팁 ──────────────────────────────────────────────────────────
@@ -636,6 +658,20 @@ def safe_get(val, default=0):
     return val
 
 
+def _normalize_div_yield(dy):
+    """yfinance dividendYield는 티커마다 % 또는 decimal로 들어와서 통일이 안 됨.
+    1.0 초과면 %로 보고 100으로 나눠서 decimal로 정규화."""
+    if dy is None:
+        return 0.0
+    try:
+        dy = float(dy)
+        if np.isnan(dy):
+            return 0.0
+        return dy / 100.0 if dy > 1.0 else dy
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def safe_div(numerator, denominator, default=0.0):
     """0 나눗셈 방지 유틸리티입니다."""
     if denominator is None or denominator == 0:
@@ -643,6 +679,29 @@ def safe_div(numerator, denominator, default=0.0):
     if numerator is None:
         return default
     return numerator / denominator
+
+
+def _meanrev_overheat_penalty(rsi: float, bb_pos: float, regime: str) -> tuple[int, str | None]:
+    """
+    EntryStatus MeanRev 컴포지트의 과열 페널티 계산 (regime-gated).
+
+    추세장(STRONG_BULL/BULL)에서 mean-revert factor는 역수익 부호이므로
+    RSI 70+/BB 0.95+ 신호는 약감점(-4), 그 외는 -14/-10 페널티.
+    돌려주는 값은 (점수, 태그) — 점수가 0이면 페널티 없음.
+    """
+    trending = regime in ("STRONG_BULL", "BULL")
+    pts = 0
+    tag: str | None = None
+    if rsi >= 70:
+        pts = -4 if trending else -14
+        tag = "RSI 과열 (추세 유지)" if trending else "RSI 과열"
+    if bb_pos > 0.95:
+        bb_pen = -4 if trending else -10
+        # 더 강한(더 작은) 페널티로 덮어쓰기
+        if bb_pen < pts:
+            pts = bb_pen
+            tag = "BB 과확장 (추세 유지)" if trending else "BB 과확장"
+    return pts, tag
 
 
 def rate_limit(max_per_second: float):
@@ -1217,6 +1276,8 @@ class WallStreetQuantStrategies:
         n = len(hist)
         supports = []
         resistances = []
+        cur = float(cur) if np.isfinite(cur) else 0.0
+        atr14 = float(atr14) if np.isfinite(atr14) and atr14 > 0 else 0.0
 
         # 1) 스윙 포인트 기반 (최근 60일)
         lb = min(n, 60)
@@ -1252,6 +1313,8 @@ class WallStreetQuantStrategies:
                 from collections import defaultdict
                 vol_at = defaultdict(float)
                 for px, vol in zip(_c60, _v60):
+                    if not (np.isfinite(px) and np.isfinite(vol)):
+                        continue
                     key = round(px / bucket) * bucket
                     vol_at[key] += vol
                 # 거래량 상위 3개 레벨
@@ -1321,21 +1384,33 @@ class WallStreetQuantStrategies:
         try:
             if len(hist) < 14:
                 return result
+            hist = hist.copy()
+            for col in ["High", "Low", "Close", "Volume"]:
+                if col in hist.columns:
+                    hist[col] = pd.to_numeric(hist[col], errors="coerce")
+            hist = hist.replace([np.inf, -np.inf], np.nan)
+            hist = hist.dropna(subset=["High", "Low", "Close"])
+            if len(hist) < 14:
+                return result
             h, l, c = hist["High"], hist["Low"], hist["Close"]
             tr = pd.concat([h - l, (h - c.shift(1)).abs(), (l - c.shift(1)).abs()], axis=1).max(axis=1)
             atr14 = float(tr.ewm(alpha=1/14, adjust=False).mean().iloc[-1])
+            if not np.isfinite(atr14) or atr14 <= 0:
+                return result
             result["atr_14"] = atr14
             cur = float(c.iloc[-1])
-            if cur <= 0:
+            if not np.isfinite(cur) or cur <= 0:
                 return result
             result["atr_percent"] = (atr14 / cur) * 100
+            if not np.isfinite(result["atr_percent"]):
+                result["atr_percent"] = 0.0
 
             # ── 변동성 레짐 ──
             if len(tr) >= 50:
                 atr_ratio = float(tr.rolling(20).mean().iloc[-1] / (tr.rolling(50).mean().iloc[-1] + 1e-9))
-                if atr_ratio > 1.5:
+                if np.isfinite(atr_ratio) and atr_ratio > 1.5:
                     result["vol_regime"] = "HIGH"; result["size_suggestion"] = "REDUCE"
-                elif atr_ratio < 0.7:
+                elif np.isfinite(atr_ratio) and atr_ratio < 0.7:
                     result["vol_regime"] = "LOW"; result["size_suggestion"] = "INCREASE"
 
             # ── 다중 지지/저항 탐색 ──
@@ -1538,28 +1613,21 @@ class WallStreetQuantStrategies:
         result = {"quality_score": 0, "profitability": "MEDIUM", "safety": "MEDIUM", "earnings_quality": 0}
         try:
             score = 0
-            # ROE는 fama_french + cs_a에서 평가 → 중복 제거
+            # patch-C1: 중복 제거 — grossMargins/debtToEquity는 fama_french에서 이미 평가.
+            #           ROE도 fama_french + cs_a에서 평가. quality는 영업이익률/유동비율/현금흐름만 담당.
             om   = safe_get(info.get("operatingMargins"), safe_get(info.get("profitMargins"), 0))
-            gm   = safe_get(info.get("grossMargins"), 0)
-            dte  = safe_get(info.get("debtToEquity"), 100)
             cr   = safe_get(info.get("currentRatio"), 1)
             ocf  = safe_get(info.get("operatingCashflow"), 0)
             rev  = safe_get(info.get("totalRevenue"), 1)
 
-            # 이익률 (영업이익률 + 매출총이익률)
+            # 이익률 (영업이익률만 — grossMargins는 fama_french 흡수)
             if om > 0.20:     score += 12; result["profitability"] = "HIGH"
             elif om > 0.10:   score += 6
             elif om < 0:      score -= 8; result["profitability"] = "LOW"
-            if gm > 0.40:     score += 5
-            elif gm > 0.25:   score += 2
 
-            # 재무 안전성 (부채비율 + 유동비율)
-            if dte < 30:      score += 10; result["safety"] = "HIGH"
-            elif dte < 80:    score += 5
-            elif dte > 150:   score -= 10; result["safety"] = "LOW"
-
-            if cr > 2:        score += 5
-            elif cr < 1:      score -= 5
+            # 재무 안전성 (유동비율만 — debtToEquity는 fama_french 흡수)
+            if cr > 2:        score += 5; result["safety"] = "HIGH"
+            elif cr < 1:      score -= 5; result["safety"] = "LOW"
 
             # 현금흐름 품질 (영업CF / 매출)
             if rev > 0 and ocf > 0:
@@ -2590,6 +2658,8 @@ class QuantNexusApp:
         self._stats_lock       = threading.Lock()
         self._slim_mode        = False  # 기본: 전체 컬럼 표시
 
+        self._sidebar_default_width = 280
+        self._sidebar_collapsed = False
         self._naver_target_cache: dict = {}
         self._naver_target_meta: dict = {}  # 증권사 목표가 메타데이터 (애널리스트 수, 고/저)
         self._naver_cache_path = os.path.join(
@@ -2766,6 +2836,7 @@ class QuantNexusApp:
                 '영업활동현금흐름': ('opcf_naver',       1e8),
                 'EBITDA':           ('ebitda_naver',     1e8),
                 '발행주식수':       ('shares_naver',     1.0),
+                '배당수익률':       ('div_yield_naver',  1.0),
             }
             for row in fi.get('rowList', []):
                 title = row['title']
@@ -2953,6 +3024,11 @@ class QuantNexusApp:
         # 전략 선택
         sf = tk.Frame(right, bg=C["HEADER_BG"])
         sf.pack(side=tk.RIGHT, padx=(0, 20))
+        self.btn_sidebar = self._skeu_button(
+            sf, "SECTORS >", self._toggle_sidebar,
+            active=False, padx=10, pady=5
+        )
+        self.btn_sidebar.pack(side=tk.LEFT, padx=(0, 8))
         tk.Label(sf, text="Strategy:", font=F["SMALL"],
                  bg=C["HEADER_BG"], fg=C["TEXT_LABEL"]).pack(side=tk.LEFT)
         self._strat_btns = {}
@@ -2991,8 +3067,10 @@ class QuantNexusApp:
         sb = tk.Frame(parent, bg=C["SIDEBAR"],
                       relief="flat", bd=0,
                       highlightbackground=C["SHADOW"],
-                      highlightthickness=1)
-        parent.add(sb, weight=1)
+                      highlightthickness=1,
+                      width=self._sidebar_default_width)
+        self.sidebar_frame = sb
+        parent.add(sb, weight=0)
 
         tk.Label(sb, text="  📊  SECTORS", font=F["HEADER"],
                  bg=C["SIDEBAR"], fg=C["ACCENT"],
@@ -3067,6 +3145,21 @@ class QuantNexusApp:
                                      bg=C["SIDEBAR"], fg=C["TEXT_LABEL"],
                                      anchor="w", padx=4, pady=2)
         self.lbl_progress.pack(fill=tk.X)
+
+    def _set_sidebar_collapsed(self, collapsed: bool):
+        self._sidebar_collapsed = bool(collapsed)
+        sash_x = 0 if self._sidebar_collapsed else self._sidebar_default_width
+        try:
+            self.paned.sashpos(0, sash_x)
+        except Exception:
+            return
+        if hasattr(self, "btn_sidebar"):
+            self.btn_sidebar.config(
+                text="SECTORS >" if self._sidebar_collapsed else "< SECTORS"
+            )
+
+    def _toggle_sidebar(self):
+        self._set_sidebar_collapsed(not self._sidebar_collapsed)
 
     def _build_main_panel(self, parent):
         """메인 트리뷰 + 로그 창."""
@@ -3284,9 +3377,15 @@ class QuantNexusApp:
             return {}
 
     def _save_ui_config(self):
+        sash_x = 0
+        if self.paned.panes():
+            try:
+                sash_x = self.paned.sashpos(0)
+            except Exception:
+                sash_x = self._sidebar_default_width
         cfg = {
             "geometry": self.root.geometry(),
-            "sash_x": max(self.paned.sashpos(0), 200) if self.paned.panes() else 450,
+            "sash_x": max(int(sash_x), 0),
         }
         try:
             with open(self._config_path, "w", encoding="utf-8") as f:
@@ -3315,9 +3414,20 @@ class QuantNexusApp:
             # 처음 실행(저장된 창 위치 없음): 위젯 렌더링 후 최대화
             self.root.after(100, lambda: self.root.state("zoomed"))
         sash_x = self._ui_config.get("sash_x")
-        if sash_x is not None:
+        if False and sash_x is not None:
             sash_x = max(sash_x, 200)  # 사이드바 최소 200px 보장
             self.root.after(100, lambda: self.paned.sashpos(0, sash_x))
+
+        if sash_x is None:
+            sash_x = 0
+        try:
+            sash_x = int(sash_x)
+        except (TypeError, ValueError):
+            sash_x = 0
+        collapsed = sash_x <= 24
+        if not collapsed:
+            self._sidebar_default_width = max(sash_x, 200)
+        self.root.after(100, lambda: self._set_sidebar_collapsed(collapsed))
 
     def _on_close(self):
         self._save_ui_config()
@@ -3539,8 +3649,34 @@ class QuantNexusApp:
         if any(tok in raw_u for tok in ("OIL", "GAS", "ENERGY", "NUCLEAR", "UTILITY", "POWER")):
             return "정유"
 
-        # 최후 fallback: 현재 섹터명 자체를 전달
-        return sector_name or str(info.get("sector") or info.get("industry") or "").strip()
+        # 최후 fallback: 큐레이션 섹터명이 있으면 그대로, 없으면
+        # yfinance 영문 GICS 섹터를 한글로 정규화해 전달 (영문 노출 방지)
+        if sector_name:
+            return sector_name
+        _GICS_KR = {
+            "TECHNOLOGY": "기술",
+            "COMMUNICATION SERVICES": "커뮤니케이션",
+            "CONSUMER CYCLICAL": "경기소비재",
+            "CONSUMER DISCRETIONARY": "경기소비재",
+            "CONSUMER DEFENSIVE": "필수소비재",
+            "CONSUMER STAPLES": "필수소비재",
+            "CONSUMER GOODS": "필수소비재",
+            "FINANCIAL SERVICES": "금융",
+            "FINANCIAL": "금융",
+            "FINANCIALS": "금융",
+            "HEALTHCARE": "바이오",
+            "HEALTH CARE": "바이오",
+            "INDUSTRIALS": "산업재",
+            "INDUSTRIAL GOODS": "산업재",
+            "BASIC MATERIALS": "소재",
+            "MATERIALS": "소재",
+            "ENERGY": "에너지",
+            "UTILITIES": "유틸리티",
+            "REAL ESTATE": "부동산",
+            "CONGLOMERATES": "지주·복합",
+        }
+        fb = str(info.get("sector") or info.get("industry") or "").strip()
+        return _GICS_KR.get(fb.upper(), fb) if fb else ""
 
     def _load_sector_tree(self):
         for item in self.sector_tree.get_children():
@@ -4257,6 +4393,28 @@ class QuantNexusApp:
             w = STRATEGY_WEIGHTS.get(self._scan_strategy,
                                      STRATEGY_WEIGHTS["BALANCED"])
 
+            # ── 투자지주사: 실적/밸류 팩터 무력화, NAV-할인 신호 주축화 ──
+            # 지주사 주가는 실적이 아니라 보유 상장지분 NAV에 할인율이
+            # 적용돼 결정된다(PER/PBR·ROE·분기EPS는 무의미). 따라서
+            # 실적계 팩터 가중치를 0으로 빼고, NAV-할인율을 담은
+            # price_target 을 압도적 주축으로, 나머지는 주가/수급 기술
+            # 팩터에만 배분한 뒤 합이 1이 되도록 재정규화한다. 이 가중은
+            # 전략 무관(STEP 10.7)으로도 동일 적용된다.
+            _is_holdco = float(info.get("_holdco_nav_ps") or 0.0) > 0.0
+            if _is_holdco:
+                _hw = {
+                    "price_target": 0.45, "momentum": 0.10, "regime": 0.08,
+                    "smart_money": 0.08, "rs": 0.07, "mean_reversion": 0.05,
+                    "mtf": 0.04, "volume": 0.03, "drawdown": 0.03,
+                    "math": 0.02, "sentiment": 0.02, "short_int": 0.01,
+                    "cs_n": 0.01, "cs_s": 0.005, "cs_l": 0.005,
+                    "fama_french": 0.0, "quality": 0.0, "cs_c": 0.0,
+                    "cs_a": 0.0, "cs_i": 0.0, "orb": 0.0, "nr7": 0.0,
+                    "bb_revert": 0.0,
+                }
+                _hs = sum(_hw.values()) or 1.0
+                w = {k: v / _hs for k, v in _hw.items()}
+
             def _n(raw: float, center: float = 0.0, scale: float = 1.5) -> float:
                 """
                 연속형 원점수 → [0, 100] 정규화.
@@ -4305,6 +4463,34 @@ class QuantNexusApp:
             # 하드코딩된 *0.35, *0.25 같은 원칙별 내부 배율은 폐기.
             # ════════════════════════════════════════════════════════════
             canslim_tags = []
+
+            # ── 투자지주사: 점수 근거 한 줄 설명 (왜 이 점수인지) ────
+            if _is_holdco:
+                _hc = pt.get("holdco_components", {}) or {}
+                _cd = _hc.get("current_discount")
+                _td = _hc.get("target_discount")
+                _vd = _hc.get("verdict", "")
+                if _cd is not None and _td is not None:
+                    _cdp, _tdp = _cd * 100.0, _td * 100.0
+                    if _vd == "UNDERVALUED":
+                        canslim_tags.append(
+                            f"💎 지주사라 실적이 아닌 NAV(보유지분 가치)로 평가해요. "
+                            f"지금 NAV 대비 {_cdp:.0f}% 할인 거래 중인데 적정 할인은 "
+                            f"~{_tdp:.0f}%라, 그만큼 저평가예요")
+                    elif _vd == "OVERVALUED":
+                        canslim_tags.append(
+                            f"💎 지주사라 실적이 아닌 NAV(보유지분 가치)로 평가해요. "
+                            f"NAV 할인이 {_cdp:.0f}%로 적정({_tdp:.0f}%)보다 얕아 "
+                            f"고평가 구간이에요")
+                    else:
+                        canslim_tags.append(
+                            f"💎 지주사라 실적이 아닌 NAV(보유지분 가치)로 평가해요. "
+                            f"NAV 할인 {_cdp:.0f}%가 적정({_tdp:.0f}%)과 비슷한 "
+                            f"적정가 수준이에요")
+                else:
+                    canslim_tags.append(
+                        "💎 지주사라 실적이 아닌 보유지분 NAV·할인율로 평가해요 "
+                        "(실적·PER·ROE 팩터는 점수에서 제외)")
 
             # ── [C] Current Quarterly EPS 가속도 ─────────────────────
             c_raw = earn["c_score"]
@@ -4479,7 +4665,12 @@ class QuantNexusApp:
             # STEP 6 — Fail-Safe Ceiling
             # EPS 마이너스 OR RS Rating < 40 → 50점 상한
             # ════════════════════════════════════════════════════════════
-            fail_safe_triggered = earn["fail_safe_eps"] or rs["fail_safe_rs"]
+            # 지주사는 회계상 적자(EPS<0)여도 NAV 가치는 멀쩡하므로
+            # EPS Fail-Safe 면제(주가 기반 RS Fail-Safe는 그대로 적용).
+            fail_safe_triggered = (
+                (earn["fail_safe_eps"] and not _is_holdco)
+                or rs["fail_safe_rs"]
+            )
             fail_safe_label = ""
             if fail_safe_triggered:
                 base = min(base, CANSLIM["SCORE_CEIL_LAGGARD"])
@@ -4508,7 +4699,10 @@ class QuantNexusApp:
                 if base > cap_val:
                     base = cap_val
                     bear_cap_applied = True
-                    canslim_tags.append(f"[M🚫] Bear Cap 적용 → 최대 {cap_val:.0f}점")
+                    # 주: Bear Cap 사실은 메인 M 원칙 문구(_m_msg: "점수에 50%
+                    # 상한이 걸려요")와 '하락장↓' 위험 배지로 이미 표시된다.
+                    # 여기서 [M…] 대괄호 태그를 추가하면 프론트가 M을
+                    # CAN SLIM 본문이 아닌 보조지표로 잘못 분류하므로 추가하지 않는다.
 
             # ════════════════════════════════════════════════════════════
             # STEP 9 — 슈퍼 그로스 승수 (엄격화)
@@ -4600,6 +4794,9 @@ class QuantNexusApp:
             }
             all_scores: dict[str, float] = {}
             for _mode, _w in STRATEGY_WEIGHTS.items():
+                # 지주사 평가는 전략(공격/방어 등) 무관 — NAV-할인 가중으로 통일
+                if _is_holdco:
+                    _w = w
                 _b = sum(_factor_values[k] * _w.get(k, 0.0) for k in _factor_values)
                 _b = max(0.0, min(120.0, _b))
                 _b = max(0.0, min(120.0, _b * hurst_kalman_trust))
@@ -5023,17 +5220,20 @@ class QuantNexusApp:
 
             # ── 1) MeanRev 컴포지트 (RSI + BB + VWAP 통합) ──────────────
             # 셋 다 r>0.83 의 동조 신호이므로 합산 금지. 최대 가점만 적용.
+            # 과열 페널티는 regime-gated helper로 계산 (STRONG_BULL/BULL은 약감점).
             mr_pts = 0
             mr_tag = None
-            # RSI 기여
+            # 과매도 가점 우선 평가
             if   _rsi_v < 30: mr_pts = max(mr_pts, 16); mr_tag = "과매도 반등"
             elif _rsi_v < 40: mr_pts = max(mr_pts, 9);  mr_tag = mr_tag or "RSI 저점권"
-            elif _rsi_v >= 70: mr_pts = min(mr_pts, -14); mr_tag = "RSI 과열"
-            # BB 기여 (더 강하면 덮어쓰기)
-            if   _bb_pos < -0.7 and mr_pts < 14:
+            # RSI/BB 과열 페널티 (regime-gated)
+            _oh_pts, _oh_tag = _meanrev_overheat_penalty(_rsi_v, _bb_pos, _reg)
+            if _oh_pts < 0 and _oh_pts < mr_pts:
+                mr_pts = _oh_pts
+                mr_tag = _oh_tag
+            # BB 하단 가점 (과매도 가점보다 강하면 덮어쓰기)
+            if _bb_pos < -0.7 and mr_pts < 14:
                 mr_pts = 14; mr_tag = "BB 하단"
-            elif _bb_pos > 0.95 and mr_pts > -10:
-                mr_pts = -10; mr_tag = "BB 과확장"
             # VWAP 살짝 눌림 보너스 (다른 신호 없을 때만)
             if mr_pts == 0 and -0.03 <= _vwap_d <= 0.02:
                 mr_pts = 4; mr_tag = "VWAP 눌림"
@@ -5170,6 +5370,45 @@ class QuantNexusApp:
                 entry_discount = 0.0
                 _rr_adj = atr.get("rr_ratio", 0.0)
 
+            # ── 파생 표시 필드 (프론트 분기 제거 · 브레인스토밍 #2/#4) ────
+            # headline_action : 카드 최상단 1-단어 결정 (점수보다 즉시 행동가능)
+            # confidence_band : 승률+R:R 괴리를 1개 밴드로 추상화
+            #                   (Phase1 app.js 임계와 동일하게 유지 → 서버/클라 일치)
+            # one_reason      : 결론 근거 1줄 (문구·칩·유형 중복 통합)
+            try:
+                _wr = atr.get("win_rate", 0.0) or 0.0
+                _rr_v = round(_rr_adj, 2)
+                _rr_now_v = atr.get("rr_ratio", 0.0) or 0.0
+                _disc = entry_discount  # 0~1
+                if entry_status == "STRONG":
+                    headline_action = "지금 매수 가능" if _disc < 0.015 else "풀백 대기"
+                elif entry_status == "NEUTRAL":
+                    headline_action = "관망"
+                else:
+                    headline_action = "회피"
+
+                _low_wr = _wr > 0 and _wr < 40
+                _low_rr = (_rr_now_v > 0 and _rr_now_v < 1.5) or (_rr_v > 0 and _rr_v < 1.5)
+                _hi_wr = _wr >= 55
+                _hi_rr = _rr_v >= 2.5 and (_rr_now_v <= 0 or _rr_now_v >= 2.0)
+                if _wr <= 0 and _rr_v <= 0:
+                    confidence_band = ""
+                elif _low_wr or _low_rr:
+                    confidence_band = "낮음"
+                elif _hi_wr and _hi_rr:
+                    confidence_band = "높음"
+                else:
+                    confidence_band = "보통"
+
+                if _phrases:
+                    one_reason = " · ".join(_phrases[:2])
+                else:
+                    one_reason = "신호 혼조 — 뚜렷한 우위 없음"
+            except Exception:
+                headline_action = status_label
+                confidence_band = ""
+                one_reason = ""
+
             entry_plan = {
                 "entry": entry_price,            # ← 풀백 지정가
                 "entry_type": _entry_type,
@@ -5183,6 +5422,10 @@ class QuantNexusApp:
                 "stop_method": atr.get("stop_method", "ATR"),
                 "win_rate": atr.get("win_rate", 0.0),
                 "score_breakdown": _score_breakdown,
+                # 파생 표시 필드 (프론트는 그대로 표시만)
+                "headline_action": headline_action,
+                "confidence_band": confidence_band,
+                "one_reason": one_reason,
             }
 
             result = {
@@ -5267,10 +5510,12 @@ class QuantNexusApp:
                 "_ADX":             regime["adx"],
                 "_OperatingMargin": safe_get(info.get("operatingMargins") or info.get("profitMargins"), 0),
                 "_DebtRatio":       safe_get(info.get("debtToEquity"), 100),
+                "_Mom1M":           mom["mom_1m"],
                 "_Mom3M":           float((cur / hist["Close"].iloc[-63] - 1) * 100) if len(hist) >= 63 else 0,
                 "_DayChgPct":       day_chg * 100,
                 "_MarketCap":       safe_get(info.get("marketCap"), 0),
                 "_MACDHist":        mr.get("macd_hist", 0),
+                "_DivYield":        _normalize_div_yield(info.get("dividendYield")),
             }
 
             # 한국 종목: 네이버 증권 재무 데이터로 보강
@@ -5287,6 +5532,8 @@ class QuantNexusApp:
                         result['_OperatingMargin'] = nf['operating_margin'] / 100
                     if 'debt_ratio' in nf:
                         result['_DebtRatio'] = nf['debt_ratio']
+                    if 'div_yield_naver' in nf:
+                        result['_DivYield'] = nf['div_yield_naver'] / 100.0   # % → decimal
 
             self.cache.set(strategy_key, result)
             return result
@@ -7715,6 +7962,71 @@ class QuantNexusApp:
         "083450.KQ": "GST",                  # 반도체 테스트소켓
         "170920.KQ": "엘티씨",              # 반도체 식각부품
         "327260.KQ": "RF머트리얼즈",        # RF소재·5G부품
+        # ── 2026-05 인기종목 보강 (네이버 시총상위 128) ──────────────────────
+        "031210.KS": "서울보증보험", "003690.KS": "코리안리",
+        "026960.KS": "동서", "000240.KS": "한국앤컴퍼니",
+        "279570.KS": "케이뱅크", "081660.KS": "미스토홀딩스",
+        "085620.KS": "미래에셋생명", "007810.KS": "코리아써키트",
+        "023590.KS": "다우기술", "395400.KS": "SK리츠",
+        "001800.KS": "오리온홀딩스", "006040.KS": "동원산업",
+        "032350.KS": "롯데관광개발", "020560.KS": "아시아나항공",
+        "003530.KS": "한화투자증권", "030610.KS": "교보증권",
+        "073240.KS": "금호타이어", "004000.KS": "롯데정밀화학",
+        "012630.KS": "HDC", "034230.KS": "파라다이스",
+        "006110.KS": "삼아알미늄", "950160.KQ": "코오롱티슈진",
+        "440110.KQ": "파두", "319400.KQ": "현대무벡스",
+        "100790.KQ": "미래에셋벤처투자", "032820.KQ": "우리기술",
+        "043260.KQ": "성호전자", "347700.KQ": "스피어",
+        "078600.KQ": "대주전자재료", "082920.KQ": "비츠로셀",
+        "068760.KQ": "셀트리온제약", "140410.KQ": "메지온",
+        "027360.KQ": "아주IB투자", "476830.KQ": "알지노믹스",
+        "060370.KQ": "LS마린솔루션", "031330.KQ": "에스에이엠티",
+        "101490.KQ": "에스앤에스텍", "290650.KQ": "엘앤씨바이오",
+        "420770.KQ": "기가비스", "183300.KQ": "코미코",
+        "096530.KQ": "씨젠", "039200.KQ": "오스코텍",
+        "445680.KQ": "큐리옥스바이오시스템즈", "295310.KQ": "에이치브이엠",
+        "090710.KQ": "휴림로봇", "232140.KQ": "와이씨",
+        "417200.KQ": "LS머트리얼즈", "475830.KQ": "오름테라퓨틱",
+        "038500.KQ": "삼표시멘트", "491000.KQ": "리브스메드",
+        "089970.KQ": "브이엠", "003380.KQ": "하림지주",
+        "085660.KQ": "차바이오텍", "195940.KQ": "HK이노엔",
+        "458870.KQ": "씨어스", "490470.KQ": "세미파이브",
+        "065350.KQ": "신성델타테크", "281740.KQ": "레이크머티리얼즈",
+        "033790.KQ": "피노", "204270.KQ": "제이앤티씨",
+        "439960.KQ": "코스모로보틱스", "388720.KQ": "유일로보틱스",
+        "127120.KQ": "제이에스링크", "161580.KQ": "필옵틱스",
+        "124500.KQ": "아이티센글로벌", "388210.KQ": "씨엠티엑스",
+        "160190.KQ": "하이젠알앤엠", "036830.KQ": "솔브레인홀딩스",
+        "007390.KQ": "네이처셀", "213420.KQ": "덕산네오룩스",
+        "466100.KQ": "클로봇", "052020.KQ": "에스티큐브",
+        "456160.KQ": "지투지바이오", "222080.KQ": "씨아이에스",
+        "126340.KQ": "비나텍", "115180.KQ": "큐리언트",
+        "056080.KQ": "유진로봇", "094170.KQ": "동운아나텍",
+        "376900.KQ": "로킷헬스케어", "074600.KQ": "원익QnC",
+        "050890.KQ": "쏠리드", "476060.KQ": "온코닉테라퓨틱스",
+        "037460.KQ": "삼지전자", "023160.KQ": "태광",
+        "052400.KQ": "코나아이", "046890.KQ": "서울반도체",
+        "032190.KQ": "다우데이타", "121600.KQ": "나노신소재",
+        "171090.KQ": "선익시스템", "044490.KQ": "태웅",
+        "092190.KQ": "서울바이오시스", "006730.KQ": "서부T&D",
+        "348370.KQ": "엔켐", "077360.KQ": "덕산하이메탈",
+        "009520.KQ": "포스코엠텍", "174900.KQ": "앱클론",
+        "358570.KQ": "지아이이노베이션", "199800.KQ": "툴젠",
+        "019210.KQ": "와이지-원", "425420.KQ": "티에프이",
+        "102940.KQ": "코오롱생명과학", "060250.KQ": "NHN KCP",
+        "252990.KQ": "샘씨엔에스", "399720.KQ": "가온칩스",
+        "089890.KQ": "코세스", "336570.KQ": "원텍",
+        "389470.KQ": "인벤티지랩", "033160.KQ": "엠케이전자",
+        "368770.KQ": "파이버프로", "253590.KQ": "네오셈",
+        "348210.KQ": "넥스틴", "015750.KQ": "성우하이텍",
+        "033500.KQ": "동성화인텍", "024850.KQ": "HLB이노베이션",
+        "078160.KQ": "메디포스트", "089010.KQ": "켐트로닉스",
+        "486990.KQ": "노타", "475960.KQ": "토모큐브",
+        "460930.KQ": "현대힘스", "214430.KQ": "아이쓰리시스템",
+        "354320.KQ": "알멕", "372320.KQ": "큐로셀",
+        "332570.KQ": "PS일렉트로닉스", "041960.KQ": "코미팜",
+        "122640.KQ": "예스티", "448900.KQ": "한국피아이엠",
+        "493280.KQ": "아이엠바이오로직스", "093320.KQ": "케이아이엔엑스",
     }
 
     # ─────────────────────────────────────────────────────────────────────
@@ -8134,6 +8446,71 @@ class QuantNexusApp:
         # 기타 보강
         "365550.KS": "물류센터리츠", "014620.KQ": "관이음쇠·피팅",
         "033780.KS": "담배·홍삼", "010950.KS": "정유·석유화학",
+        # ── 2026-05 인기종목 보강 (네이버 시총상위 128) ──────────────────────
+        "031210.KS": "종합보증보험", "003690.KS": "재보험",
+        "026960.KS": "식품·포장재", "000240.KS": "타이어그룹지주",
+        "279570.KS": "인터넷은행", "081660.KS": "패션지주(FILA)",
+        "085620.KS": "생명보험", "007810.KS": "PCB",
+        "023590.KS": "IT지주(키움)", "395400.KS": "SK계열리츠",
+        "001800.KS": "오리온지주", "006040.KS": "수산식품지주",
+        "032350.KS": "카지노·리조트", "020560.KS": "항공",
+        "003530.KS": "증권", "030610.KS": "증권",
+        "073240.KS": "타이어", "004000.KS": "정밀화학",
+        "012630.KS": "건설그룹지주", "034230.KS": "외국인카지노",
+        "006110.KS": "알루미늄박", "950160.KQ": "유전자치료제",
+        "440110.KQ": "SSD컨트롤러", "319400.KQ": "물류자동화",
+        "100790.KQ": "벤처캐피탈", "032820.KQ": "원전계측제어",
+        "043260.KQ": "필름콘덴서", "347700.KQ": "우주항공·SW",
+        "078600.KQ": "실리콘음극재", "082920.KQ": "리튬1차전지",
+        "068760.KQ": "케미컬제약", "140410.KQ": "단심실치료제",
+        "027360.KQ": "벤처캐피탈", "476830.KQ": "RNA치료제",
+        "060370.KQ": "해저케이블시공", "031330.KQ": "반도체유통",
+        "101490.KQ": "블랭크마스크", "290650.KQ": "인체조직이식재",
+        "420770.KQ": "기판검사장비", "183300.KQ": "부품세정·코팅",
+        "096530.KQ": "분자진단", "039200.KQ": "표적항암신약",
+        "445680.KQ": "세포분석자동화", "295310.KQ": "특수합금소재",
+        "090710.KQ": "지능형로봇", "232140.KQ": "웨이퍼테스터",
+        "417200.KQ": "울트라커패시터", "475830.KQ": "ADC·TPD신약",
+        "038500.KQ": "시멘트", "491000.KQ": "복강경수술기구",
+        "089970.KQ": "폴리실리콘식각", "003380.KQ": "하림지주",
+        "085660.KQ": "세포치료제", "195940.KQ": "위식도신약",
+        "458870.KQ": "심전도모니터링", "490470.KQ": "반도체설계서비스",
+        "065350.KQ": "가전부품", "281740.KQ": "LED·반도체소재",
+        "033790.KQ": "전구체소재", "204270.KQ": "강화유리·커넥터",
+        "439960.KQ": "웨어러블로봇", "388720.KQ": "산업용로봇",
+        "127120.KQ": "유전체분석", "161580.KQ": "디스플레이장비",
+        "124500.KQ": "SI·IT서비스", "388210.KQ": "장비소모성부품",
+        "160190.KQ": "산업용모터", "036830.KQ": "소재지주",
+        "007390.KQ": "줄기세포치료제", "213420.KQ": "OLED소재",
+        "466100.KQ": "로봇소프트웨어", "052020.KQ": "면역항암신약",
+        "456160.KQ": "장기지속주사제", "222080.KQ": "2차전지장비",
+        "126340.KQ": "슈퍼커패시터", "115180.KQ": "저분자신약",
+        "056080.KQ": "청소·서비스로봇", "094170.KQ": "아날로그반도체",
+        "376900.KQ": "장기재생플랫폼", "074600.KQ": "석영유리",
+        "050890.KQ": "통신중계기", "476060.KQ": "소화기·항암신약",
+        "037460.KQ": "통신장비유통", "023160.KQ": "관이음쇠",
+        "052400.KQ": "결제IC·지역화폐", "046890.KQ": "LED",
+        "032190.KQ": "SW유통지주", "121600.KQ": "CMP슬러리·TCO",
+        "171090.KQ": "OLED증착장비", "044490.KQ": "자유형단조",
+        "092190.KQ": "LED칩", "006730.KQ": "호텔·석유판매",
+        "348370.KQ": "2차전지전해액", "077360.KQ": "솔더볼",
+        "009520.KQ": "철강포장·탈산제", "174900.KQ": "항체의약품",
+        "358570.KQ": "면역항암신약", "199800.KQ": "유전자교정",
+        "019210.KQ": "절삭공구", "425420.KQ": "테스트소켓",
+        "102940.KQ": "원료의약·항균제", "060250.KQ": "전자결제",
+        "252990.KQ": "세라믹기판", "399720.KQ": "디자인하우스",
+        "089890.KQ": "솔더볼장비", "336570.KQ": "미용의료기기",
+        "389470.KQ": "약물전달플랫폼", "033160.KQ": "본딩와이어",
+        "368770.KQ": "광섬유관성센서", "253590.KQ": "반도체검사장비",
+        "348210.KQ": "패턴결함검사", "015750.KQ": "자동차차체부품",
+        "033500.KQ": "초저온보냉재", "024850.KQ": "리드프레임",
+        "078160.KQ": "줄기세포·제대혈", "089010.KQ": "터치IC·소재",
+        "486990.KQ": "AI경량화SW", "475960.KQ": "홀로토모현미경",
+        "460930.KQ": "선박기자재", "214430.KQ": "영상센서",
+        "354320.KQ": "알루미늄압출", "372320.KQ": "CAR-T치료제",
+        "332570.KQ": "전력증폭기모듈", "041960.KQ": "동물약품",
+        "122640.KQ": "반도체·DP장비", "448900.KQ": "자동차부품",
+        "493280.KQ": "이중항체신약", "093320.KQ": "인터넷연동(IX)",
     }
 
     # ─────────────────────────────────────────────────────────────────────
@@ -8823,6 +9200,256 @@ class QuantNexusApp:
         "SATS": "에코스타",
         "MOD": "모딘 매뉴팩처링",
         "POET": "포엣 테크놀로지스",
+
+        # ── 2026-05 인기종목 보강 (네이버 시총상위 232) ──────────────────────
+        "GOOG": "알파벳 Class C",
+        "CDNS": "케이던스 디자인 시스템즈",
+        "MAR": "메리어트 인터내셔널",
+        "SNPS": "시놉시스",
+        "ORLY": "오레일리 오토모티브",
+        "DASH": "도어대시",
+        "CTAS": "신타스",
+        "CBRS": "세레브라스 시스템스",
+        "PCAR": "파카",
+        "TER": "테라다인",
+        "ADSK": "오토데스크",
+        "FAST": "패스널",
+        "FER": "페로비알",
+        "ARGX": "아겐스 ADR",
+        "FLEX": "플렉스",
+        "MDLN": "메드라인",
+        "BIDU": "바이두 ADR",
+        "FITB": "피프스 서드 뱅코프",
+        "CCEP": "코카-콜라 유로퍼시픽 파트너스",
+        "JD": "제이디닷컴 ADR",
+        "KDP": "큐리그 닥터 페퍼",
+        "ERIC": "텔레폰악티에볼라예트 에릭슨 ADR",
+        "GFS": "글로벌파운드리",
+        "ESLT": "엘빗 시스템즈",
+        "VOD": "보다폰 그룹 ADR",
+        "ACGL": "아치 캐피털 그룹",
+        "TCOM": "트립닷컴 그룹 ADR",
+        "CPRT": "코파트",
+        "ONC": "비원 메디슨스 ADR",
+        "HBAN": "헌팅턴 뱅크셰어스",
+        "CASY": "케이시스 제너럴 스토어스",
+        "NTRS": "노던 트러스트",
+        "RPRX": "로열티 파마",
+        "RYAAY": "라이언에어 홀딩스 ADR",
+        "TSEM": "타워 세미컨덕터",
+        "SYM": "심보틱",
+        "GEHC": "GE 헬스케어",
+        "MTSI": "M/A-컴 테크놀로지 솔루션스 홀딩스",
+        "VRSN": "베리사인",
+        "CINF": "신시내티 파이낸셜",
+        "STRL": "스털링 인프라스트럭처",
+        "WTW": "윌리스 타워스 왓슨",
+        "FTAI": "FTAI 애비에이션",
+        "UTHR": "유나이티드 테라퓨틱스",
+        "TW": "트레이드웹 마켓",
+        "CTSH": "코그니전트 테크놀로지 솔루션",
+        "EXE": "익스팬드 에너지",
+        "PFG": "프린시펄 파이낸셜 그룹",
+        "FFIV": "F5",
+        "WWD": "우드워드",
+        "FCNCA": "퍼스트 시티즌스 뱅크셰어스",
+        "FWONK": "포뮬러 원 그룹 Series C",
+        "ROIV": "로이반트 사이언시스",
+        "VTRS": "비아트리스",
+        "FUTU": "푸투 홀딩스 ADR",
+        "EVRG": "에버지",
+        "LNT": "얼라이언트 에너지",
+        "WMG": "워너 뮤직 그룹",
+        "VNOM": "바이퍼 에너지",
+        "TTMI": "TTM 테크놀로지스",
+        "LOGI": "로지텍 인터내셔널",
+        "PTC": "PTC",
+        "EWBC": "이스트 웨스트 뱅코프",
+        "SSNC": "SS&C 테크놀로지스 홀딩스",
+        "TPG": "TPG",
+        "GMAB": "젠맵 ADR",
+        "NBIX": "뉴로크린 바이오사이언시스",
+        "NDSN": "노드슨",
+        "LAMR": "라마 애드버타이징",
+        "HST": "호스트 호텔스 & 리조트",
+        "ASND": "어센디스 파마 ADR",
+        "GRAB": "그랩 홀딩스",
+        "JAZZ": "재즈 파마슈티컬스",
+        "AUR": "오로라 이노베이션",
+        "LECO": "링컨 일렉트릭 홀딩스",
+        "RGC": "리젠셀 바이오사이언스 홀딩스",
+        "ARXS": "ARXIS",
+        "HTHT": "화주 그룹",
+        "AAOI": "어플라이드 옵토일렉트로닉스",
+        "HAS": "해즈브로",
+        "ARCC": "아레스 캐피탈",
+        "RMBS": "램버스",
+        "TIGO": "밀리콤 인터내셔널 셀룰러",
+        "GLPI": "게이밍 & 레저 프로퍼티스",
+        "FOXA": "폭스 Class A",
+        "IESC": "IES 홀딩스",
+        "PAYP": "페이페이 ADR",
+        "FOX": "폭스 Class B",
+        "TRMB": "트림블",
+        "SMMT": "서밋 테라퓨틱스 ADR",
+        "WSE": "와이즈",
+        "GH": "가단트 헬쓰",
+        "BBIO": "브릿지바이오 파머",
+        "EXEL": "엑셀리시스",
+        "SMTC": "셈텍",
+        "ZBRA": "지브라 테크놀로지스",
+        "FRVO": "퍼보 에너지",
+        "IONS": "아이오니스 파마슈티컬스",
+        "SANM": "산미나",
+        "MEDP": "메드페이스 홀딩스",
+        "AGNC": "AGNC 인베스트먼트",
+        "COO": "쿠퍼 컴퍼니스",
+        "MDGL": "매드리갈 파마슈티컬스",
+        "AXSM": "액섬 테라퓨틱스",
+        "VIAV": "비아비 솔루션스",
+        "VICR": "비코",
+        "ENLT": "엔라이트 리뉴어블 에너지",
+        "COKE": "코카콜라 콘솔리데이티드",
+        "ERIE": "이리 인뎀니티",
+        "LFUS": "리틀휴즈",
+        "DRS": "레오나르도 DRS",
+        "BTSG": "브라이트스프링 헬스 서비스",
+        "PSKY": "파라마운트 스카이댄스",
+        "SEIC": "SEI 인베스트먼트",
+        "GLXY": "갤럭시 디지털 홀딩스",
+        "AAON": "에이에이온",
+        "ARWR": "애로우헤드 파마슈티컬스",
+        "PODD": "인슐릿",
+        "ENSG": "엔사인 그룹",
+        "XE": "X-에너지",
+        "CYTK": "사이토키네틱스",
+        "WYNN": "윈 리조트",
+        "SFD": "스미스필드 푸드",
+        "FCFS": "퍼스트캐쉬 홀딩스",
+        "WTFC": "윈트러스트 파이낸셜",
+        "BRK-A": "버크셔 해서웨이 Class A",
+        "BABA": "알리바바 그룹 홀딩스 ADR",
+        "HSBC": "HSBC 홀딩스 ADR",
+        "GE": "GE 에어로스페이스",
+        "PM": "필립 모리스 인터내셔널",
+        "SMFG": "스미토모 미쓰이 파이낸셜그룹 ADR",
+        "RY": "로열 뱅크 오브 캐나다",
+        "SHEL": "쉘 ADR",
+        "MUFG": "미쓰비시 UFJ 파이낸셜 그룹 ADR",
+        "BHP": "BHP 그룹 ADR",
+        "TTE": "토탈에너지스",
+        "SAP": "SAP ADR",
+        "TD": "토론토 도미니언 은행",
+        "SAN": "방코 산탄데르 ADR",
+        "UBS": "UBS 그룹 AG",
+        "WELL": "웰타워",
+        "APH": "암페놀",
+        "BTI": "브리티쉬 아메리칸 토바코 ADR",
+        "RIO": "리오 틴토 ADR",
+        "HDB": "HDFC 뱅크 ADR",
+        "UL": "유니레버 ADR",
+        "BBVA": "방코 빌바오 비스카야 아르헨타리아 ADR",
+        "MO": "알트리아그룹",
+        "ENB": "엔브리지",
+        "BP": "BP ADR",
+        "BN": "브룩필드",
+        "BMO": "뱅크 오브 몬트리올",
+        "MFG": "미즈호 파이낸셜그룹 ADR",
+        "CM": "캐내디언 임페리얼 뱅크 오브 커머스",
+        "CNQ": "캐나다 내추럴 리소시스",
+        "EQNR": "에퀴노르 ADR",
+        "BNS": "뱅크 오브 노바 스코샤",
+        "IBN": "ICICI 뱅크 ADR",
+        "WM": "웨이스트 매니지먼트",
+        "JCI": "존슨 컨트롤스 인터내셔널",
+        "EPD": "Enterprise Products Partners Units",
+        "ING": "ING 그룹 ADR",
+        "E": "에니 ADR",
+        "NGG": "내셔널 그리드 ADR",
+        "SU": "선코어 에너지",
+        "AMX": "아메리카 모빌 ADR 시리즈 L",
+        "MRSH": "마쉬 앤 맥레넌 컴퍼니스",
+        "BCS": "바클레이즈 ADR",
+        "NOK": "노키아 ADR",
+        "CP": "캐나디안 퍼시픽 캔자스 시티",
+        "LYG": "로이즈 뱅킹 그룹 ADR",
+        "CVNA": "카바나",
+        "PBR": "페트로브라스 ADR",
+        "EMR": "에머슨 일렉트릭",
+        "HLT": "힐튼 월드와이드 홀딩스",
+        "TRP": "TC 에너지",
+        "RCL": "로얄 캐리비안 크루즈",
+        "VALE": "발레 ADR",
+        "AON": "에이온",
+        "ASX": "ASE 테크놀로지 홀딩 ADR",
+        "CRH": "CRH",
+        "B": "바릭 마이닝",
+        "CNI": "커네디언 내셔널 레일웨이",
+        "FIX": "컴포트 시스템즈 USA",
+        "RSG": "리퍼블릭 서비스",
+        "RACE": "페라리",
+        "NWG": "내트웨스트 그룹 ADR",
+        "URI": "유나이티드 렌탈스",
+        "DB": "도이치은행",
+        "GWW": "W W 그레인저",
+        "TEL": "TE 커넥티비티",
+        "KEYS": "키사이트 테크놀로지스",
+        "RELX": "렐엑스 ADR",
+        "CVE": "세노버스 에너지",
+        "AZO": "오토존",
+        "AJG": "아서 J 갤러거 앤 코",
+        "TAK": "다케다 파마슈티컬 ADR",
+        "PSA": "퍼블릭 스토리지",
+        "INFY": "인포시스 ADR",
+        "ABEV": "암베브 ADR",
+        "CAH": "카디널 헬스",
+        "MT": "아르셀로미탈 ADR",
+        "WAB": "웨스팅하우스 에어 브레이크 테크놀로지",
+        "GRMN": "가민",
+        "WDS": "우드사이드 에너지 그룹 ADR",
+        "UMC": "유나이티드 마이크로일렉트로닉 ADR",
+        "FERG": "퍼거슨 엔터프라이즈",
+        "AMP": "아메리프라이즈 파이낸셜",
+        "ITUB": "이타우 우니방쿠 홀딩 ADR",
+        "VTR": "벤타스",
+        "IX": "오릭스 ADR",
+        "HLN": "헤일리온 ADR",
+        "TEVA": "테바 파마슈티컬 인더스트리 ADR",
+        "WCN": "웨이스트 커넥션스",
+        "BDX": "벡톤 디킨슨 앤 코",
+        "PUK": "푸르덴셜 ADR",
+        "VIK": "바이킹 홀딩스",
+        "PEG": "퍼블릭 서비스 엔터프라이즈",
+        "KB": "KB금융지주 ADR",
+        "TKO": "TKO 그룹 홀딩스",
+        "UI": "유비퀴티",
+        "EQT": "EQT",
+        "PCG": "퍼시픽 가스 & 일렉트릭",
+        "VG": "벤처 글로벌",
+        "HAL": "할리버튼",
+        "JBL": "자빌",
+        "VMC": "벌칸 머티리얼스",
+        "SYY": "시스코",
+        "LVS": "라스베이거스 샌즈",
+        "CHT": "중화 텔레콤 ADR",
+        "MLM": "마틴 마리에타 머터리얼스",
+        "Q": "큐니티 일렉트로닉스",
+        # ── 2026-05-20 누락 보강: 펨코·레딧 바이럴 종목 ───────────────
+        "PGY":  "파가야 테크놀로지스",
+        "OPEN": "오픈도어 테크놀로지스",
+        "DJT":  "트럼프 미디어 & 테크놀로지",
+        "BB":   "블랙베리",
+        "KSS":  "콜스",
+        "DNUT": "크리스피 크림",
+        "CHWY": "츄이",
+        "PTON": "펠로톤 인터랙티브",
+        "LAES": "실즈큐",
+        "AEVA": "아에바",
+        "LAZR": "루미나 테크놀로지스",
+        "RUM":  "럼블",
+        "RDFN": "레드핀",
+        "SES":  "SES AI",
+        "GRRR": "고릴라 테크놀로지",
     }
 
     # US_DESC — 미국 종목 한글 설명 (Name 컬럼 옆에 표시)
@@ -9533,6 +10160,253 @@ class QuantNexusApp:
         "SATS": "위성통신 · 디시 네트워크 · 5G",
         "MOD": "열관리 · 데이터센터 냉각 · 전장",
         "POET": "실리콘 포토닉스 · AI 광인터커넥트",
+
+        # ── 2026-05 인기종목 보강 (네이버 시총상위) ──────────────────────
+        "GOOG": "온라인 서비스 · 플랫폼",
+        "CDNS": "소프트웨어",
+        "MAR": "호텔 · 크루즈",
+        "SNPS": "소프트웨어",
+        "ORLY": "자동차 부품 · 소매",
+        "DASH": "온라인 서비스 · 플랫폼",
+        "CTAS": "경영 지원 서비스",
+        "CBRS": "통합 하드웨어 및 소프트웨어",
+        "PCAR": "중장비 · 차량",
+        "TER": "반도체 장비 · 테스트",
+        "ADSK": "소프트웨어",
+        "FAST": "산업 기계 · 장비",
+        "FER": "건설 · 엔지니어링",
+        "ARGX": "바이오 · 신약 연구",
+        "FLEX": "전자 장비 · 부품",
+        "MDLN": "의료 장비 · 유통",
+        "BIDU": "온라인 서비스 · 플랫폼",
+        "FITB": "은행",
+        "CCEP": "음료",
+        "JD": "백화점",
+        "KDP": "음료",
+        "ERIC": "통신 · 네트워크 장비",
+        "GFS": "반도체 장비 · 테스트",
+        "ESLT": "항공우주 · 방산",
+        "VOD": "무선 통신",
+        "ACGL": "손해보험",
+        "TCOM": "레저 · 엔터테인먼트",
+        "CPRT": "온라인 서비스 · 플랫폼",
+        "ONC": "바이오 · 신약 연구",
+        "HBAN": "은행",
+        "CASY": "식품 소매 · 유통",
+        "NTRS": "자산운용 · 투자",
+        "RPRX": "제약",
+        "RYAAY": "항공사",
+        "TSEM": "반도체",
+        "SYM": "산업 기계 · 장비",
+        "GEHC": "첨단 의료 장비",
+        "MTSI": "반도체",
+        "VRSN": "IT 서비스 · 컨설팅",
+        "CINF": "손해보험",
+        "STRL": "건설 · 엔지니어링",
+        "WTW": "보험 · 중개",
+        "FTAI": "항공우주 · 방산",
+        "UTHR": "제약",
+        "TW": "금융 시장 운영",
+        "CTSH": "IT 서비스 · 컨설팅",
+        "EXE": "오일 · 가스 E&P",
+        "PFG": "생명 · 건강 보험",
+        "FFIV": "IT 서비스 · 컨설팅",
+        "WWD": "항공우주 · 방산",
+        "FCNCA": "은행",
+        "FWONK": "방송 · 미디어",
+        "ROIV": "제약",
+        "VTRS": "제약",
+        "FUTU": "핀테크",
+        "EVRG": "전력 유틸리티",
+        "LNT": "전력 유틸리티",
+        "WMG": "엔터테인먼트 제작",
+        "VNOM": "오일 · 가스 E&P",
+        "TTMI": "반도체",
+        "LOGI": "컴퓨터 하드웨어",
+        "PTC": "소프트웨어",
+        "EWBC": "은행",
+        "SSNC": "IT 서비스 · 컨설팅",
+        "TPG": "자산운용 · 투자",
+        "GMAB": "바이오 · 신약 연구",
+        "NBIX": "제약",
+        "NDSN": "산업 기계 · 장비",
+        "LAMR": "리츠 · 부동산",
+        "HST": "리츠 · 부동산",
+        "ASND": "바이오 · 신약 연구",
+        "GRAB": "소프트웨어",
+        "JAZZ": "제약",
+        "AUR": "소프트웨어",
+        "LECO": "산업 기계 · 장비",
+        "RGC": "바이오 · 신약 연구",
+        "ARXS": "산업 기계 · 장비",
+        "HTHT": "호텔 · 크루즈",
+        "AAOI": "전자 장비 · 부품",
+        "HAS": "완구 · 키즈 제품",
+        "ARCC": "자산운용 · 투자",
+        "RMBS": "반도체",
+        "TIGO": "무선 통신",
+        "GLPI": "리츠 · 부동산",
+        "FOXA": "방송 · 미디어",
+        "IESC": "건설 · 엔지니어링",
+        "PAYP": "경영 지원 서비스",
+        "FOX": "방송 · 미디어",
+        "TRMB": "소프트웨어",
+        "SMMT": "바이오 · 신약 연구",
+        "WSE": "온라인 서비스 · 플랫폼",
+        "GH": "의료 장비 · 유통",
+        "BBIO": "제약",
+        "EXEL": "바이오 · 신약 연구",
+        "SMTC": "반도체",
+        "ZBRA": "전자 장비 · 부품",
+        "FRVO": "전력 유틸리티",
+        "IONS": "바이오 · 신약 연구",
+        "SANM": "전자 장비 · 부품",
+        "MEDP": "바이오 · 신약 연구",
+        "AGNC": "리츠 · 부동산",
+        "COO": "의료 장비 · 유통",
+        "MDGL": "바이오 · 신약 연구",
+        "AXSM": "제약",
+        "VIAV": "통신 · 네트워크 장비",
+        "VICR": "전기 부품 · 장비",
+        "ENLT": "민자 발전",
+        "COKE": "음료",
+        "ERIE": "손해보험",
+        "LFUS": "전자 장비 · 부품",
+        "DRS": "항공우주 · 방산",
+        "BTSG": "의료 시설 · 서비스",
+        "PSKY": "엔터테인먼트 제작",
+        "SEIC": "자산운용 · 투자",
+        "GLXY": "투자은행 · 중개",
+        "AAON": "전기 부품 · 장비",
+        "ARWR": "바이오 · 신약 연구",
+        "PODD": "의료 장비 · 유통",
+        "ENSG": "의료 시설 · 서비스",
+        "XE": "중전기 장비",
+        "CYTK": "바이오 · 신약 연구",
+        "WYNN": "카지노 · 게이밍",
+        "SFD": "식품 가공",
+        "FCFS": "소비자 금융",
+        "WTFC": "은행",
+        "BRK-A": "복합 소비재 대기업",
+        "BABA": "온라인 서비스 · 플랫폼",
+        "HSBC": "은행",
+        "SMFG": "은행",
+        "RY": "은행",
+        "SHEL": "통합 오일 · 가스",
+        "MUFG": "은행",
+        "BHP": "광물 채굴",
+        "TTE": "통합 오일 · 가스",
+        "SAP": "소프트웨어",
+        "TD": "은행",
+        "SAN": "은행",
+        "UBS": "자산운용 · 투자",
+        "WELL": "리츠 · 부동산",
+        "APH": "전자 장비 · 부품",
+        "BTI": "담배",
+        "RIO": "광물 채굴",
+        "HDB": "은행",
+        "UL": "생활 필수 소비재",
+        "BBVA": "은행",
+        "ENB": "오일 · 가스 수송",
+        "BP": "정유 · 가스 마케팅",
+        "BN": "자산운용 · 투자",
+        "BMO": "은행",
+        "MFG": "은행",
+        "CM": "은행",
+        "CNQ": "오일 · 가스 E&P",
+        "EQNR": "통합 오일 · 가스",
+        "BNS": "은행",
+        "IBN": "은행",
+        "WM": "환경 서비스",
+        "JCI": "전기 부품 · 장비",
+        "EPD": "오일 · 가스 수송",
+        "ING": "은행",
+        "E": "통합 오일 · 가스",
+        "NGG": "복합 유틸리티",
+        "SU": "정유 · 가스 마케팅",
+        "AMX": "통합 통신",
+        "MRSH": "보험 · 중개",
+        "BCS": "은행",
+        "NOK": "통신 · 네트워크 장비",
+        "CP": "화물 · 물류",
+        "LYG": "은행",
+        "CVNA": "자동차 부품 · 소매",
+        "PBR": "통합 오일 · 가스",
+        "EMR": "전기 부품 · 장비",
+        "HLT": "호텔 · 크루즈",
+        "TRP": "오일 · 가스 수송",
+        "RCL": "호텔 · 크루즈",
+        "VALE": "철강",
+        "AON": "보험 · 중개",
+        "ASX": "반도체 장비 · 테스트",
+        "CRH": "건설 자재",
+        "B": "금 채굴",
+        "CNI": "화물 · 물류",
+        "FIX": "건설 · 엔지니어링",
+        "RSG": "환경 서비스",
+        "RACE": "자동차 · 트럭 제조",
+        "NWG": "은행",
+        "URI": "경영 지원 서비스",
+        "DB": "은행",
+        "GWW": "산업 기계 · 장비",
+        "TEL": "전자 장비 · 부품",
+        "KEYS": "전자 장비 · 부품",
+        "RELX": "IT 서비스 · 컨설팅",
+        "CVE": "오일 · 가스 E&P",
+        "AZO": "자동차 부품 · 소매",
+        "AJG": "보험 · 중개",
+        "TAK": "제약",
+        "PSA": "리츠 · 부동산",
+        "INFY": "IT 서비스 · 컨설팅",
+        "ABEV": "양조 · 주류",
+        "CAH": "제약",
+        "MT": "철강",
+        "WAB": "중장비 · 차량",
+        "GRMN": "통신 · 네트워크 장비",
+        "WDS": "오일 · 가스 E&P",
+        "UMC": "반도체",
+        "FERG": "건설 자재 · 비품",
+        "AMP": "자산운용 · 투자",
+        "ITUB": "은행",
+        "VTR": "리츠 · 부동산",
+        "IX": "소비자 금융",
+        "HLN": "제약",
+        "TEVA": "제약",
+        "WCN": "환경 서비스",
+        "BDX": "의료 장비 · 유통",
+        "PUK": "생명 · 건강 보험",
+        "VIK": "레저 · 엔터테인먼트",
+        "PEG": "복합 유틸리티",
+        "KB": "은행",
+        "TKO": "엔터테인먼트 제작",
+        "UI": "통신 · 네트워크 장비",
+        "EQT": "오일 · 가스 E&P",
+        "PCG": "전력 유틸리티",
+        "VG": "오일 · 가스 E&P",
+        "HAL": "유전 서비스 · 장비",
+        "JBL": "전자 장비 · 부품",
+        "VMC": "건설 자재",
+        "SYY": "식품 소매 · 유통",
+        "LVS": "카지노 · 게이밍",
+        "CHT": "통합 통신",
+        "MLM": "건설 자재",
+        "Q": "반도체",
+        # ── 2026-05-20 누락 보강: 펨코·레딧 바이럴 종목 ───────────────
+        "PGY":  "AI 신용평가 · 자산담보대출 핀테크",
+        "OPEN": "부동산 iBuying · AI 가격결정",
+        "DJT":  "Truth Social · 보수 SNS · 미디어",
+        "BB":   "IoT · QNX 차량용 OS · 사이버보안",
+        "KSS":  "미국 백화점 · 종합 리테일",
+        "DNUT": "도넛 · 글로벌 프랜차이즈",
+        "CHWY": "반려동물 이커머스 · 정기배송",
+        "PTON": "홈피트니스 · 인터랙티브 바이크",
+        "LAES": "양자내성 암호 · 보안 칩 · IoT",
+        "AEVA": "4D FMCW 라이다 · 자율주행 센서",
+        "LAZR": "라이다 · 자율주행 인지 시스템",
+        "RUM":  "동영상 플랫폼 · 클라우드 서비스",
+        "RDFN": "온라인 부동산 중개 플랫폼",
+        "SES":  "리튬메탈 배터리 · UAM · EV",
+        "GRRR": "AI 비전 · 스마트시티 · 영상분석",
     }
 
     # ─────────────────────────────────────────────────────────────────────
@@ -9552,7 +10426,7 @@ class QuantNexusApp:
 
                 # AI 플랫폼·클라우드·엔터프라이즈
                 "AI Platform & Cloud":["ADBE","AI","AMZN","BBAI","BOX","CFLT","CRM","DDOG",
-                                       "DOCN","ESTC","GOOGL","GTLB","HUBS","IBM","INTU",
+                                       "DOCN","ESTC","GOOGL","GRRR","GTLB","HUBS","IBM","INTU",
                                        "MDB","MNDY","MSFT","NOW","NTNX","ORCL","PATH","PLTR",
                                        "RBRK","SNOW","SOUN","TEAM","TEM","WDAY"],
 
@@ -9563,7 +10437,7 @@ class QuantNexusApp:
                                        "VRT","WDC","WULF"],
 
                 # 사이버보안
-                "Cybersecurity":      ["AKAM","CHKP","CRWD","FTNT","GEN","NET",
+                "Cybersecurity":      ["AKAM","BB","CHKP","CRWD","FTNT","GEN","LAES","NET",
                                        "OKTA","PANW","QLYS","RPD","S","TENB","VRNS","ZS"],
 
                 # SaaS·소프트웨어 고성장
@@ -9600,7 +10474,7 @@ class QuantNexusApp:
 
                 # 핀테크·결제·BNPL
                 "Fintech & Payments": ["AFRM","ALLY","AXP","BILL","COF","FISV",
-                                       "FOUR","GPN","IBKR","MA","MELI","NU","PYPL","SE",
+                                       "FOUR","GPN","IBKR","MA","MELI","NU","PGY","PYPL","SE",
                                        "SOFI","SYF","TOST","UPST","V","XYZ"],
 
                 # 금융거래소·신용평가·데이터 — Russell 1000 핵심 (신규)
@@ -9691,24 +10565,24 @@ class QuantNexusApp:
             # ── 7. 소비재 & 리테일 ────────────────────────────────────────
             "🛍️ Consumer & Retail": {
                 # 이커머스·여행·예약
-                "E-commerce & Travel":["ABNB","AMZN","BKNG","CPNG","EBAY","ETSY",
-                                       "EXPE","MELI","PDD","SE","SHOP","W"],
+                "E-commerce & Travel":["ABNB","AMZN","BKNG","CHWY","CPNG","EBAY","ETSY",
+                                       "EXPE","GRAB","MELI","PDD","SE","SHOP","W"],
 
                 # 대형 리테일·디스카운트
                 "Retail Giants":      ["AEO","BJ","BURL","COST","DG","DLTR","FIVE",
-                                       "GME","GPS","HD","KR","LOW","OLLI","ROST","TGT",
+                                       "GME","GPS","HD","KR","KSS","LOW","OLLI","ROST","TGT",
                                        "TJX","TSCO","WMT"],
 
                 # 레스토랑
-                "Restaurants":        ["BROS","CAVA","CMG","DPZ","DRI","MCD","QSR","SBUX",
+                "Restaurants":        ["BROS","CAVA","CMG","DNUT","DPZ","DRI","MCD","QSR","SBUX",
                                        "SHAK","TXRH","WING","YUM"],
 
                 # 자동차·EV
-                "Auto & EV":          ["APTV","F","GM","HMC","LCID","LEA","LI","NIO",
+                "Auto & EV":          ["AEVA","APTV","F","GM","HMC","LAZR","LCID","LEA","LI","NIO",
                                        "ON","OUST","RIVN","STLA","TM","TSLA","VC","XPEV"],
 
                 # 럭셔리·스포츠웨어·뷰티
-                "Luxury & Apparel":   ["CPRI","EL","LULU","MOV","NKE","ONON",
+                "Luxury & Apparel":   ["CPRI","EL","LULU","MOV","NKE","ONON","PTON",
                                        "PVH","RL","SKX","TPR","ULTA","VFC"],
             },
 
@@ -9728,8 +10602,8 @@ class QuantNexusApp:
             # ── 9. 미디어 & 엔터테인먼트 ─────────────────────────────────
             "🎮 Media & Entertainment": {
                 # 소셜미디어·광고 플랫폼 (AI 광고 효율화)
-                "Social & Ad Tech":   ["CRTO","DV","GOOGL","IAC","IAS","META","MGNI",
-                                       "PINS","PUBM","RDDT","SNAP","TTD","ZD"],
+                "Social & Ad Tech":   ["CRTO","DJT","DV","GOOGL","IAC","IAS","META","MGNI",
+                                       "PINS","PUBM","RDDT","RUM","SNAP","TTD","ZD"],
 
                 # 게임·e스포츠
                 "Gaming":             ["DKNG","EA","MSFT","NTES","PLTK","RBLX","TTWO","U"],
@@ -9756,8 +10630,8 @@ class QuantNexusApp:
                                        "SPG","VICI","VNO","WPC"],
 
                 # 주택건설·모기지
-                "Homebuilders":       ["CVCO","DHI","KBH","LEN","MHO","MTH","NVR",
-                                       "PHM","RKT","SKY","TOL","UWM"],
+                "Homebuilders":       ["CVCO","DHI","KBH","LEN","MHO","MTH","NVR","OPEN",
+                                       "PHM","RDFN","RKT","SKY","TOL","UWM"],
             },
 
             # ── 11. 소재 & 원자재 ─────────────────────────────────────────
@@ -9778,7 +10652,7 @@ class QuantNexusApp:
                                        "KGC","NEM","OR","PAAS","RGLD","WPM"],
 
                 # 리튬·배터리 소재 (EV·ESS 수요)
-                "Lithium & Battery":  ["ALB","ENVX","LAC","QS","SLDP","SQM"],
+                "Lithium & Battery":  ["ALB","ENVX","LAC","QS","SES","SLDP","SQM"],
             },
 
             # ── 12. 통신 & 5G ─────────────────────────────────────────────

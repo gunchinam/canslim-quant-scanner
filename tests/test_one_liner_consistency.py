@@ -359,6 +359,12 @@ _CHARACTER_CASES = [
     ("solid_value_not_bland_neutral",
      {"Ticker": "SVN", "TotalScore": 52, "_PER": 22,
       "_ROE": 0.14, "_EPSGrowth": 0.05, "Mom12M": 0.20}, "NOT_NEUTRAL"),
+    # 삼성전기형: RSI 77이지만 추세 살아있고 모멘텀 꺾임 없음 → 과열 단정 금지,
+    # 모멘텀리더로 흡수돼야 (composite gate: rsi≥70 + mom12≥20 + mom3>-3)
+    ("rsi_hot_but_trend_alive_is_momentum_leader",
+     {"Ticker": "SEC", "TotalScore": 75, "RSI": 77,
+      "Mom12M": 0.45, "_Mom3M": 5, "_PER": 22,
+      "_ROE": 0.18, "_EPSGrowth": 0.20}, "MOMENTUM_LEADER"),
 ]
 
 
@@ -463,6 +469,66 @@ def test_rebound_metric_phrase_reachable():
     assert "rebound" in tags, f"rebound 태그 미발행: tags={tags}"
 
 
+def test_dividend_phrase_not_in_general_pool():
+    """배당 멘트는 _METRIC_PHRASES에만 있고 일반 _PHRASES 풀에서는 빠져야 한다.
+
+    배당 안 주는 종목한테 '받는 배당 감안하면' 같은 잘못된 멘트가
+    나오던 회귀 방지. 일반 풀에서 '배당' 단어를 찾으면 안 됨.
+    """
+    for bucket, phrases in ol._PHRASES.items():
+        for ph in phrases:
+            assert "배당" not in ph, (
+                f"_PHRASES['{bucket}']에 배당 멘트가 잔존: {ph!r}"
+            )
+
+
+def test_zero_dividend_stock_never_gets_dividend_tag():
+    """배당 안 주는 종목한테는 high_dividend 태그가 안 붙어야 한다."""
+    # 배당 정보 없음
+    d_none = {"Ticker": "NOD", "_ROE": 0.20, "_OperatingMargin": 0.30,
+              "_EPSGrowth": 40}
+    tags = ol._metric_tags(d_none)
+    assert "high_dividend" not in tags, (
+        f"_DivYield 없는 종목에 high_dividend 태그가 붙음: tags={tags}"
+    )
+
+    # 명시적 0
+    d_zero = {"Ticker": "ZRO", "_DivYield": 0.0, "_ROE": 0.20,
+              "_OperatingMargin": 0.30, "_EPSGrowth": 40}
+    tags = ol._metric_tags(d_zero)
+    assert "high_dividend" not in tags, (
+        f"_DivYield=0 종목에 high_dividend 태그가 붙음: tags={tags}"
+    )
+
+    # 미미한 배당 (1% 이하) — 매력 멘트 자격 없음
+    d_tiny = {"Ticker": "TNY", "_DivYield": 0.005, "_ROE": 0.20,
+              "_OperatingMargin": 0.30, "_EPSGrowth": 40}
+    tags = ol._metric_tags(d_tiny)
+    assert "high_dividend" not in tags, (
+        f"_DivYield=0.5% 종목에 high_dividend 태그가 붙음: tags={tags}"
+    )
+
+
+def test_high_dividend_stock_can_get_dividend_phrase():
+    """배당 충분히 주는 TRUE_VALUE 종목은 high_dividend 태그가 붙고
+    매칭되는 _METRIC_PHRASES 엔트리가 존재해야 한다."""
+    d = {"Ticker": "DIV", "_DivYield": 0.045,  # 4.5%
+         "_PER": 7, "_ROE": 0.15, "_OperatingMargin": 0.20,
+         "_EPSGrowth": 15}
+    tags = ol._metric_tags(d)
+    assert "high_dividend" in tags, (
+        f"_DivYield=4.5% 종목에 high_dividend 태그 미발행: tags={tags}"
+    )
+    key = ("TRUE_VALUE", "high_dividend")
+    assert key in ol._METRIC_PHRASES, (
+        f"_METRIC_PHRASES에 {key} 엔트리가 없음"
+    )
+    phrases = ol._METRIC_PHRASES[key]
+    assert len(phrases) >= 2, (
+        f"{key} 풀이 너무 빈약함: {len(phrases)}개"
+    )
+
+
 class _UT(unittest.TestCase):
     def test_all(self):
         test_score_grade_thresholds()
@@ -481,6 +547,9 @@ class _UT(unittest.TestCase):
         test_rebound_phrases_exist_and_clean()
         test_bucket_avoid_invariant_preserved()
         test_rebound_metric_phrase_reachable()
+        test_dividend_phrase_not_in_general_pool()
+        test_zero_dividend_stock_never_gets_dividend_tag()
+        test_high_dividend_stock_can_get_dividend_phrase()
 
 
 if __name__ == "__main__":

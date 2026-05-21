@@ -96,3 +96,55 @@ def test_deeptech_with_red_grade_still_avoid():
 def test_deeptech_with_explicit_avoid_signal_still_avoid():
     row = _row_for_bucket(score=20, signal="AVOID")
     assert _raw_bucket(row) == "AVOID"
+
+
+def test_satrec_initiative_scenario():
+    """쎄트렉아이(099320) 시나리오: 적자지만 위성 수주 성장 → STORY_STOCK."""
+    row = {
+        "Ticker": "099320.KQ",
+        "Sector": "위성·발사체",
+        "TotalScore": 25,
+        "_RevenueGrowth": 0.30,
+        "_MarketCap": 1_500_000_000_000,
+        "Signal": "",
+        "Grade": "YELLOW",
+        "_PER": 0, "_ROE": -8, "_EPSGrowth": -15,
+        "RSI": 55, "Mom12M": 40, "_Mom3M": 5, "Drawdown": -10,
+        "_OperatingMargin": -3,
+    }
+    assert _raw_bucket(row) == "STORY_STOCK"
+
+
+def test_paper_space_themed_smallcap_stays_avoid():
+    """이름만 우주테마인 좌비주(매출 정체, 소형주) → 여전히 AVOID."""
+    row = {
+        "Ticker": "X.KQ",
+        "Sector": "드론·우주",
+        "TotalScore": 20,
+        "_RevenueGrowth": -0.05,
+        "_MarketCap": 30_000_000_000,
+        "Signal": "",
+        "Grade": "YELLOW",
+        "_PER": 0, "_ROE": -20, "_EPSGrowth": -50,
+        "RSI": 30, "Mom12M": -40, "_Mom3M": -15, "Drawdown": -50,
+        "_OperatingMargin": -25,
+    }
+    assert _raw_bucket(row) == "AVOID"
+
+
+def test_profitable_deeptech_unaffected():
+    """흑자 딥테크 종목은 게이트와 무관하게 정상 분류."""
+    row = {
+        "Ticker": "012450.KS",
+        "Sector": "드론·우주",
+        "TotalScore": 75,
+        "_RevenueGrowth": 0.25,
+        "_MarketCap": 10_000_000_000_000,
+        "Signal": "",
+        "Grade": "GREEN",
+        "_PER": 18, "_ROE": 14, "_EPSGrowth": 30,
+        "RSI": 65, "Mom12M": 50, "_Mom3M": 8, "Drawdown": -5,
+        "_OperatingMargin": 8,
+    }
+    result = _raw_bucket(row)
+    assert result not in ("AVOID", "STORY_STOCK")

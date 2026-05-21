@@ -5217,8 +5217,16 @@ class QuantNexusApp:
             # ════════════════════════════════════════════════════════════
             # 지주사는 회계상 적자(EPS<0)여도 NAV 가치는 멀쩡하므로
             # EPS Fail-Safe 면제(주가 기반 RS Fail-Safe는 그대로 적용).
+            # 딥테크 수주형 적자 기업도 동일하게 EPS Fail-Safe 면제한다.
+            # row dict는 아직 생성 전이므로 게이트가 요구하는 3개 필드를 인라인으로 구성.
+            _deeptech_row = {
+                "Sector": self._ticker_sector_map.get(ticker, "") if hasattr(self, "_ticker_sector_map") else "",
+                "_RevenueGrowth": safe_get(info.get("revenueGrowth"), 0.0),
+                "_MarketCap": safe_get(info.get("marketCap"), 0),
+            }
+            _is_deeptech = _is_deeptech_story(ticker, _deeptech_row)
             fail_safe_triggered = (
-                (earn["fail_safe_eps"] and not _is_holdco)
+                (earn["fail_safe_eps"] and not _is_holdco and not _is_deeptech)
                 or rs["fail_safe_rs"]
             )
             fail_safe_label = ""

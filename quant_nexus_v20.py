@@ -5953,6 +5953,7 @@ class QuantNexusApp:
                 # yfinance 미제공 KR 종목은 현재가 × 발행주식수(네이버 분기 역산)로 폴백
                 "_MarketCap":       safe_get(info.get("marketCap"), 0)
                                     or ((cur or 0) * (info.get("sharesOutstanding") or 0)),
+                "_RevenueGrowth":   safe_get(info.get("revenueGrowth"), 0.0),
                 "_MACDHist":        mr.get("macd_hist", 0),
                 "_DivYield":        _normalize_div_yield(info.get("dividendYield")),
                 "_AvgVol20":        float(hist["Volume"].tail(20).mean()) if len(hist) >= 20 else 0.0,

@@ -274,6 +274,152 @@
   }
 
   /* ══════════════════════════════════════════════════════════════
+   *  4. 워치리스트 마이크로인터랙션 (별 파티클 + 마일스톤 토스트)
+   * ══════════════════════════════════════════════════════════════ */
+
+  /**
+   * 별 버튼 주변에 미니 별 파티클을 발사.
+   */
+  function starBurst(btnEl) {
+    if (!btnEl || prefersReducedMotion()) return;
+    var rect = btnEl.getBoundingClientRect();
+    var cx = rect.left + rect.width / 2;
+    var cy = rect.top + rect.height / 2;
+
+    var container = document.createElement('div');
+    container.className = 'ix-confetti-container';
+    container.setAttribute('aria-hidden', 'true');
+
+    for (var i = 0; i < 8; i++) {
+      var star = document.createElement('span');
+      star.className = 'ix-star-particle';
+      var angle = (Math.PI * 2 * i) / 8;
+      var dist = 16 + Math.random() * 20;
+      star.style.setProperty('--ix-dx', (Math.cos(angle) * dist) + 'px');
+      star.style.setProperty('--ix-dy', (Math.sin(angle) * dist) + 'px');
+      star.style.left = cx + 'px';
+      star.style.top = cy + 'px';
+      star.textContent = '\u2605';
+      container.appendChild(star);
+    }
+
+    document.body.appendChild(container);
+    setTimeout(function () { container.remove(); }, 700);
+  }
+
+  /**
+   * 마일스톤 토스트 표시.
+   */
+  function showToast(msg, duration) {
+    duration = duration || 2500;
+    var existing = document.querySelector('.ix-toast');
+    if (existing) existing.remove();
+
+    var toast = document.createElement('div');
+    toast.className = 'ix-toast';
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(function () {
+      toast.classList.add('ix-toast-show');
+    });
+
+    setTimeout(function () {
+      toast.classList.remove('ix-toast-show');
+      setTimeout(function () { toast.remove(); }, 300);
+    }, duration);
+  }
+
+  var _milestones = [5, 10, 20, 50];
+  var _milestoneMessages = {
+    5:  '5개 종목 관심 등록!',
+    10: '10개 도달! 포트폴리오가 탄탄해지고 있어요',
+    20: '20개 돌파! 시장을 꿰뚫고 계시네요',
+    50: '50개! 당신은 진정한 종목 헌터'
+  };
+
+  /* ══════════════════════════════════════════════════════════════
+   *  5. 비교 페이지 카드 뒤집기 (3D Flip)
+   * ══════════════════════════════════════════════════════════════ */
+
+  function setupCompareFlip() {
+    var grid = document.getElementById('compare-grid');
+    if (!grid) return;
+
+    // MutationObserver: 카드가 동적으로 렌더링된 후 플립 구조 적용
+    var observer = new MutationObserver(function () {
+      var cards = grid.querySelectorAll('.compare-card:not(.ix-flip-ready)');
+      cards.forEach(function (card) {
+        card.classList.add('ix-flip-ready');
+
+        // 기존 콘텐츠를 front/back 으로 분리
+        var header = card.querySelector('.compare-card-header');
+        var body = card.querySelector('.compare-body');
+        if (!header || !body) return;
+
+        var chart = body.querySelector('.compare-chart');
+        var metrics = body.querySelector('.compare-metrics');
+        var oneliner = body.querySelector('.compare-oneliner');
+
+        // front: header + chart
+        var front = document.createElement('div');
+        front.className = 'ix-flip-front';
+        front.appendChild(header.cloneNode(true));
+        if (chart) {
+          var chartClone = chart.cloneNode(true);
+          chartClone.style.padding = '12px 18px';
+          front.appendChild(chartClone);
+        }
+        // flip hint
+        var hint = document.createElement('div');
+        hint.className = 'ix-flip-hint';
+        hint.textContent = '\u21BB 클릭하면 상세 지표';
+        front.appendChild(hint);
+
+        // back: header(compact) + metrics + oneliner
+        var back = document.createElement('div');
+        back.className = 'ix-flip-back';
+        var backHeader = header.cloneNode(true);
+        backHeader.style.paddingBottom = '8px';
+        back.appendChild(backHeader);
+        if (metrics) back.appendChild(metrics.cloneNode(true));
+        if (oneliner) back.appendChild(oneliner.cloneNode(true));
+        var hintBack = document.createElement('div');
+        hintBack.className = 'ix-flip-hint';
+        hintBack.textContent = '\u21BB 클릭하면 차트';
+        back.appendChild(hintBack);
+
+        // replace card content with flip structure
+        var inner = document.createElement('div');
+        inner.className = 'ix-flip-inner';
+        inner.appendChild(front);
+        inner.appendChild(back);
+
+        card.innerHTML = '';
+        card.appendChild(inner);
+        card.classList.add('ix-flip-card');
+
+        card.addEventListener('click', function () {
+          if (prefersReducedMotion()) {
+            // 모션 감소 모드: 단순 토글
+            var fr = card.querySelector('.ix-flip-front');
+            var bk = card.querySelector('.ix-flip-back');
+            if (fr && bk) {
+              var showing = fr.style.display !== 'none';
+              fr.style.display = showing ? 'none' : '';
+              bk.style.display = showing ? '' : 'none';
+            }
+          } else {
+            card.classList.toggle('flipped');
+          }
+        });
+      });
+    });
+
+    observer.observe(grid, { childList: true, subtree: true });
+  }
+
+  /* ══════════════════════════════════════════════════════════════
    *  훅: app.js 의 기존 함수를 래핑
    * ══════════════════════════════════════════════════════════════ */
 
@@ -328,6 +474,36 @@
         _prevStatStrong = null;
       });
     }
+
+    // 4) toggleWatchlist 래핑 → 별 파티클 + 마일스톤 토스트
+    if (typeof window.toggleWatchlist === 'function') {
+      var _origToggleWatchlist = window.toggleWatchlist;
+      window.toggleWatchlist = function (ticker, ev) {
+        var wasInList = window._watchlist && window._watchlist.has(ticker);
+        _origToggleWatchlist(ticker, ev);
+        var isNowInList = window._watchlist && window._watchlist.has(ticker);
+
+        // 추가됐을 때만 효과
+        if (!wasInList && isNowInList) {
+          // 별 파티클: 클릭된 버튼 찾기
+          var btn = ev && ev.currentTarget ? ev.currentTarget :
+                    document.querySelector('.star-btn.starred');
+          if (btn) starBurst(btn);
+
+          // 마일스톤 체크
+          var count = window._watchlist ? window._watchlist.size : 0;
+          for (var i = 0; i < _milestones.length; i++) {
+            if (count === _milestones[i]) {
+              showToast(_milestoneMessages[_milestones[i]]);
+              break;
+            }
+          }
+        }
+      };
+    }
+
+    // 5) 비교 페이지 카드 뒤집기 초기화
+    setupCompareFlip();
   }
 
   /* ── 초기화 ──────────────────────────────────────────────── */

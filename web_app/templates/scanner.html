@@ -1833,11 +1833,46 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   .ix-disc-label { font-size: 9px; padding: 2px 6px; }
 }
 
+/* Star burst particles (watchlist) */
+.ix-star-particle {
+  position: absolute;
+  font-size: 10px;
+  color: var(--warning);
+  pointer-events: none;
+  animation: ixConfettiBurst 0.6s ease-out forwards;
+}
+
+/* Toast notification */
+.ix-toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(16px);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  padding: 10px 22px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow-elevated);
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s var(--ease-spring);
+  z-index: 9998;
+  pointer-events: none;
+}
+.ix-toast-show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   .ix-stat-roll,
   .ix-confetti-dot,
+  .ix-star-particle,
   .ix-disc-enter { animation: none !important; }
+  .ix-toast { transition: none !important; }
 }
 </style>
 </head>

@@ -62,9 +62,6 @@ echo "==> Creating local environment file if missing"
 if [[ ! -f .env ]]; then
   cat > .env <<'EOF'
 FINNHUB_API_KEY=
-KIS_APP_KEY=
-KIS_APP_SECRET=
-KIS_ACCOUNT=
 EOF
   echo "Created .env. Fill in API keys before using live data sources."
 fi

@@ -14,8 +14,11 @@ analyze_ticker() 결과 dict를 받아 상황별 한줄평 1개를 반환한다.
 """
 from __future__ import annotations
 import hashlib
+import logging
 import os
 import time
+
+_log = logging.getLogger(__name__)
 
 # 한줄평 회전 주기(초). 같은 종목이라도 이 주기마다 다른 문구로 순환한다.
 # 기본 900초(15분): 짧은 재폴링엔 안 흔들리고, 시간이 지나면 새 문구.
@@ -420,10 +423,10 @@ def _data_tag(d: dict, bucket: str) -> str:
         if abs(target_gap) >= 5:
             extra.append(f"목표가괴리 {target_gap:+.0f}%")
 
-    # KIS 수급 태그 (KR 종목만)
-    if d.get("_KIS_Available"):
-        frgn = int(d.get("_KIS_Foreign") or 0)
-        inst = int(d.get("_KIS_Institution") or 0)
+    # 네이버 수급 태그 (KR 종목만)
+    if d.get("_Investor_Available"):
+        frgn = int(d.get("_Investor_Foreign") or 0)
+        inst = int(d.get("_Investor_Institution") or 0)
         def _fmt_qty(v: int) -> str:
             if abs(v) >= 10000:
                 return f"{v / 10000:+.1f}만주"
@@ -2746,7 +2749,7 @@ _METRIC_PHRASES: dict[tuple[str, str], list[str]] = {
     ("MOMENTUM_LEADER", "earnings_streak"): [
         "계속 잘 나오는데 우상향까지 살아있으면 추세 믿어도 됨",
     ],
-    # ── KIS 수급: 외인 순매수 ──
+    # ── 수급: 외인 순매수 ──
     ("MOMENTUM_LEADER", "foreign_buy"): [
         "외인이 담는 중인데 우상향까지 살아있으면 추세 믿을 만함",
         "외인이 줍줍하는 중이라 수급이 떡상을 받쳐주는 거임",
@@ -2765,7 +2768,7 @@ _METRIC_PHRASES: dict[tuple[str, str], list[str]] = {
         "많이 빠진 구간에서 외인이 받아주면 바닥 근처일 수 있음",
         "외인이 담는 게 반등 먼저 알리는 경우 많음",
     ],
-    # ── KIS 수급: 외인 순매도 ──
+    # ── 수급: 외인 순매도 ──
     ("MOMENTUM_LEADER", "foreign_sell"): [
         "잘 가는데 외인이 던지는 중이라 수급 조심해야 됨",
         "외인이 던지기 시작하면 떡상 계속 갈지 점검해야 됨",
@@ -2778,7 +2781,7 @@ _METRIC_PHRASES: dict[tuple[str, str], list[str]] = {
         "외인까지 던지는 중이면 바닥 아직 안 나온 거임",
         "외인 던지는데 떡락까지 크면 반등 기대하기 힘든 구간임",
     ],
-    # ── KIS 수급: 기관 순매수 ──
+    # ── 수급: 기관 순매수 ──
     ("MOMENTUM_LEADER", "inst_buy"): [
         "기관이 같이 태우는 떡상이라 힘 쉽게 안 빠짐",
         "기관이 담는 중에 우상향까지면 큰손 쓸어담는 물량일 듯",
@@ -2795,7 +2798,7 @@ _METRIC_PHRASES: dict[tuple[str, str], list[str]] = {
         "횡보 중인데 기관이 조용히 모으는 놈임",
         "기관이 꾸준히 담으면 한 방 대기 중일 가능성 있음",
     ],
-    # ── KIS 수급: 기관 순매도 ──
+    # ── 수급: 기관 순매도 ──
     ("MOMENTUM_LEADER", "inst_sell"): [
         "기관이 익절하고 나가는 중이라 추세 지쳤는지 봐야 됨",
         "올라가는데 기관이 빠지면 마지막 구간일 수 있음",
@@ -3499,10 +3502,10 @@ def _metric_tags(d: dict) -> list[str]:
         if earn_streak >= 4:
             tags.append("earnings_streak")
 
-    # KIS 투자자 매매동향 (KR 종목만)
-    if d.get("_KIS_Available"):
-        frgn = int(d.get("_KIS_Foreign") or 0)
-        inst = int(d.get("_KIS_Institution") or 0)
+    # 네이버 투자자 매매동향 (KR 종목만)
+    if d.get("_Investor_Available"):
+        frgn = int(d.get("_Investor_Foreign") or 0)
+        inst = int(d.get("_Investor_Institution") or 0)
         # 의미 있는 순매수/순매도 (절대값 1000주 이상)
         if frgn >= 1000:
             tags.append("foreign_buy")
@@ -4050,6 +4053,7 @@ def annotate(results: list[dict]) -> list[dict]:
             r["OneLiner"] = wrap_oneliner(_friendly_one_liner(r))
             r["OneLinerData"] = get_oneliner_data(r, bucket)
         except Exception:
+            _log.exception("OneLiner.annotate failed for ticker=%s", r.get("Ticker"))
             r.setdefault("OneLiner", "")
             r.setdefault("OneLinerTag", "NEUTRAL")
             r.setdefault("OneLinerData", "")

@@ -733,18 +733,16 @@ def api_ticker(ticker: str):
                         result["Name"] = fixed
                 except Exception:
                     pass
-            # KIS 투자자 매매동향 (외인/기관 순매수)
+            # 네이버 금융 투자자 매매동향 (외인/기관 순매수, 단위: 주)
             try:
-                from kis_api import get_investor_trend, is_available as kis_ok
-                if kis_ok():
-                    inv = get_investor_trend(code6)
-                    if inv.get("available"):
-                        result["_KIS_Foreign"] = inv["foreign"]
-                        result["_KIS_Institution"] = inv["institution"]
-                        result["_KIS_Program"] = inv["program"]
-                        result["_KIS_Available"] = True
-            except Exception as ke:
-                logging.debug("KIS investor trend failed for %s: %s", ticker, ke)
+                from naver_finance import get_investor_flow
+                inv = get_investor_flow(code6)
+                if inv.get("rows"):
+                    result["_Investor_Foreign"] = int(inv.get("foreign_net_latest") or 0)
+                    result["_Investor_Institution"] = int(inv.get("inst_net_latest") or 0)
+                    result["_Investor_Available"] = True
+            except Exception as ne:
+                logging.debug("naver investor flow failed for %s: %s", ticker, ne)
         else:
             # US 종목: yfinance 수급/센티먼트 데이터
             try:

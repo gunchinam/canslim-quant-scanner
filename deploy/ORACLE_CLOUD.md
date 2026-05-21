@@ -110,9 +110,6 @@ nano .env
 
 ```env
 FINNHUB_API_KEY=
-KIS_APP_KEY=
-KIS_APP_SECRET=
-KIS_ACCOUNT=
 ```
 
 실제 키는 Git에 올리지 않는다.

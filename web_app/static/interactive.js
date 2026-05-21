@@ -86,12 +86,7 @@
         var row = entry.target;
         observer.unobserve(row);
 
-        var numEl = row.querySelector('.score-num');
         var barEl = row.querySelector('.score-bar-fill');
-        if (numEl) {
-          var score = parseInt(numEl.textContent, 10) || 0;
-          animateCount(numEl, score, 500);
-        }
         if (barEl) {
           var w = parseFloat(barEl.style.width) || 0;
           animateBar(barEl, w);
@@ -504,6 +499,124 @@
 
     // 5) 비교 페이지 카드 뒤집기 초기화
     setupCompareFlip();
+
+    // 6) WOW pack: tilt+holo, stagger entrance, top10 spotlight, score pulse, click ripple
+    setupWowPack();
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+   *  WOW PACK — 4종 반응형 액션
+   * ══════════════════════════════════════════════════════════════ */
+  function setupWowPack() {
+    if (prefersReducedMotion()) return;
+    injectWowStyles();
+    var tbody = document.getElementById('stock-list');
+    if (!tbody) return;
+
+    var run = function () {
+      var rows = tbody.querySelectorAll('tr');
+      applyStaggerEntrance(rows);
+      attachClickRipple(rows);
+    };
+    run();
+    // 리스트 재렌더 감지 (innerHTML 교체 시)
+    var mo = new MutationObserver(function () {
+      // 디바운스
+      if (window._wowMoTimer) clearTimeout(window._wowMoTimer);
+      window._wowMoTimer = setTimeout(run, 30);
+    });
+    mo.observe(tbody, { childList: true });
+  }
+
+  function injectWowStyles() {
+    if (document.getElementById('ix-wow-styles')) return;
+    var css = ''
+      + '@keyframes ixRowIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}'
+      + '@keyframes ixGoldSweep{0%{background-position:-200% 0}100%{background-position:200% 0}}'
+      + '@keyframes ixScorePulse{0%,100%{box-shadow:0 0 0 0 rgba(255,200,60,0)}50%{box-shadow:0 0 16px 4px rgba(255,200,60,0.55)}}'
+      + '.ix-row-in{animation:ixRowIn .55s cubic-bezier(0.22,1,0.36,1) both}'
+      + '#stock-list tr.ix-top1 .score-num{animation:ixScorePulse 2.2s ease-in-out infinite}'
+      + '.ix-ripple{position:fixed;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(120,180,255,0.55),rgba(120,180,255,0) 70%);transform:translate(-50%,-50%) scale(0);animation:ixRippleExpand .55s ease-out forwards;z-index:9999}'
+      + '@keyframes ixRippleExpand{to{transform:translate(-50%,-50%) scale(28);opacity:0}}';
+    var st = document.createElement('style');
+    st.id = 'ix-wow-styles';
+    st.textContent = css;
+    document.head.appendChild(st);
+  }
+
+  function applyStaggerEntrance(rows) {
+    rows.forEach(function (r, i) {
+      if (r.dataset.ixIn) return;
+      r.dataset.ixIn = '1';
+      r.style.animationDelay = Math.min(i * 35, 600) + 'ms';
+      r.classList.add('ix-row-in');
+    });
+  }
+
+  function applyTop10Spotlight(rows) {
+    rows.forEach(function (r, i) {
+      r.classList.remove('ix-top10', 'ix-top1');
+      if (i === 0) r.classList.add('ix-top1');
+      if (i < 10) r.classList.add('ix-top10');
+    });
+  }
+
+  function attachTiltHolo(rows) {
+    rows.forEach(function (r) {
+      if (r.dataset.ixTilt) return;
+      r.dataset.ixTilt = '1';
+      // 홀로그램 오버레이 삽입 (첫 td 안에 절대위치)
+      var firstTd = r.querySelector('td');
+      if (firstTd && !r.querySelector('.ix-holo')) {
+        var holo = document.createElement('span');
+        holo.className = 'ix-holo';
+        r.style.position = 'relative';
+        r.appendChild(holo);
+      }
+      r.addEventListener('mousemove', function (e) {
+        var rect = r.getBoundingClientRect();
+        var px = (e.clientX - rect.left) / rect.width;
+        var py = (e.clientY - rect.top) / rect.height;
+        var rx = (py - 0.5) * -4;  // 약한 틸트
+        var ry = (px - 0.5) * 6;
+        r.style.transform = 'perspective(900px) rotateX(' + rx.toFixed(2) + 'deg) rotateY(' + ry.toFixed(2) + 'deg)';
+        r.style.setProperty('--mx', (px * 100) + '%');
+        r.style.setProperty('--my', (py * 100) + '%');
+        r.classList.add('ix-tilt-hover');
+      });
+      r.addEventListener('mouseleave', function () {
+        r.style.transform = '';
+        r.classList.remove('ix-tilt-hover');
+      });
+    });
+  }
+
+  function attachClickRipple(rows) {
+    rows.forEach(function (r) {
+      if (r.dataset.ixRipple) return;
+      r.dataset.ixRipple = '1';
+      r.addEventListener('click', function (e) {
+        // 별 버튼/액션버튼 클릭은 제외
+        var t = e.target;
+        if (t.closest && (t.closest('.star-btn') || t.closest('button') || t.closest('a'))) return;
+        var ripple = document.createElement('span');
+        ripple.className = 'ix-ripple';
+        ripple.style.left = e.clientX + 'px';
+        ripple.style.top = e.clientY + 'px';
+        ripple.style.width = ripple.style.height = '24px';
+        document.body.appendChild(ripple);
+        setTimeout(function () { ripple.remove(); }, 600);
+      }, { passive: true });
+    });
+  }
+
+  function pulseHighScores(rows) {
+    rows.forEach(function (r) {
+      var num = r.querySelector('.score-num');
+      if (!num) return;
+      var v = parseFloat((num.textContent || '0').replace(/[^\d.\-]/g, '')) || 0;
+      if (v >= 85) r.classList.add('ix-top1'); // 85+는 톱1 펄스 공유
+    });
   }
 
   /* ── 초기화 ──────────────────────────────────────────────── */

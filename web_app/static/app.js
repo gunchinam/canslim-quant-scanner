@@ -407,6 +407,20 @@ function fmtPrice(v) {
   return n.toFixed(2);
 }
 
+function _fmtAvgVol(v) {
+  if (v == null || !isFinite(v) || v <= 0) return '—';
+  const n = Number(v);
+  if (currentMarket === 'KR') {
+    if (n >= 1e8) return (n / 1e8).toFixed(1) + '억주';
+    if (n >= 1e4) return Math.round(n / 1e4).toLocaleString('ko-KR') + '만주';
+    return Math.round(n).toLocaleString('ko-KR') + '주';
+  }
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return Math.round(n).toLocaleString('en-US');
+}
+
 // ── 마켓/전략 변경 (scanner.html select) ─────────────────────────────────
 
 function _setSegActive(groupId, val) {
@@ -716,6 +730,7 @@ function renderStockRow(stock, rank) {
   const chgClass   = dayChg > 0 ? 'chg-up' : dayChg < 0 ? 'chg-down' : 'chg-flat';
   const chgSign    = dayChg > 0 ? '+' : '';
   const rsi        = stock.RSI != null ? fmt(stock.RSI, 1) : '—';
+  const avgVol     = _fmtAvgVol(stock._AvgVol20);
   const targetLabel = stock.NomuraUsed ? '섹터 밸류에이션 목표가' : 'DCF 메인 목표가';
   const upsidePct  = stock.TargetUpside != null
     ? (stock.TargetUpside >= 0 ? '+' : '') + fmt(stock.TargetUpside * 100, 1) + '%'
@@ -764,6 +779,7 @@ function renderStockRow(stock, rank) {
   <td class="right">${fmtPrice(stock.Price)}</td>
   <td class="right ${chgClass}">${chgSign}${chgPct}%</td>
   <td class="right">${rsi}</td>
+  <td class="right">${avgVol}</td>
   <td class="right" title="${stock.BrokerTargetSource ? esc(stock.BrokerTargetSource) : '증권사 컨센서스 없음'}">${stock.BrokerTarget ? (() => { const bUp = stock.Price ? ((stock.BrokerTarget - stock.Price) / stock.Price) * 100 : null; return `<div class="target-price">${fmtPrice(stock.BrokerTarget)}</div><div class="target-upside" style="color:${bUp != null && bUp >= 0 ? 'var(--success)' : 'var(--destructive)'}">${bUp != null ? (bUp >= 0 ? '+' : '') + fmt(bUp, 1) + '%' : ''}</div>`; })() : '<div class="target-empty">컨센서스 없음</div>'}</td>
   <td class="reason-cell">${reasonHtml}</td>
 </tr>`;
@@ -1712,15 +1728,15 @@ function _renderInvestorCard(d) {
 
   const items = [];
 
-  // KR: KIS 외인/기관
-  if (d._KIS_Available) {
+  // KR: 네이버 외인/기관
+  if (d._Investor_Available) {
     const fmtQty = v => {
       const abs = Math.abs(v);
       const sign = v >= 0 ? '+' : '-';
       return abs >= 10000 ? `${sign}${(abs/10000).toFixed(1)}만주` : `${sign}${abs.toLocaleString()}주`;
     };
-    const frgn = d._KIS_Foreign || 0;
-    const inst = d._KIS_Institution || 0;
+    const frgn = d._Investor_Foreign || 0;
+    const inst = d._Investor_Institution || 0;
     if (frgn !== 0) items.push({ label: '외국인', value: fmtQty(frgn), color: frgn > 0 ? 'var(--success)' : 'var(--destructive)' });
     if (inst !== 0) items.push({ label: '기관', value: fmtQty(inst), color: inst > 0 ? 'var(--success)' : 'var(--destructive)' });
   }

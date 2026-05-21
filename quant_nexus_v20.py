@@ -68,13 +68,6 @@ import os
 import threading
 
 try:
-    import kis_api as _kis_api
-    _KIS_OK = _kis_api.is_available()
-except Exception:
-    _kis_api = None  # type: ignore
-    _KIS_OK = False
-
-try:
     import naver_quarter as _naver_q
     _NAVERQ_OK = True
 except Exception:
@@ -4730,17 +4723,6 @@ class QuantNexusApp:
                 )
                 return None
 
-            # ── KIS 실시간 현재가 보완 (KR 종목·KIS 설정 시) ──────
-            if _is_kr and _KIS_OK and _kis_api is not None:
-                try:
-                    _kis_r = _kis_api.get_price(ticker)
-                    if _kis_r.get("available") and _kis_r.get("price", 0) > 0:
-                        _kis_price = float(_kis_r["price"])
-                        day_chg    = _kis_r.get("change_rate", day_chg * 100) / 100
-                        cur        = _kis_price
-                except Exception as _e:
-                    logging.debug(f"[KIS] {ticker} 가격 보완 실패: {_e}")
-
             # ── KR 밸류 팩터 보강 (단일 진실원천) ──────────────────────
             # yfinance 는 .KS/.KQ 의 priceToBook·trailingPE 를 거의 항상
             # None 으로 준다. 그 결과 fama_french 의 value_score 가 0 으로
@@ -4774,7 +4756,7 @@ class QuantNexusApp:
             dd     = self.engine.drawdown_risk(hist)
             vol_a  = self.engine.volume_anomaly(hist)
             rs     = self.engine.relative_strength(hist)
-            # earnings_momentum 은 KR 재무 보강(Naver/KIS) 이후 호출한다.
+            # earnings_momentum 은 KR 재무 보강(Naver) 이후 호출한다.
             # (raw yfinance info 는 KR earningsGrowth 누락이 잦아 '데이터 부족' 오표기)
             target_source = ""
             broker_target = 0.0  # 증권사 컨센서스 목표가 (KR: 네이버, US: yfinance)
@@ -4784,8 +4766,7 @@ class QuantNexusApp:
                 # KR: yfinance info 는 freeCashflow/ebitda/bookValue 등이 누락/지연되는 경우가 많아
                 # 2026 기준 데이터 우선순위:
                 #   1) 네이버 분기 TTM (직전 분기 + 차기 분기 컨센서스 포함 → 2026 기준)
-                #   2) KIS 결산 (2025 연간 fallback)
-                #   3) 네이버 연간
+                #   2) 네이버 연간
                 fin = None
                 if _NAVERQ_OK and _naver_q is not None:
                     try:
@@ -4794,13 +4775,6 @@ class QuantNexusApp:
                             fin = nq
                     except Exception as _e:
                         logging.debug(f"[NaverQ] {ticker} TTM 조회 실패: {_e}")
-                if fin is None and _KIS_OK and _kis_api is not None:
-                    try:
-                        kf = _kis_api.get_financials(ticker)
-                        if kf.get("available"):
-                            fin = kf
-                    except Exception as _e:
-                        logging.debug(f"[KIS] {ticker} 재무 조회 실패: {_e}")
 
                 if fin:
                     if fin.get("eps"):
@@ -4870,7 +4844,7 @@ class QuantNexusApp:
                                 broker_target_source = "Yahoo Finance Analyst Mean"
                     except Exception:
                         pass
-            # KR 재무 보강(Naver/KIS)·US targetMeanPrice 반영이 끝난
+            # KR 재무 보강(Naver)·US targetMeanPrice 반영이 끝난
             # info 로 실적 모멘텀 산출 → KR EPS 성장률 '데이터 부족' 해소
             earn   = self.engine.earnings_momentum(info)
             _sector_for_nomura = self._nomura_sector_hint(ticker, info)
@@ -5240,12 +5214,19 @@ class QuantNexusApp:
                 (25.0, 0.93), (30.0, 0.86), (35.0, 0.80), (45.0, 0.75),
             ])
             base = max(0.0, min(120.0, base * vix_m))
+            # Re-clamp to fail-safe ceiling if it was set (VIX upmove must not bypass cap).
+            if fail_safe_triggered:
+                _ceil_post = CANSLIM["SCORE_CEIL_MOMENTUM_OVERRIDE"] if _momentum_override else CANSLIM["SCORE_CEIL_LAGGARD"]
+                base = min(base, _ceil_post)
 
             # ════════════════════════════════════════════════════════════
             # STEP 8 — [M] Bear Cap: Bear 시장 → 최종 점수 50% 상한
             # ════════════════════════════════════════════════════════════
+            # Bear Cap은 fail-safe 여부와 무관하게 약세장에선 항상 적용 (이전 버전은
+            # fail_safe_triggered 시 우회되어 모멘텀 override 종목(천장 70)이 약세장에서
+            # 50 캡을 뚫는 버그가 있었음).
             bear_cap_applied = False
-            if regime["m_bear_cap"] and not fail_safe_triggered:
+            if regime["m_bear_cap"]:
                 cap_val = 100.0 * CANSLIM["BEAR_CAP"]   # 50점
                 if base > cap_val:
                     base = cap_val
@@ -5355,7 +5336,10 @@ class QuantNexusApp:
                     _ceil = CANSLIM["SCORE_CEIL_MOMENTUM_OVERRIDE"] if _momentum_override else CANSLIM["SCORE_CEIL_LAGGARD"]
                     _b = min(_b, _ceil)
                 _b = max(0.0, min(120.0, _b * vix_m))
-                if regime["m_bear_cap"] and not fail_safe_triggered:
+                if fail_safe_triggered:
+                    _ceil_ms = CANSLIM["SCORE_CEIL_MOMENTUM_OVERRIDE"] if _momentum_override else CANSLIM["SCORE_CEIL_LAGGARD"]
+                    _b = min(_b, _ceil_ms)
+                if regime["m_bear_cap"]:
                     _b = min(_b, 100.0 * CANSLIM["BEAR_CAP"])
                 _b = max(0.0, min(100.0, _b * super_mult))
                 _va = self.engine.vol_adjusted(hist, _b)
@@ -5953,6 +5937,8 @@ class QuantNexusApp:
                 "_MarketCap":       safe_get(info.get("marketCap"), 0),
                 "_MACDHist":        mr.get("macd_hist", 0),
                 "_DivYield":        _normalize_div_yield(info.get("dividendYield")),
+                "_AvgVol20":        float(hist["Volume"].tail(20).mean()) if len(hist) >= 20 else 0.0,
+                "_AvgDollarVol20":  float((hist["Close"] * hist["Volume"]).tail(20).mean()) if len(hist) >= 20 else 0.0,
             }
 
             # 한국 종목: 네이버 증권 재무 데이터로 보강

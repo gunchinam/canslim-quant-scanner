@@ -9,14 +9,6 @@ services:
       - FLASK_DEBUG=0
       - DISABLE_KR_WARMUP=${DISABLE_KR_WARMUP:-0}
       - SCAN_WORKERS=${SCAN_WORKERS:-4}
-      # KIS API
-      - IS_MOCK=${IS_MOCK:-true}
-      - APP_KEY=${APP_KEY:-}
-      - APP_SECRET=${APP_SECRET:-}
-      - ACCOUNT_NO=${ACCOUNT_NO:-}
-      - KIS_REAL_APP_KEY=${KIS_REAL_APP_KEY:-}
-      - KIS_REAL_APP_SECRET=${KIS_REAL_APP_SECRET:-}
-      - KIS_REAL_ACCOUNT_NO=${KIS_REAL_ACCOUNT_NO:-}
       # Data APIs
       - DART_API_KEY=${DART_API_KEY:-}
       - FINNHUB_API_KEY=${FINNHUB_API_KEY:-}

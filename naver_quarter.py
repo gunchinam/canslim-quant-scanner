@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """naver_quarter.py — 네이버 모바일 분기 재무 API → TTM (최근 4분기) 구성.
 
-KIS 재무 엔드포인트는 직전 연도 결산(예: 202512)이 최신이라 2026 기준 DCF 에 부적합.
 네이버 모바일 `finance/quarter` 는 직전 보고분기 + 다음 분기 컨센서스(isConsensus='Y')
 까지 포함하므로, 최신 4 개 분기를 합산해 trailing-twelve-month 입력을 만든다.
 
@@ -100,12 +99,15 @@ def get_ttm_financials(code: str) -> Dict[str, Any]:
         if not titles or not rows:
             return out
 
-        # trTitleList 는 시간 오름차순; 마지막부터 4개 선택
-        if len(titles) < 4:
+        # trTitleList 는 시간 오름차순. TTM은 '실제 보고된' 직전 4분기만 사용.
+        # 컨센서스(추정) 분기를 합산하면 net_income / EPS 가 부풀려져 다른 지표
+        # (PER, EPS성장률, ROE 산정 분모)에 연쇄 왜곡이 발생한다.
+        actual_titles = [t for t in titles if t.get("isConsensus") != "Y"]
+        if len(actual_titles) < 4:
             return out
-        last4 = titles[-4:]  # 가장 최신 4분기 (마지막이 가장 최신)
+        last4 = actual_titles[-4:]  # actual 직전 4분기
         period_keys = [t.get("key") for t in last4]
-        has_consensus = any(t.get("isConsensus") == "Y" for t in last4)
+        has_consensus = any(t.get("isConsensus") == "Y" for t in titles[-4:])
 
         # flow 항목 합산
         def _sum(title_kw: str) -> float:
@@ -121,12 +123,18 @@ def get_ttm_financials(code: str) -> Dict[str, Any]:
                 cols = r.get("columns", {})
                 op_inc = sum(_to_float((cols.get(pk) or {}).get("value")) for pk in period_keys) * 1e8
                 break
+        # 지배주주순이익 우선 (한국 회계기준 EPS 산정 기준). 없으면 당기순이익 폴백.
         net_inc = 0.0
-        for r in rows:
-            t = str(r.get("title",""))
-            if t.strip() == "당기순이익":
-                cols = r.get("columns", {})
-                net_inc = sum(_to_float((cols.get(pk) or {}).get("value")) for pk in period_keys) * 1e8
+        for target in ("지배주주순이익", "당기순이익"):
+            for r in rows:
+                t = str(r.get("title","")).strip()
+                if t == target:
+                    cols = r.get("columns", {})
+                    vals = [(cols.get(pk) or {}).get("value") for pk in period_keys]
+                    if any(v not in (None, "-", "") for v in vals):
+                        net_inc = sum(_to_float(v) for v in vals) * 1e8
+                        break
+            if net_inc:
                 break
         eps_ttm = _sum("EPS")  # EPS 는 원/주, 단위 환산 없음
 
@@ -142,19 +150,20 @@ def get_ttm_financials(code: str) -> Dict[str, Any]:
                 if "EPS" in str(r.get("title", "")):
                     eps_cols = r.get("columns", {}) or {}
                     break
-            all_keys = [t.get("key") for t in titles]
+            # actual 분기만 사용 (컨센서스 분기 제외)
+            actual_keys = [t.get("key") for t in titles if t.get("isConsensus") != "Y"]
 
             def _eps(k: Optional[str]) -> float:
                 return _to_float((eps_cols.get(k) or {}).get("value"))
 
-            if len(all_keys) >= 8:
-                ttm_now  = sum(_eps(k) for k in all_keys[-4:])
-                ttm_prev = sum(_eps(k) for k in all_keys[-8:-4])
+            if len(actual_keys) >= 8:
+                ttm_now  = sum(_eps(k) for k in actual_keys[-4:])
+                ttm_prev = sum(_eps(k) for k in actual_keys[-8:-4])
                 if ttm_prev > 1e-9:
                     eps_growth = (ttm_now - ttm_prev) / ttm_prev
-            if len(all_keys) >= 5:
-                q_now = _eps(all_keys[-1])
-                q_yoy = _eps(all_keys[-5])
+            if len(actual_keys) >= 5:
+                q_now = _eps(actual_keys[-1])
+                q_yoy = _eps(actual_keys[-5])
                 if q_yoy > 1e-9:
                     eps_qoq_growth = (q_now - q_yoy) / q_yoy
         except Exception:
@@ -173,9 +182,10 @@ def get_ttm_financials(code: str) -> Dict[str, Any]:
         debt = _extract_value(rows, "부채비율", latest_actual_key)
 
         # 발행주식수: net_income (TTM, 원) / EPS (TTM, 원/주)
+        # 적자 종목도 |net_inc|/|eps| 로 역산 (둘 다 같은 부호이므로 부호 무관)
         shares = 0.0
-        if eps_ttm > 0 and net_inc > 0:
-            shares = net_inc / eps_ttm
+        if abs(eps_ttm) > 1e-9 and abs(net_inc) > 1e-9:
+            shares = abs(net_inc) / abs(eps_ttm)
 
         out.update({
             "revenue":           revenue,
@@ -189,7 +199,7 @@ def get_ttm_financials(code: str) -> Dict[str, Any]:
             "roe":               roe,
             "debt_ratio":        debt,
             "shares_outstanding": shares,
-            "fiscal_period":     f"TTM {period_keys[0]}~{period_keys[-1]}" + ("(E)" if has_consensus else ""),
+            "fiscal_period":     f"TTM {period_keys[0]}~{period_keys[-1]}",
             "has_consensus":     has_consensus,
             "available":         bool(op_inc or net_inc or eps_ttm),
         })

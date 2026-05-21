@@ -404,6 +404,7 @@ CANSLIM = {
     "RS_LEADER_MIN":     80,     # L: 주도주 RS Rating 최솟값
     "RS_LAGGARD_MAX":    40,     # L: 낙오주 RS Rating 상한
     "SCORE_CEIL_LAGGARD":50,     # Fail-Safe: 낙오주 점수 천장
+    "SCORE_CEIL_MOMENTUM_OVERRIDE": 70,  # 극강 모멘텀 종목 FailSafe 완화 천장
     "SUPER_MULT_MIN":    1.20,   # 슈퍼 그로스 최소 승수
     "SUPER_MULT_MAX":    1.50,   # 슈퍼 그로스 최대 승수
     "BEAR_CAP":          0.50,   # M: Bear 시장 점수 상한 비율
@@ -4476,9 +4477,11 @@ class QuantNexusApp:
                 if r.get("_fail_eps", False):
                     eps_fail = True
                 fail_safe = eps_fail or rs_fail
-
+                # 극강 모멘텀 종목은 EPS FailSafe 완화
+                _mom_ovr = r.get("_momentum_override", False)
                 if fail_safe:
-                    final = min(final, CANSLIM["SCORE_CEIL_LAGGARD"])
+                    _ceil = CANSLIM["SCORE_CEIL_MOMENTUM_OVERRIDE"] if _mom_ovr else CANSLIM["SCORE_CEIL_LAGGARD"]
+                    final = min(final, _ceil)
                     r["TotalScore"] = final
                 r["FailSafe"] = fail_safe
 
@@ -4494,7 +4497,8 @@ class QuantNexusApp:
                 ])
 
                 if fail_safe:
-                    if final >= 45:    sig = "⚠️ WATCH (Fail-Safe Active)"
+                    if _mom_ovr:       sig = "⚡ MOMENTUM (Fail-Safe 완화)"
+                    elif final >= 45:  sig = "⚠️ WATCH (Fail-Safe Active)"
                     else:              sig = "📉 LAGGARD (AVOID)"
                 elif bear_cap:
                     sig = "🚫 BEAR MARKET — AVOID"
@@ -5206,12 +5210,26 @@ class QuantNexusApp:
                 or rs["fail_safe_rs"]
             )
             fail_safe_label = ""
+            # 극강 모멘텀 종목: EPS FailSafe 완화 (RS≥90, 12M수익률>200%, Hurst>0.65)
+            _momentum_override = (
+                earn["fail_safe_eps"]
+                and not rs["fail_safe_rs"]
+                and rs["rs_rating"] >= 90
+                and mom["mom_12m"] > 2.0
+                and hurst["h"] > 0.65
+            )
             if fail_safe_triggered:
-                base = min(base, CANSLIM["SCORE_CEIL_LAGGARD"])
-                reasons = []
-                if earn["fail_safe_eps"]: reasons.append("EPS<0")
-                if rs["fail_safe_rs"]:    reasons.append(f"RS{rs['rs_rating']}<40")
-                fail_safe_label = f"⛔ Fail-Safe({', '.join(reasons)}) → 최대 {CANSLIM['SCORE_CEIL_LAGGARD']}점"
+                if _momentum_override:
+                    _ceil = CANSLIM["SCORE_CEIL_MOMENTUM_OVERRIDE"]
+                    base = min(base, _ceil)
+                    reasons = [f"EPS<0 but RS{rs['rs_rating']}+Mom{mom['mom_12m']:+.0%}"]
+                    fail_safe_label = f"⚡ Fail-Safe 완화(극강모멘텀) → 최대 {_ceil}점"
+                else:
+                    base = min(base, CANSLIM["SCORE_CEIL_LAGGARD"])
+                    reasons = []
+                    if earn["fail_safe_eps"]: reasons.append("EPS<0")
+                    if rs["fail_safe_rs"]:    reasons.append(f"RS{rs['rs_rating']}<40")
+                    fail_safe_label = f"⛔ Fail-Safe({', '.join(reasons)}) → 최대 {CANSLIM['SCORE_CEIL_LAGGARD']}점"
                 canslim_tags.append(fail_safe_label)
 
             # ════════════════════════════════════════════════════════════
@@ -5334,7 +5352,8 @@ class QuantNexusApp:
                 _b = max(0.0, min(120.0, _b))
                 _b = max(0.0, min(120.0, _b * hurst_kalman_trust))
                 if fail_safe_triggered:
-                    _b = min(_b, CANSLIM["SCORE_CEIL_LAGGARD"])
+                    _ceil = CANSLIM["SCORE_CEIL_MOMENTUM_OVERRIDE"] if _momentum_override else CANSLIM["SCORE_CEIL_LAGGARD"]
+                    _b = min(_b, _ceil)
                 _b = max(0.0, min(120.0, _b * vix_m))
                 if regime["m_bear_cap"] and not fail_safe_triggered:
                     _b = min(_b, 100.0 * CANSLIM["BEAR_CAP"])
@@ -5376,8 +5395,9 @@ class QuantNexusApp:
             # STEP 11 — CAN SLIM 시그널 결정
             # ════════════════════════════════════════════════════════════
             if fail_safe_triggered:
-                if final >= 45:    signal = "⚠️ WATCH (Fail-Safe Active)"
-                else:              signal = "📉 LAGGARD (AVOID)"
+                if _momentum_override: signal = "⚡ MOMENTUM (Fail-Safe 완화)"
+                elif final >= 45:      signal = "⚠️ WATCH (Fail-Safe Active)"
+                else:                  signal = "📉 LAGGARD (AVOID)"
             elif bear_cap_applied:
                 signal = "🚫 BEAR MARKET — AVOID"
             elif final >= 90 and fulfilled == 3:
@@ -5873,6 +5893,7 @@ class QuantNexusApp:
                 "SuperMult":        super_mult,
                 "FailSafe":         fail_safe_triggered,
                 "_fail_eps":        earn["fail_safe_eps"],
+                "_momentum_override": _momentum_override,
                 "BearCap":          bear_cap_applied,
                 "Conviction":       conviction,
                 "LowLiquidity":     low_liquidity,

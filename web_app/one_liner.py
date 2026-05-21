@@ -3587,6 +3587,10 @@ def _raw_bucket(d: dict) -> str:
     mom12 = mom12 * 100
     eps_g = eps_g * 100
 
+    # ── 극강 모멘텀 FailSafe 완화 종목 → 무조건 MOMENTUM_LEADER ──
+    if d.get("_momentum_override"):
+        return "MOMENTUM_LEADER"
+
     # ── 우선순위 순서 (위에서 아래로 first-match) ──
     # 진입 타이밍을 먼저 반영해 한줄평과 진입 카드의 톤을 맞춘다.
     if entry in ("AVOID", "RED"):
@@ -3833,6 +3837,9 @@ def _bucket(d: dict) -> str:
         return raw
 
     # grade == "AVOID": 모든 긍정 버킷 차단 → 부정으로 치환
+    # 극강 모멘텀 완화 종목은 MOMENTUM_LEADER 유지
+    if d.get("_momentum_override"):
+        return raw
     if raw in _POS_BUCKETS or raw in ("NEUTRAL", "STORY_STOCK", "OVERSOLD"):
         return _negative_for(d)
     return raw

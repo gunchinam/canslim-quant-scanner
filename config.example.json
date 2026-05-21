@@ -5,6 +5,7 @@
   "TELEGRAM_BOT_TOKEN": "",
   "TELEGRAM_CHAT_ID": "",
   "OPENAI_API_KEY": "",
+  "GEMINI_API_KEY": "",
   "ANTHROPIC_API_KEY": "",
   "GROK_API_KEY": "",
   "AI_COMMENT_PROVIDER": "openai",

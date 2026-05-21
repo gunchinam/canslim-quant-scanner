@@ -1242,7 +1242,7 @@ class DataCache:
     - 파일 해시를 별도로 저장하여 오염된 캐시를 자동 폐기합니다.
     - max_age_minutes 를 초과한 항목은 만료 처리합니다.
     """
-    REQUIRED_KEYS = {"Ticker", "Name", "Price", "TotalScore", "Signal"}
+    REQUIRED_KEYS = {"Ticker", "Name", "Price", "TotalScore", "Signal", "_AvgVol20"}
     NAME_FIXUPS = {
         "LITE": "루멘텀",
     }
@@ -5934,7 +5934,9 @@ class QuantNexusApp:
                 "_Mom1M":           mom["mom_1m"],
                 "_Mom3M":           float((cur / hist["Close"].iloc[-63] - 1) * 100) if len(hist) >= 63 else 0,
                 "_DayChgPct":       day_chg * 100,
-                "_MarketCap":       safe_get(info.get("marketCap"), 0),
+                # yfinance 미제공 KR 종목은 현재가 × 발행주식수(네이버 분기 역산)로 폴백
+                "_MarketCap":       safe_get(info.get("marketCap"), 0)
+                                    or ((cur or 0) * (info.get("sharesOutstanding") or 0)),
                 "_MACDHist":        mr.get("macd_hist", 0),
                 "_DivYield":        _normalize_div_yield(info.get("dividendYield")),
                 "_AvgVol20":        float(hist["Volume"].tail(20).mean()) if len(hist) >= 20 else 0.0,

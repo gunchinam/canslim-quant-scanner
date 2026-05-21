@@ -693,9 +693,9 @@ td.score-col {
 }
 .scan-loading-trivia-wrap {
   position: relative;
-  height: 72px;
+  height: 120px;
   overflow: hidden;
-  max-width: 520px;
+  max-width: 560px;
   margin: 0 auto;
 }
 .scan-loading-trivia {
@@ -1665,7 +1665,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
   /* Loading screen mobile */
   .scan-loading { padding: 40px 16px 32px; }
-  .scan-loading-trivia-wrap { max-width: 100%; }
+  .scan-loading-trivia-wrap { max-width: 100%; height: 168px; }
   .scan-loading-trivia-text { font-size: 13px; }
 
   /* Chat panel already handled */
@@ -1989,12 +1989,13 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
               <th class="right sortable" data-sort="DayChg">등락 <span class="sort-arrow"></span></th>
               <th class="right sortable" data-sort="RSI">RSI <span class="sort-arrow"></span></th>
               <th class="right sortable" data-sort="_AvgVol20" title="최근 20거래일 평균 거래량 — 진입 시 유동성 확인용">평균거래량 <span class="sort-arrow"></span></th>
+              <th class="right sortable" data-sort="_MarketCap" title="시가총액 — 기업 규모">시총 <span class="sort-arrow"></span></th>
               <th class="right sortable" data-sort="BrokerTarget" title="증권사 컨센서스 목표가 — KR: 네이버 증권 국내 증권사 평균 / US: Yahoo Finance Analyst Mean Target">증권사 목표가 <span class="sort-arrow"></span></th>
               <th class="reason-col">핵심 이유</th>
             </tr>
           </thead>
           <tbody id="stock-list">
-            <tr><td colspan="14" class="state-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</td></tr>
+            <tr><td colspan="15" class="state-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</td></tr>
           </tbody>
         </table>
       </div>

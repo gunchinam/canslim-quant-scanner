@@ -35,6 +35,9 @@ SETTINGS_SCHEMA: dict[str, list[dict[str, str]]] = {
     "Finnhub (US 수급 데이터)": [
         {"key": "FINNHUB_API_KEY",            "label": "API Key (finnhub.io 무료 발급)", "type": "password"},
     ],
+    "Gemini (심층 분석)": [
+        {"key": "GEMINI_API_KEY",             "label": "API Key (Google AI Studio 무료 발급)", "type": "password"},
+    ],
 }
 
 
@@ -99,5 +102,8 @@ def get_connection_status(data: dict[str, str]) -> dict[str, dict[str, Any]]:
 
     # Finnhub
     status["Finnhub"] = {"connected": bool(data.get("FINNHUB_API_KEY"))}
+
+    # Gemini
+    status["Gemini"] = {"connected": bool(data.get("GEMINI_API_KEY"))}
 
     return status

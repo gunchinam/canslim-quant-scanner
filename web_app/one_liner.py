@@ -22,7 +22,7 @@ _log = logging.getLogger(__name__)
 
 try:
     from quant_nexus_v20 import _DEEPTECH_SECTORS
-except Exception:
+except ImportError:
     _DEEPTECH_SECTORS = {
         "드론·우주", "위성·발사체", "양자보안·암호", "양자센서·하드웨어",
         "원전·SMR", "신재생·ESS", "자율주행·전장", "바이오 신약",

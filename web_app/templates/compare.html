@@ -144,7 +144,12 @@ html, body {
 }
 @media (max-width: 720px) {
   .compare-shell { padding: 16px; }
-  .compare-topbar { align-items: flex-start; flex-direction: column; }
+  .compare-topbar { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .compare-grid { grid-template-columns: 1fr; gap: 16px; }
+}
+@media (max-width: 480px) {
+  .compare-shell { padding: 10px; }
+  .compare-title { font-size: 18px; }
 }
 </style>
 </head>

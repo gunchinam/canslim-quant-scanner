@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light">
 <title>{{ ticker }} — (.)(.)검색기</title>
 <link rel="stylesheet" href="/static/theme.css">
@@ -1022,6 +1022,78 @@ html, body {
   background-image: radial-gradient(#2A2418 1.2px, transparent 1.6px);
   background-size: 16px 16px;
   opacity: 0.18;
+}
+
+/* ── Responsive: Tablet (≤768px) ───────────────────────────── */
+@media (max-width: 768px) {
+  .shell { max-width: 100%; }
+
+  .topbar { height: 52px; }
+  .tab-nav { top: 52px; }
+  .tab-btn { height: 42px; font-size: 13px; min-height: 42px; }
+
+  .hero-wrap,
+  .canslim-list,
+  [style*="padding:20px 24px"],
+  [style*="padding:12px 24px"],
+  [style*="padding:8px 24px"] {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  .hero-card { padding: 16px; }
+  .hero-score { font-size: 40px; }
+  .hero-unit { font-size: 20px; }
+  .hero-grade { font-size: 15px; }
+
+  .hero-oneliner {
+    font-size: clamp(22px, 5.5vw, 38px);
+    padding: 20px 16px;
+    min-height: 80px;
+    margin: 0 0 12px 0;
+    box-shadow: 4px 4px 0 currentColor;
+  }
+
+  .cs-card-grid { grid-template-columns: 1fr; padding: 12px 14px; }
+  .us-metric-grid { grid-template-columns: 1fr; }
+
+  .act-grid { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .entry-meta-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Inline style padding overrides */
+  #dp-tech-content,
+  #dp-finance-content,
+  #usinsight-content,
+  #dartnews-content { padding: 14px !important; }
+}
+
+/* ── Responsive: Small Mobile (≤480px) ─────────────────────── */
+@media (max-width: 480px) {
+  .topbar { height: 48px; padding: 0 4px; }
+  .tab-nav { top: 48px; }
+  .tab-btn { font-size: 12px; padding: 0 4px; }
+  .icon-btn { width: 38px; height: 38px; }
+
+  .hero-wrap { padding: 12px 10px 0 !important; }
+  .hero-card { padding: 14px; border-radius: 12px; }
+  .hero-score { font-size: 36px; }
+  .hero-unit { font-size: 18px; }
+
+  .hero-oneliner {
+    font-size: clamp(18px, 5vw, 30px);
+    padding: 16px 12px;
+    border-radius: 10px;
+    border-width: 2px;
+  }
+
+  .canslim-list { padding: 12px 10px 0 !important; }
+
+  .us-earnings-card { flex-direction: column; align-items: flex-start; gap: 8px; }
+
+  .dn-filing-item { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .dn-filing-title { white-space: normal; }
+
+  .act-grid { grid-template-columns: 1fr; }
 }
 </style>
 </head>

@@ -1525,6 +1525,167 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 .ind-label { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
 .ind-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
 .ind-val { font-size: 16px; font-weight: 700; white-space: nowrap; }
+
+/* ── Responsive: Mobile Sidebar Toggle ─────────────────────── */
+.mobile-menu-btn {
+  display: none;
+  width: 36px; height: 36px;
+  border: none; border-radius: 8px;
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+  align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 199;
+}
+.sidebar-backdrop.visible { display: block; }
+
+/* ── Responsive: Tablet (≤1024px) ──────────────────────────── */
+@media (max-width: 1024px) {
+  .topbar { padding: 0 16px; gap: 10px; }
+  .main { padding: 12px 16px; }
+  .stats-bar { padding: 0 16px; }
+  .macro-strip { padding: 0 16px; }
+  .topbar-date { display: none; }
+  #btn-export, #btn-share { display: none; }
+  .content { grid-template-columns: 180px 1fr; }
+}
+
+/* ── Responsive: Mobile (≤768px) ───────────────────────────── */
+@media (max-width: 768px) {
+  .app-shell {
+    grid-template-rows: 52px auto auto 1fr;
+    height: 100dvh;
+    height: 100vh; /* fallback */
+  }
+
+  .mobile-menu-btn { display: flex; }
+
+  .topbar {
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .topbar-logo { font-size: 15px; margin-right: 4px; }
+  .topbar-controls { gap: 6px; }
+  .search-box { max-width: none; flex: 1; min-width: 0; }
+  .search-input { height: 32px; font-size: 14px; }
+  #btn-export, #btn-share, .topbar-date, a[href="/settings"] { display: none; }
+  .btn-scan { height: 32px; padding: 0 12px; font-size: 12px; }
+
+  .macro-strip {
+    padding: 0 12px;
+    gap: 10px;
+    height: 32px;
+    font-size: 11px;
+  }
+  .macro-meta { display: none; }
+
+  .stats-bar {
+    padding: 8px 12px;
+    height: auto;
+    flex-wrap: wrap;
+    gap: 6px 0;
+  }
+  .stat-item { padding: 0 10px 0 0; margin-right: 10px; }
+  .stat-label { font-size: 11px; }
+  .stat-value { font-size: 14px; }
+  .filter-chips {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 4px 0;
+  }
+  .filter-chips::-webkit-scrollbar { display: none; }
+
+  .content { grid-template-columns: 1fr; }
+  .sidebar {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 260px;
+    z-index: 200;
+    box-shadow: 0 0 24px rgba(0,0,0,0.2);
+  }
+  .sidebar.mobile-open { display: block; }
+
+  .main { padding: 10px; overflow-x: hidden; }
+
+  .stock-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -10px;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+  .stock-table th, .stock-table td { padding: 10px 8px; font-size: 12px; }
+  .desc-col, .reason-col { display: none; }
+  th[data-sort="BrokerTarget"], td:nth-child(12) { display: none; }
+  .name-cell { max-width: 130px; }
+  .stock-name { font-size: 13px; }
+  .stock-oneliner { max-width: 160px; font-size: 11px; padding: 3px 7px; }
+  .score-col { min-width: 90px; width: 90px; }
+
+  /* Detail panel full-screen on mobile */
+  .detail-overlay { padding: 0; }
+  .detail-panel {
+    width: 100%;
+    height: 100dvh;
+    height: 100vh;
+    border-radius: 0;
+    max-height: none;
+  }
+  .dp-body { flex-direction: column; }
+  .dp-left {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .dp-oneliner-poster { font-size: clamp(20px, 5vw, 36px); margin: 10px 14px; padding: 18px 14px; }
+
+  /* Loading screen mobile */
+  .scan-loading { padding: 40px 16px 32px; }
+  .scan-loading-trivia-wrap { max-width: 100%; }
+  .scan-loading-trivia-text { font-size: 13px; }
+
+  /* Chat panel already handled */
+}
+
+/* ── Responsive: Small Mobile (≤480px) ─────────────────────── */
+@media (max-width: 480px) {
+  .topbar-logo { display: none; }
+  .btn-seg { padding: 0 8px; font-size: 11px; height: 28px; }
+  .btn-scan { font-size: 11px; gap: 4px; }
+  .btn-scan svg { width: 12px; height: 12px; }
+
+  .macro-strip { height: 28px; font-size: 10.5px; gap: 8px; }
+  .macro-signal { padding: 2px 8px; font-size: 10.5px; }
+
+  .stats-bar .stat-item:nth-child(n+3):not(:last-child) { display: none; }
+  .chip { height: 26px; padding: 0 10px; font-size: 11px; }
+
+  .stock-table th:nth-child(1), .stock-table td:nth-child(1),
+  .stock-table th:nth-child(2), .stock-table td:nth-child(2) { display: none; }
+  .stock-table th:nth-child(3), .stock-table td:nth-child(3) { width: 28px; }
+  th[data-sort="RSI"], td:nth-child(11) { display: none; }
+
+  .cs-card-grid { grid-template-columns: 1fr; }
+  .dp-axis-grid { grid-template-columns: 1fr; }
+  .entry-grid { grid-template-columns: repeat(2, 1fr); }
+  .dp-header { padding: 0 12px; }
+  .dp-name { font-size: 16px; }
+}
 </style>
 </head>
 <body>
@@ -1532,6 +1693,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
   <!-- TopBar -->
   <header class="topbar">
+    <button class="mobile-menu-btn" id="mobile-menu-btn" onclick="toggleMobileSidebar()" aria-label="메뉴">☰</button>
     <div class="topbar-logo">(.)(.) <span>검색기</span></div>
     <div class="topbar-controls">
       <div class="btn-seg-group" id="market-btn-group">
@@ -1609,8 +1771,10 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
   <!-- Content -->
   <div class="content">
+    <!-- Mobile Sidebar Backdrop -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleMobileSidebar()"></div>
     <!-- Sidebar: Sector List -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div id="filter-list">
         <div style="padding:20px 10px;color:var(--text-tertiary);font-size:12px;">로딩 중...</div>
       </div>
@@ -2031,6 +2195,23 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="/static/app.js"></script>
+<script>
+/* ── Mobile Sidebar Toggle ─────────────────────────────────── */
+function toggleMobileSidebar() {
+  var sb = document.getElementById('sidebar');
+  var bd = document.getElementById('sidebar-backdrop');
+  var open = sb.classList.toggle('mobile-open');
+  if (open) { bd.classList.add('visible'); } else { bd.classList.remove('visible'); }
+}
+/* Auto-close sidebar when a sector is clicked on mobile */
+document.addEventListener('click', function(e) {
+  if (window.innerWidth > 768) return;
+  var btn = e.target.closest('.sector-btn, .sector-btn-all');
+  if (btn && document.getElementById('sidebar').classList.contains('mobile-open')) {
+    toggleMobileSidebar();
+  }
+});
+</script>
 <script>
 (function(){
   const toggle = document.getElementById('chat-toggle');

@@ -529,7 +529,7 @@ async function runScan() {
 
   setStatHTML('stat-total',  '…<span class="unit">개</span>');
   setStatHTML('stat-strong', '…<span class="unit">개</span>');
-  setStockListMsg('스캔 중…');
+  showScanLoading();
 
   try {
     const p = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
@@ -555,8 +555,10 @@ async function runScan() {
     _refreshFilteredView();
   } catch (e) {
     console.error('runScan 실패:', e);
+    stopScanLoading();
     setStockListMsg('스캔 실패. 서버 상태를 확인하세요.');
   } finally {
+    stopScanLoading();
     if (btn) btn.disabled = false;
   }
 }
@@ -811,6 +813,102 @@ function _colCount() {
 function setStockListMsg(msg) {
   const tbody = document.getElementById('stock-list');
   if (tbody) tbody.innerHTML = `<tr><td colspan="${_colCount()}" class="state-msg">${esc(msg)}</td></tr>`;
+}
+
+// ── Game-style Loading Screen (쓸데없는 주식 잡학) ─────────────────────
+const _STOCK_TRIVIA = [
+  '버크셔 해서웨이 A주 한 주 가격은 약 60만 달러. 서울 아파트 한 채 값이다.',
+  '워런 버핏은 11살에 첫 주식을 샀다. Cities Service 우선주 3주를 38.25달러에.',
+  '뉴욕증권거래소(NYSE)의 개장벨은 원래 중국식 징이었다. 1903년에 놋쇠 벨로 바뀌었다.',
+  '"월스트리트"라는 이름은 네덜란드 식민지 시절 원주민 방어용 나무 벽(wall)에서 유래했다.',
+  '세계 최초의 주식회사는 1602년 네덜란드 동인도회사(VOC)다. 배당률이 무려 18%였다.',
+  '나스닥(NASDAQ)은 약어다: National Association of Securities Dealers Automated Quotations.',
+  '코스닥의 "닥"도 약어다: Korea Securities Dealers Automated Quotations.',
+  '1929년 대공황 때 제시 리버모어는 공매도로 1억 달러를 벌었다. 현재 가치 약 17억 달러.',
+  '일본 닛케이225는 1989년 12월 29일에 최고점을 찍고, 무려 34년 만인 2024년에 회복했다.',
+  'S&P 500 기업의 평균 수명은 약 18년이다. 1960년대에는 60년이었다.',
+  '코카콜라를 1919년 IPO 때 40달러에 샀으면, 배당 재투자 시 지금 약 1천만 달러.',
+  '"검은 월요일"(1987년 10월 19일) 다우존스는 하루에 22.6% 폭락했다. 역대 최대 일일 낙폭.',
+  '알고리즘 트레이딩이 미국 주식 거래량의 약 60~73%를 차지한다. 사람이 소수파.',
+  '피터 린치는 마젤란 펀드를 13년간 운용하며 연평균 29.2% 수익률을 달성했다.',
+  '한국 주식시장의 점심시간 휴장은 2000년 5월 22일에 폐지되었다.',
+  '역사상 가장 비싼 주문 실수: 미즈호증권이 "1엔에 610,000주" 주문. 손실 약 4억 달러.',
+  '애플이 시가총액 1조 달러를 처음 돌파한 건 2018년 8월 2일이다.',
+  '삼성전자는 1975년 상장 당시 주가가 1만 원이었다.',
+  '한국 증시에서 외국인 투자 한도가 완전 폐지된 건 IMF 직후인 1998년이다.',
+  '주식시장에서 "불(bull)"은 소가 뿔로 위로 들이받는 모습에서, "곰(bear)"은 발톱으로 아래로 할퀴는 모습에서 유래.',
+  'NYSE 트레이딩 플로어 바닥에는 1857년에 심은 플라타너스 나무가 있다.',
+  '전 세계 주식시장 시가총액 합계는 약 100조 달러. 지구인 1인당 약 1.2만 달러.',
+  '테슬라는 2020년 한 해 동안 주가가 743% 올랐다.',
+  '워런 버핏의 자산 99%는 50세 이후에 만들어졌다. 복리의 힘.',
+  '일본의 트레이더 BNF는 데이트레이딩만으로 160만 엔을 2005년까지 약 153억 엔으로 불렸다.',
+  '캔슬림(CAN SLIM)을 만든 윌리엄 오닐은 30살에 NYSE 최연소 회원석을 샀다.',
+  'NYSE 개장벨을 울린 유명인 중에는 스누프 독, 마사 스튜어트, 스파이더맨(코스프레)이 있다.',
+  '주식 "틱(tick)"의 어원은 시세 표시기(ticker tape)가 "틱틱" 소리를 내며 인쇄하던 것에서 유래.',
+  '한국 코스피 역사상 최대 일일 상승률은 2008년 10월 30일의 11.95%다.',
+  '"주식을 사면 그 회사의 화장실도 내 것" — 이론적으로는 맞다. 지분율만큼.',
+  '세계에서 가장 오래된 현존 주식은 네덜란드 동인도회사(VOC) 주권이다. 1606년 발행, 경매가 약 1억 원.',
+  '다우존스 산업평균지수는 원래 12개 종목이었다. 최초 구성 종목 중 지금까지 남은 건 제너럴 일렉트릭뿐이었는데, 그마저도 2018년에 빠졌다.',
+  '찰리 멍거는 투자 비결을 한마디로 요약했다: "합리적인 가격에 훌륭한 기업을."',
+  '1970년대 월스트리트에서는 거래량이 너무 많아서 매주 수요일에 쉬었다. 서류 처리 때문에.',
+];
+let _triviaTimer = null;
+let _triviaIdx = 0;
+
+function _shuffledTrivia() {
+  const a = [..._STOCK_TRIVIA];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+let _shuffled = _shuffledTrivia();
+
+function showScanLoading() {
+  stopScanLoading();
+  _shuffled = _shuffledTrivia();
+  _triviaIdx = 0;
+  const tbody = document.getElementById('stock-list');
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="${_colCount()}" style="padding:0;border:none;">
+    <div class="scan-loading">
+      <div class="scan-loading-spinner">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+      <div class="scan-loading-status">종목 분석 중...</div>
+      <div class="scan-loading-trivia-wrap">
+        <div class="scan-loading-trivia" id="scan-trivia">
+          <div class="scan-loading-trivia-label">알고 계셨나요?</div>
+          <div class="scan-loading-trivia-text">${esc(_shuffled[0])}</div>
+        </div>
+      </div>
+      <div class="scan-loading-progress"><div class="scan-loading-progress-bar"></div></div>
+    </div>
+  </td></tr>`;
+  _triviaTimer = setInterval(_rotateScanTrivia, 5000);
+}
+
+function _rotateScanTrivia() {
+  const wrap = document.querySelector('.scan-loading-trivia-wrap');
+  const cur = document.getElementById('scan-trivia');
+  if (!wrap || !cur) { stopScanLoading(); return; }
+  cur.classList.add('fade-out');
+  setTimeout(() => {
+    _triviaIdx = (_triviaIdx + 1) % _shuffled.length;
+    const el = document.createElement('div');
+    el.className = 'scan-loading-trivia';
+    el.id = 'scan-trivia';
+    el.innerHTML = `<div class="scan-loading-trivia-label">알고 계셨나요?</div>
+      <div class="scan-loading-trivia-text">${esc(_shuffled[_triviaIdx])}</div>`;
+    cur.remove();
+    wrap.appendChild(el);
+  }, 400);
+}
+
+function stopScanLoading() {
+  if (_triviaTimer) { clearInterval(_triviaTimer); _triviaTimer = null; }
 }
 
 function setStatHTML(id, html) {

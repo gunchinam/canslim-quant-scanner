@@ -654,6 +654,106 @@ td.score-col {
   font-size: 14px;
 }
 
+/* ── Game-style Loading Screen ────────────────────────────── */
+.scan-loading {
+  padding: 60px 24px 48px;
+  text-align: center;
+  user-select: none;
+}
+.scan-loading-spinner {
+  display: inline-flex;
+  gap: 6px;
+  margin-bottom: 28px;
+}
+.scan-loading-spinner .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--brand);
+  animation: scanBounce 1.4s ease-in-out infinite;
+}
+.scan-loading-spinner .dot:nth-child(2) { animation-delay: 0.16s; }
+.scan-loading-spinner .dot:nth-child(3) { animation-delay: 0.32s; }
+.scan-loading-spinner .dot:nth-child(4) { animation-delay: 0.48s; }
+@keyframes scanBounce {
+  0%, 80%, 100% { transform: scale(0.4); opacity: 0.3; }
+  40% { transform: scale(1); opacity: 1; }
+}
+.scan-loading-status {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+  letter-spacing: -0.2px;
+}
+.scan-loading-trivia-wrap {
+  position: relative;
+  height: 72px;
+  overflow: hidden;
+  max-width: 520px;
+  margin: 0 auto;
+}
+.scan-loading-trivia {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  animation: triviaFadeIn 0.5s var(--ease-out) forwards;
+}
+.scan-loading-trivia.fade-out {
+  animation: triviaFadeOut 0.4s var(--ease-in) forwards;
+}
+@keyframes triviaFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes triviaFadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-12px); }
+}
+.scan-loading-trivia-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--brand);
+  opacity: 0.7;
+}
+.scan-loading-trivia-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.6;
+  word-break: keep-all;
+}
+.scan-loading-progress {
+  margin-top: 24px;
+  width: 200px;
+  height: 3px;
+  background: var(--surface-muted);
+  border-radius: 2px;
+  overflow: hidden;
+  display: inline-block;
+}
+.scan-loading-progress-bar {
+  height: 100%;
+  background: var(--brand);
+  border-radius: 2px;
+  width: 0%;
+  animation: fakeProgress 90s cubic-bezier(0.1, 0.5, 0.1, 1) forwards;
+}
+@keyframes fakeProgress {
+  0%   { width: 0%; }
+  10%  { width: 15%; }
+  30%  { width: 35%; }
+  60%  { width: 60%; }
+  80%  { width: 78%; }
+  100% { width: 92%; }
+}
+
 /* Scrollbar styling */
 .sidebar::-webkit-scrollbar,
 .main::-webkit-scrollbar { width: 6px; }

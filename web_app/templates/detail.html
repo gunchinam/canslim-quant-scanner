@@ -1023,6 +1023,29 @@ html, body {
   background-size: 16px 16px;
   opacity: 0.18;
 }
+
+/* ── Mobile ≤ 768px ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  .shell { max-width: 100%; }
+  .hero-wrap { padding: 12px 12px 0; }
+  .hero-card { padding: 14px; }
+  .hero-score { font-size: 36px; }
+  .hero-unit { font-size: 18px; }
+  .hero-grade { font-size: 14px; }
+  .canslim-list { padding: 12px 12px 0; }
+  .cs-summary { margin: 12px 12px 0; }
+  .axis-grid { padding: 12px 12px 0; gap: 8px; }
+  .axis-card { padding: 10px; }
+  .axis-score-num { font-size: 24px; }
+  .tab-btn { font-size: 13px; height: 42px; }
+}
+
+@media (max-width: 480px) {
+  .topbar { padding: 0 4px; }
+  .axis-grid { grid-template-columns: 1fr; }
+  .hero-score { font-size: 32px; }
+  .hero-unit { font-size: 16px; }
+}
 </style>
 </head>
 <body>

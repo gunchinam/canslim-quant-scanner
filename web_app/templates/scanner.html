@@ -1432,6 +1432,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
   <!-- TopBar -->
   <header class="topbar">
+    <button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleMobileSidebar()" title="섹터 메뉴">☰</button>
     <div class="topbar-logo">(.)(.) <span>검색기</span></div>
     <div class="topbar-controls">
       <div class="btn-seg-group" id="market-btn-group">
@@ -1509,8 +1510,9 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
   <!-- Content -->
   <div class="content">
+    <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleMobileSidebar()"></div>
     <!-- Sidebar: Sector List -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div id="filter-list">
         <div style="padding:20px 10px;color:var(--text-tertiary);font-size:12px;">로딩 중...</div>
       </div>
@@ -1900,9 +1902,149 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   background: #fef3c7; color: #92400e; padding: 6px 10px; border-radius: 8px;
   font-size: 12px; font-weight: 600; text-align: center;
 }
+/* ── Mobile: Hamburger button (hidden on desktop) ──────── */
+.sidebar-toggle {
+  display: none;
+  width: 36px; height: 36px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text-primary);
+  font-size: 18px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ── Mobile ≤ 768px ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* App shell: allow scroll */
+  .app-shell {
+    grid-template-rows: auto auto auto 1fr;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  /* Topbar: wrap to 2 rows */
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .topbar-logo { font-size: 15px; }
+  .topbar-controls {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+    order: 2;
+  }
+  .topbar-date { order: 1; font-size: 11px; }
+
+  /* Hide button text labels, show icons only */
+  .btn-scan svg { margin: 0; }
+  .btn-scan { padding: 0 10px; font-size: 0; gap: 0; }
+  .btn-scan svg { font-size: initial; width: 14px; height: 14px; }
+  #btn-share span { display: none; }
+
+  /* Search box: full width */
+  .search-box { max-width: none; flex: 1 1 100%; order: 10; }
+
+  /* Hamburger visible */
+  .sidebar-toggle { display: inline-flex; }
+
+  /* Macro strip */
+  .macro-strip { padding: 0 12px; height: 32px; font-size: 11px; gap: 10px; }
+
+  /* Stats bar: wrap */
+  .stats-bar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 12px;
+    gap: 4px 12px;
+  }
+  .stat-item { padding: 4px 0; margin-right: 12px; border-right: none; }
+  .stat-item:last-child { flex: 1 1 100%; justify-content: flex-start; }
+
+  /* Filter chips: horizontal scroll */
+  .filter-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+  .filter-chips::-webkit-scrollbar { display: none; }
+
+  /* Content: single column, sidebar hidden */
+  .content {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 260px;
+    height: 100vh;
+    z-index: 200;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+  }
+  .sidebar.mobile-open { display: block; }
+  .sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 199;
+  }
+  .sidebar-backdrop.active { display: block; }
+
+  /* Main: reduce padding */
+  .main { padding: 8px; }
+
+  /* Table: horizontal scroll, hide less important columns */
+  .stock-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .stock-table { min-width: 600px; }
+  .stock-table .desc-col { display: none; }
+  .stock-table .reason-col { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+  .stock-table th, .stock-table td { padding: 8px 6px; font-size: 12px; }
+  .score-col { min-width: 90px; width: 90px; }
+}
+
+/* ── Mobile ≤ 480px ─────────────────────────────────────── */
 @media (max-width: 480px) {
   #chat-panel { width: calc(100vw - 24px); right: 12px; bottom: 84px; }
   #chat-toggle { bottom: 16px; right: 16px; width: 48px; height: 48px; font-size: 20px; }
+
+  .topbar { padding: 6px 8px; gap: 6px; }
+  .topbar-logo { font-size: 14px; }
+
+  .btn-seg { font-size: 12px; padding: 0 8px; height: 30px; }
+  .btn-scan { height: 30px; }
+  .ctrl-select { height: 30px; font-size: 12px; }
+
+  .stats-bar { padding: 6px 8px; }
+  .stat-label { font-size: 11px; }
+  .stat-value { font-size: 14px; }
+  .chip { height: 26px; padding: 0 8px; font-size: 11px; }
+
+  /* Table: hide more columns on phone */
+  .stock-table [data-sort="Sector"],
+  .stock-table td:nth-child(6) { display: none; }
+  .stock-table [data-sort="RSI"],
+  .stock-table td:nth-child(11) { display: none; }
+  .stock-table [data-sort="BrokerTarget"],
+  .stock-table td:nth-child(12) { display: none; }
+  .stock-table th:nth-child(1),
+  .stock-table td:nth-child(1) { display: none; }
+
+  .score-col { min-width: 70px; width: 70px; }
+  .score-num { font-size: 14px; }
+
+  /* Detail drawer: full width */
+  .detail-drawer { width: 100vw !important; }
 }
 </style>
 
@@ -1931,6 +2073,15 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="/static/app.js"></script>
+<script>
+function toggleMobileSidebar() {
+  var sb = document.getElementById('sidebar');
+  var bd = document.getElementById('sidebar-backdrop');
+  var open = sb.classList.toggle('mobile-open');
+  bd.classList.toggle('active', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+}
+</script>
 <script>
 (function(){
   const toggle = document.getElementById('chat-toggle');

@@ -72,6 +72,11 @@ _ticker_detail_cache_lock = threading.Lock()
 _scan_refresh_lock = threading.Lock()
 _scan_refresh_inflight: set[tuple[str, str, str]] = set()
 
+# ── 스캔 결과 전체 캐시 (API 레벨, pickle 재읽기 방지) ──
+_SCAN_RESULTS_TTL_SEC = 300  # 5분
+_scan_results_cache: dict[tuple[str, str, str], dict] = {}
+_scan_results_cache_lock = threading.Lock()
+
 
 def _configure_yf_cache() -> None:
     try:
@@ -173,9 +178,15 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
             except Exception as he:
                 logging.warning("background history annotate/save failed: %s", he)
             try:
-                _annotate_one_liners(results)
+                results = _annotate_one_liners(results)
             except Exception as oe:
                 logging.warning("background one_liner annotate failed: %s", oe)
+            # 스캔 결과 전체 캐시 갱신
+            if results:
+                with _scan_results_cache_lock:
+                    _scan_results_cache[(market, strategy, sector)] = {
+                        "_ts": int(time.time()), "data": results,
+                    }
         except Exception as e:
             logging.warning("background scan refresh failed: %s", e)
         finally:
@@ -315,6 +326,16 @@ def _kr_warmup_loop(interval_sec: int = 1800) -> None:
                     # 워머는 Semaphore(4)로 throttle: scan_all max_workers=4 로 호출
                     results = adapter.scan_all(max_workers=4)
                     logging.info("KR warm-up done: %d tickers", len(results) if results else 0)
+                    # 스캔 결과 전체 캐시 갱신
+                    if results:
+                        try:
+                            results = _annotate_one_liners(results)
+                        except Exception:
+                            pass
+                        with _scan_results_cache_lock:
+                            _scan_results_cache[("KR", "BALANCED", "")] = {
+                                "_ts": int(time.time()), "data": results,
+                            }
                 except Exception as e:
                     logging.warning("KR warm-up failed: %s", e)
             finally:
@@ -543,7 +564,6 @@ def _apply_aq_fusion(results: list, market: str, top_n: int = 30) -> list:
 def api_scan():
     """GET /api/scan?market=US&strategy=BALANCED&sector=SaaS → [{...}, ...]"""
     try:
-        adapter = _make_adapter()
         sector  = request.args.get("sector", "")
         market  = (request.args.get("market") or "US").upper()
         strategy = (request.args.get("strategy") or "BALANCED").upper()
@@ -552,6 +572,27 @@ def api_scan():
             aq_top = int(request.args.get("aq_top", os.environ.get("AQ_SCAN_TOP", "0")))
         except (TypeError, ValueError):
             aq_top = 0
+
+        # ── 스캔 결과 전체 캐시 조회 (pickle 재읽기 완전 회피) ──
+        _sr_key = (market, strategy, sector)
+        _sr_now = int(time.time())
+        with _scan_results_cache_lock:
+            _sr_cached = _scan_results_cache.get(_sr_key)
+        if _sr_cached and (_sr_now - _sr_cached.get("_ts", 0)) < _SCAN_RESULTS_TTL_SEC:
+            _refresh_scan_background(market, strategy, sector)
+            resp = jsonify(_sr_cached["data"])
+            try:
+                cache_age_min, as_of_iso = _scan_cache_meta(market)
+                if cache_age_min is not None:
+                    resp.headers["X-Cache-Age-Min"] = str(cache_age_min)
+                if as_of_iso:
+                    resp.headers["X-As-Of"] = as_of_iso
+                resp.headers["X-Warming-In-Progress"] = "false"
+            except Exception:
+                pass
+            return resp
+
+        adapter = _make_adapter()
         results = []
         warming_in_progress = False
         if market in ("US", "KR"):
@@ -587,6 +628,10 @@ def api_scan():
                 results = _apply_aq_fusion(results, market, top_n=aq_top)
             except Exception as ae:
                 logging.warning("aq fusion failed: %s", ae)
+        # ── 스캔 결과 전체 캐시 저장 ──
+        if results:
+            with _scan_results_cache_lock:
+                _scan_results_cache[_sr_key] = {"_ts": _sr_now, "data": results}
         # Stale-data UX 헤더 (non-breaking: 본문은 array 유지)
         resp = jsonify(results)
         try:

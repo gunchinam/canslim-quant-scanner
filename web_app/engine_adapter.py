@@ -152,7 +152,7 @@ class ScanAdapter:
                 return None
         return _qn.QuantNexusApp._analyze_ticker(self, ticker)
 
-    def scan_sector(self, sector: str, *, max_workers: int = 12, prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
+    def scan_sector(self, sector: str, *, max_workers: int = int(os.environ.get("SCAN_WORKERS", "12")), prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
         """특정 섹터 종목을 병렬 분석 후 TotalScore 내림차순 반환."""
         tickers = self._sectors.get(sector, [])
         results: list[dict] = []
@@ -173,7 +173,7 @@ class ScanAdapter:
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         return results
 
-    def scan_all(self, *, max_workers: int = 12, prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
+    def scan_all(self, *, max_workers: int = int(os.environ.get("SCAN_WORKERS", "12")), prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
         """전체 섹터 종목을 병렬 분석 (중복 ticker 제거) 후 TotalScore 내림차순 반환."""
         ticker_sector: dict[str, str] = {}
         for sector, tickers in self._sectors.items():

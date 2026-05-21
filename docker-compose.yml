@@ -8,6 +8,7 @@ services:
       - FLASK_HOST=0.0.0.0
       - FLASK_DEBUG=0
       - DISABLE_KR_WARMUP=${DISABLE_KR_WARMUP:-0}
+      - SCAN_WORKERS=${SCAN_WORKERS:-4}
       # KIS API
       - IS_MOCK=${IS_MOCK:-true}
       - APP_KEY=${APP_KEY:-}
@@ -32,6 +33,7 @@ services:
     volumes:
       - app-data:/app/data
       - yfinance-cache:/app/.yfinance-cache
+      - scan-cache:/app/web_app/cache_v19
     restart: on-failure:5
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
@@ -43,3 +45,4 @@ services:
 volumes:
   app-data:
   yfinance-cache:
+  scan-cache:

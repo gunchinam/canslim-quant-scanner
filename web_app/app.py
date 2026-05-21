@@ -54,15 +54,18 @@ def _render_deployment() -> bool:
 
 # ── 4축 차트 / 컨센서스 캐시 (성능 최적화) ──
 _FOUR_AXIS_TTL_SEC = 1800  # 30분
+_FOUR_AXIS_MAX = 200
 _four_axis_cache: dict[str, dict] = {}
 _four_axis_cache_lock = threading.Lock()
 
 _CONSENSUS_TTL_SEC = 900  # 15분
+_CONSENSUS_MAX = 200
 _consensus_cache: dict[str, dict] = {}
 _consensus_cache_lock = threading.Lock()
 
 # ── 티커 상세 응답 캐시 (드로어 재오픈 시 즉시 응답) ──
 _TICKER_DETAIL_TTL_SEC = 300  # 5분
+_TICKER_DETAIL_MAX = 200
 _ticker_detail_cache: dict[str, dict] = {}
 _ticker_detail_cache_lock = threading.Lock()
 
@@ -130,10 +133,24 @@ def _render_static_template(name: str, replacements: dict[str, str] | None = Non
     return Response(content, mimetype="text/html; charset=utf-8")
 
 
+_adapter_pool: dict[tuple[str, str], object] = {}
+_adapter_pool_lock = threading.Lock()
+_ADAPTER_POOL_MAX = 4
+
+
 def _make_adapter():
     market   = request.args.get("market",   "US")
     strategy = request.args.get("strategy", "BALANCED")
-    return _get_scan_adapter_cls()(market=market, strategy=strategy)
+    key = (market.upper(), strategy.upper())
+    with _adapter_pool_lock:
+        if key in _adapter_pool:
+            return _adapter_pool[key]
+    adapter = _get_scan_adapter_cls()(market=market, strategy=strategy)
+    with _adapter_pool_lock:
+        if len(_adapter_pool) >= _ADAPTER_POOL_MAX:
+            _adapter_pool.pop(next(iter(_adapter_pool)), None)
+        _adapter_pool[key] = adapter
+    return adapter
 
 
 def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
@@ -731,6 +748,8 @@ def api_ticker(ticker: str):
         # AQ 융합은 /api/aq_signal/<ticker> 로 분리 (드로어 lazy-load)
         # ── 응답 캐시 저장 ──
         with _ticker_detail_cache_lock:
+            if len(_ticker_detail_cache) >= _TICKER_DETAIL_MAX:
+                _ticker_detail_cache.pop(next(iter(_ticker_detail_cache)), None)
             _ticker_detail_cache[_td_key] = {"_ts": int(time.time()), "data": result}
         return jsonify(result)
     except Exception as e:
@@ -846,6 +865,8 @@ def api_consensus(ticker: str):
             logging.warning("yfinance consensus: %s", e)
 
     with _consensus_cache_lock:
+        if len(_consensus_cache) >= _CONSENSUS_MAX:
+            _consensus_cache.pop(next(iter(_consensus_cache)), None)
         _consensus_cache[cons_cache_key] = {"data": result, "_ts": int(time.time())}
     return jsonify(result)
 
@@ -1024,6 +1045,8 @@ def api_four_axis(ticker: str):
             "structured_analysis": rd.get("structured_analysis", ""),
         }
         with _four_axis_cache_lock:
+            if len(_four_axis_cache) >= _FOUR_AXIS_MAX:
+                _four_axis_cache.pop(next(iter(_four_axis_cache)), None)
             _four_axis_cache[cache_key] = {"data": payload, "_ts": int(time.time())}
         return jsonify(payload)
     except Exception as e:

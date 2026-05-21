@@ -20,6 +20,28 @@ import time
 
 _log = logging.getLogger(__name__)
 
+try:
+    from quant_nexus_v20 import _DEEPTECH_SECTORS
+except Exception:
+    _DEEPTECH_SECTORS = {
+        "드론·우주", "위성·발사체", "양자보안·암호", "양자센서·하드웨어",
+        "원전·SMR", "신재생·ESS", "자율주행·전장", "바이오 신약",
+    }
+
+
+def _is_deeptech_story(row: dict) -> bool:
+    """딥테크 스토리 종목 여부. quant_nexus_v20 동등 로직."""
+    sector = row.get("Sector") or ""
+    if sector not in _DEEPTECH_SECTORS:
+        return False
+    rev_growth = row.get("_RevenueGrowth")
+    if rev_growth is None or rev_growth <= 0:
+        return False
+    mcap = row.get("_MarketCap") or 0
+    if mcap <= 1e11:
+        return False
+    return True
+
 # 한줄평 회전 주기(초). 같은 종목이라도 이 주기마다 다른 문구로 순환한다.
 # 기본 900초(15분): 짧은 재폴링엔 안 흔들리고, 시간이 지나면 새 문구.
 _ROTATE_SECONDS = max(1, int(os.environ.get("ONELINER_ROTATE_SECONDS", "900")))
@@ -3634,6 +3656,13 @@ def _raw_bucket(d: dict) -> str:
 
     # 위험/회피 신호 먼저
     if "AVOID" in signal or (score and score < 30):
+        # RED grade / 명시적 AVOID signal은 면제 없이 AVOID
+        grade = (d.get("Grade") or "").upper()
+        if "AVOID" in signal or grade == "RED":
+            return "AVOID"
+        # 딥테크 수주형 종목은 STORY_STOCK으로 라우팅
+        if _is_deeptech_story(d):
+            return "STORY_STOCK"
         return "AVOID"
     if dd_pct <= -25 and mom3 <= -8:
         return "FALLING_KNIFE"

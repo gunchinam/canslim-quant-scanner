@@ -47,3 +47,52 @@ def test_deeptech_story_fail_on_missing_market_cap():
     row = _row()
     row.pop("_MarketCap", None)
     assert _is_deeptech_story("X", row) is False
+
+
+import os as _os
+import sys as _sys
+
+_THIS_DIR = _os.path.dirname(_os.path.abspath(__file__))
+_PROJECT_ROOT = _os.path.dirname(_THIS_DIR)
+_WEB_APP = _os.path.join(_PROJECT_ROOT, "web_app")
+for _p in (_PROJECT_ROOT, _WEB_APP):
+    if _p not in _sys.path:
+        _sys.path.insert(0, _p)
+
+from one_liner import _raw_bucket  # noqa: E402
+
+
+def _row_for_bucket(score=20, sector="드론·우주", rev_growth=0.10,
+                     market_cap=200_000_000_000, signal="", grade=""):
+    return {
+        "Ticker": "099320.KQ",
+        "TotalScore": score,
+        "Sector": sector,
+        "_RevenueGrowth": rev_growth,
+        "_MarketCap": market_cap,
+        "Signal": signal,
+        "Grade": grade,
+        "_PER": 0, "_ROE": -10, "_EPSGrowth": -20,
+        "RSI": 50, "Mom12M": 5, "_Mom3M": 0, "Drawdown": -5,
+        "_OperatingMargin": -5,
+    }
+
+
+def test_deeptech_story_routes_to_story_stock_when_low_score():
+    row = _row_for_bucket(score=20)
+    assert _raw_bucket(row) == "STORY_STOCK"
+
+
+def test_non_deeptech_low_score_still_avoid():
+    row = _row_for_bucket(score=20, sector="반도체")
+    assert _raw_bucket(row) == "AVOID"
+
+
+def test_deeptech_with_red_grade_still_avoid():
+    row = _row_for_bucket(score=20, grade="RED")
+    assert _raw_bucket(row) == "AVOID"
+
+
+def test_deeptech_with_explicit_avoid_signal_still_avoid():
+    row = _row_for_bucket(score=20, signal="AVOID")
+    assert _raw_bucket(row) == "AVOID"

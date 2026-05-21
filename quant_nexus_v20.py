@@ -419,6 +419,28 @@ _DEEPTECH_SECTORS: set[str] = {
     "바이오 신약",
 }
 
+
+def _is_deeptech_story(ticker: str, row: dict) -> bool:
+    """딥테크 보정 대상 여부.
+
+    True 조건 (모두 충족):
+      - row["Sector"] ∈ _DEEPTECH_SECTORS
+      - row["_RevenueGrowth"] > 0 (매출 YoY 증가)
+      - row["_MarketCap"] > 1000억원 (= 1e11)
+    데이터 결측 시 보수적으로 False.
+    """
+    sector = row.get("Sector") or ""
+    if sector not in _DEEPTECH_SECTORS:
+        return False
+    rev_growth = row.get("_RevenueGrowth")
+    if rev_growth is None or rev_growth <= 0:
+        return False
+    mcap = row.get("_MarketCap") or 0
+    if mcap <= 1e11:
+        return False
+    return True
+
+
 # ─── 전략 가중치 — v20.1 전면 확장 ──────────────────────────────────────
 #
 # 설계 원칙:

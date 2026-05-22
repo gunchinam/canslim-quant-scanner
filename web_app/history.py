@@ -120,6 +120,7 @@ def save_snapshot(results: list[dict], market: str) -> None:
         r["Ticker"]: {
             "score": round(float(r.get("TotalScore", 0) or 0), 1),
             "rank": i + 1,
+            "entry": r.get("EntryStatus"),
         }
         for i, r in enumerate(sorted_by_score)
         if r.get("Ticker")

@@ -19,6 +19,23 @@ os.makedirs(_SNAP_DIR, exist_ok=True)
 _MAX_LOOKBACK_DAYS = 14
 
 
+def _grade_from_score(score) -> str | None:
+    """종합점수 → 등급 S/A/B/C. 숫자가 아니면 None. 컷은 프론트 _stockGrade와 정합."""
+    if score is None:
+        return None
+    try:
+        n = float(score)
+    except (TypeError, ValueError):
+        return None
+    if n >= 75:
+        return "S"
+    if n >= 60:
+        return "A"
+    if n >= 45:
+        return "B"
+    return "C"
+
+
 def _snap_path(market: str, day: date) -> str:
     return os.path.join(_SNAP_DIR, f"scanner_{market}_{day.isoformat()}.json")
 

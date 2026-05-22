@@ -132,6 +132,8 @@ const _ENTRY_COLOR = { STRONG: 'green', NEUTRAL: 'yellow', AVOID: 'red',
                        GREEN: 'green', YELLOW: 'yellow', RED: 'red' };
 const _ENTRY_ICON  = { STRONG: '🟢', NEUTRAL: '🟡', AVOID: '🔴',
                        GREEN: '🟢', YELLOW: '🟡', RED: '🔴' };
+const _ENTRY_LABEL = { STRONG: '진입적기', NEUTRAL: '눌림대기', AVOID: '부적합',
+                       GREEN: '진입적기', YELLOW: '눌림대기', RED: '부적합' };
 
 // 종합점수(Y) × 진입 타이밍(X) 2축 사분면 배지
 function _renderQuadrant(d) {
@@ -373,6 +375,8 @@ function _entryLight(stock) {
   if (!stock || !stock.EntryStatus) return '';
   const st = stock.EntryStatus;
   const ico = _ENTRY_ICON[st] || '⚪';
+  const lbl = _ENTRY_LABEL[st] || '';
+  const cls = _ENTRY_COLOR[st] || 'neutral';
   const phr = stock.EntryPhrase || '';
   const sc  = stock.EntryScore != null ? `진입 타이밍 ${stock.EntryScore}/100` : '';
   let tip = phr ? `${phr}${sc ? ' (' + sc + ')' : ''}` : sc;
@@ -385,7 +389,7 @@ function _entryLight(stock) {
     tip += ` | AgentQuant: ${stock.AQ_Verdict || '—'}${reg}${aqSc}`;
     aqBadge = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-left:2px;vertical-align:middle;" title="${esc(stock.AQ_Verdict||'')}"></span>`;
   }
-  return `<span class="entry-light" title="${esc(tip)}">${ico}${aqBadge}</span>`;
+  return `<span class="entry-badge entry-${cls}" title="${esc(tip)}">${ico}${lbl ? `<span class="entry-badge-label">${esc(lbl)}</span>` : ''}${aqBadge}</span>`;
 }
 
 function _renderSignalHtml(signal, stock) {

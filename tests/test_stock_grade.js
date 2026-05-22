@@ -7,7 +7,7 @@ const assert = require('assert');
 const src = fs.readFileSync(
   path.join(__dirname, '..', 'web_app', 'static', 'app.js'), 'utf8');
 
-const m = src.match(/function _stockGrade\s*\([\s\S]*?\n\}/);
+const m = src.match(/function _stockGrade\s*\([\s\S]*?\r?\n\}/);
 if (!m) { console.error('FAIL: _stockGrade 함수를 app.js 에서 찾지 못함'); process.exit(1); }
 const _stockGrade = new Function(m[0] + '\nreturn _stockGrade;')();
 
@@ -18,11 +18,9 @@ const cases = [
   [44, 'C'], [0, 'C'],
   [null, null], [undefined, null], ['', null], [NaN, null], ['abc', null],
 ];
-let pass = 0;
 for (const [input, expected] of cases) {
   const got = _stockGrade(input);
   assert.strictEqual(got, expected,
     `_stockGrade(${JSON.stringify(input)}) = ${JSON.stringify(got)}, 기대값 ${JSON.stringify(expected)}`);
-  pass++;
 }
-console.log(`PASS: _stockGrade ${pass}/${cases.length} cases`);
+console.log(`PASS: _stockGrade ${cases.length}/${cases.length} cases`);

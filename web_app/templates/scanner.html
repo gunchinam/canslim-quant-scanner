@@ -1098,6 +1098,21 @@ td.score-col {
 .grade-badge.grade-B { color: #fff; background: #16A34A; }
 .grade-badge.grade-C { color: #fff; background: #9CA3AF; }
 
+.history-strip { display: flex; flex-direction: column; gap: 4px; }
+.history-row { display: flex; gap: 3px; }
+.history-cell { flex: 1; height: 16px; border-radius: 3px; min-width: 6px; }
+.history-cell-empty { background: var(--surface-page); border: 1px solid rgba(0,0,0,0.08); }
+.history-cell.grade-S { background: #7C3AED; }
+.history-cell.grade-A { background: #2563EB; }
+.history-cell.grade-B { background: #16A34A; }
+.history-cell.grade-C { background: #9CA3AF; }
+.history-cell.entry-green { background: #16A34A; }
+.history-cell.entry-yellow { background: #EAB308; }
+.history-cell.entry-red { background: #DC2626; }
+.history-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+.history-empty-msg { font-size: 12px; color: var(--text-tertiary); }
+@media (max-width: 640px) { .history-cell { height: 12px; min-width: 4px; } }
+
 /* Story stock chip — quality grade scale not applicable */
 .story-chip {
   display: inline-flex;
@@ -2185,6 +2200,13 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;margin-bottom:1px;">🧭 회사 가치 × 진입 타이밍</div>
           <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:8px;">이 종목이 어느 칸에 있는지 한눈에 — 위로 갈수록 좋은 회사, 오른쪽일수록 좋은 타이밍</div>
           <div id="dp-quadrant"></div>
+        </div>
+
+        <!-- 시그널 이력 타임라인 -->
+        <div id="dp-history-card" class="dp-metrics-card" style="display:none; padding:14px 16px;">
+          <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;margin-bottom:8px;">시그널 이력</div>
+          <div id="dp-history-strip"></div>
+          <div class="history-axis"><span id="dp-history-start"></span><span id="dp-history-end"></span></div>
         </div>
 
         <div class="dp-metrics-card">

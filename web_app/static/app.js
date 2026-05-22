@@ -91,6 +91,16 @@ function _signalTier(signal) {
   return 'neutral';
 }
 
+// 종합점수(TotalScore) → 종목 등급 S/A/B/C. 숫자가 아니면 null.
+function _stockGrade(totalScore) {
+  const n = Number(totalScore);
+  if (totalScore == null || totalScore === '' || Number.isNaN(n)) return null;
+  if (n >= 75) return 'S';
+  if (n >= 60) return 'A';
+  if (n >= 45) return 'B';
+  return 'C';
+}
+
 function signalColor(signal) {
   const tier = _signalTier(signal);
   return { strong: 'var(--success)', buy: 'var(--info)', hold: 'var(--warning)', sell: 'var(--destructive)', neutral: 'var(--text-secondary)' }[tier];
@@ -1579,15 +1589,15 @@ async function openDetail(ticker) {
   document.body.style.overflow = 'hidden';
   const _dpLink = document.getElementById('dp-detail-link');
   if (_dpLink) _dpLink.href = '/detail/' + encodeURIComponent(ticker) + '?market=' + currentMarket + '&strategy=' + currentStrategy;
-  window.TICKER = ticker;
 
   // 스캔 데이터가 이미 있으면 즉시 렌더링 (빈 드로어 방지)
   const cached = _stockMap[ticker];
   if (cached) _populatePanelDetail(cached, /* skipFourAxis */ true);
 
-  // 4축 차트 + 종목 상세 + AQ 시그널을 모두 병렬로 요청
+  // 4축 차트 + 종목 상세 + AQ 시그널 + 증권사 컨센서스를 모두 병렬로 요청
   loadDpFourAxis(ticker);
   _loadAqSignal(ticker, seq);
+  loadConsensus(ticker, 'dp-consensus-card', 'dpcons');
 
   try {
     const p   = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
@@ -1671,13 +1681,10 @@ function _clearPanelDetail() {
   if (tc) tc.innerHTML = loading;
   const fc = document.getElementById('dp-finance-content');
   if (fc) fc.innerHTML = loading;
-  const dc = document.getElementById('deep-content');
-  const defaultDeep = '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12px;"><b>분석 시작</b> 버튼을 눌러 Gemini 심층분석을 실행하세요.</div>';
-  if (dc) dc.innerHTML = defaultDeep;
-  const ds = document.getElementById('deep-sources');
-  if (ds) ds.innerHTML = '';
-  const dm = document.getElementById('deep-meta');
-  if (dm) dm.textContent = '';
+  const cc = document.getElementById('dp-consensus-card');
+  if (cc) cc.style.display = 'none';
+  const ec = document.getElementById('dp-earnings-card');
+  if (ec) ec.style.display = 'none';
 }
 
 function _populatePanelDetail(d, skipFourAxis) {
@@ -2918,48 +2925,49 @@ async function loadAgentQuant(ticker) {
 
 // ── 증권사 컨센서스 상세 로딩 ─────────────────────────────────────────
 
-async function loadConsensus(ticker) {
-  const wrap = document.getElementById('consensus-wrap');
+async function loadConsensus(ticker, wrapId = 'consensus-wrap', prefix = 'cons') {
+  const wrap = document.getElementById(wrapId);
   if (!wrap) return;
   const p = new URLSearchParams({ market: currentMarket });
   const cacheKey = `consensus:${ticker}:${currentMarket}`;
   const cached = _clientCache.get(cacheKey);
-  if (cached) { _renderConsensusData(wrap, cached); return; }
+  if (cached) { _renderConsensusData(wrap, cached, prefix); return; }
   try {
     const res = await fetch(`/api/consensus/${ticker}?${p}`);
     if (!res.ok) return;
     const data = await res.json();
     _clientCache.set(cacheKey, data);
-    _renderConsensusData(wrap, data);
+    _renderConsensusData(wrap, data, prefix);
   } catch (e) {
     console.debug('loadConsensus:', e);
   }
 }
 
-function _renderConsensusData(wrap, data) {
+function _renderConsensusData(wrap, data, prefix = 'cons') {
   const s = data.summary || {};
   const reports = data.reports || [];
 
   if (!s.mean && !s.high && reports.length === 0) return;
   wrap.style.display = '';
 
-  const badge = document.getElementById('cons-opinion-badge');
+  const badge = document.getElementById(`${prefix}-opinion-badge`);
   if (badge && s.opinion) {
     badge.textContent = s.opinion;
+    badge.style.display = '';
   } else if (badge) {
     badge.style.display = 'none';
   }
 
-  if (s.low)  setText('cons-low',  fmtPrice(s.low));
-  if (s.mean) setText('cons-mean', fmtPrice(s.mean));
-  if (s.high) setText('cons-high', fmtPrice(s.high));
+  if (s.low)  setText(`${prefix}-low`,  fmtPrice(s.low));
+  if (s.mean) setText(`${prefix}-mean`, fmtPrice(s.mean));
+  if (s.high) setText(`${prefix}-high`, fmtPrice(s.high));
 
-  const countWrap = document.getElementById('cons-count-wrap');
+  const countWrap = document.getElementById(`${prefix}-count-wrap`);
   if (countWrap && s.count) {
     countWrap.textContent = `(${s.count}개 증권사)`;
   }
 
-  const reportsEl = document.getElementById('cons-reports');
+  const reportsEl = document.getElementById(`${prefix}-reports`);
   if (reportsEl && reports.length > 0) {
     reportsEl.innerHTML = reports.map(r => `
       <div style="display:flex; align-items:center; padding:8px 0; border-top:1px solid var(--border); font-size:12px;">

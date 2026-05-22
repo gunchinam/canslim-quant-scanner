@@ -46,3 +46,51 @@ def test_save_snapshot_includes_entry(tmp_path, monkeypatch):
     assert snap["AAA"]["entry"] == "STRONG"
     assert snap["BBB"]["entry"] is None
     assert snap["AAA"]["score"] == 80.0
+
+
+from datetime import timedelta
+
+
+def _write_snap(tmp_path, market, day, payload):
+    p = os.path.join(str(tmp_path), f"scanner_{market}_{day.isoformat()}.json")
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(payload, f)
+
+
+def test_load_timeline_normal(tmp_path, monkeypatch):
+    h = _reload_history_with_dir(tmp_path, monkeypatch)
+    today = date.today()
+    _write_snap(tmp_path, "US", today, {"AAA": {"score": 80, "rank": 1, "entry": "STRONG"}})
+    _write_snap(tmp_path, "US", today - timedelta(days=1),
+                {"AAA": {"score": 50, "rank": 2, "entry": "AVOID"}})
+    tl = h.load_timeline("AAA", "US")
+    assert len(tl) == 14
+    assert tl[-1] == {"date": today.isoformat(), "grade": "S", "entry": "STRONG"}
+    assert tl[-2] == {"date": (today - timedelta(days=1)).isoformat(),
+                      "grade": "B", "entry": "AVOID"}
+    assert tl[0]["date"] < tl[-1]["date"]
+
+
+def test_load_timeline_empty_day(tmp_path, monkeypatch):
+    h = _reload_history_with_dir(tmp_path, monkeypatch)
+    today = date.today()
+    _write_snap(tmp_path, "US", today, {"AAA": {"score": 80, "rank": 1, "entry": "STRONG"}})
+    tl = h.load_timeline("AAA", "US")
+    assert tl[-2] == {"date": (today - timedelta(days=1)).isoformat(),
+                      "grade": None, "entry": None}
+
+
+def test_load_timeline_legacy_snapshot(tmp_path, monkeypatch):
+    h = _reload_history_with_dir(tmp_path, monkeypatch)
+    today = date.today()
+    _write_snap(tmp_path, "US", today, {"AAA": {"score": 80, "rank": 1}})
+    tl = h.load_timeline("AAA", "US")
+    assert tl[-1] == {"date": today.isoformat(), "grade": "S", "entry": None}
+
+
+def test_load_timeline_ticker_missing(tmp_path, monkeypatch):
+    h = _reload_history_with_dir(tmp_path, monkeypatch)
+    today = date.today()
+    _write_snap(tmp_path, "US", today, {"BBB": {"score": 80, "rank": 1, "entry": "STRONG"}})
+    tl = h.load_timeline("AAA", "US")
+    assert all(item["grade"] is None and item["entry"] is None for item in tl)

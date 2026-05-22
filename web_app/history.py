@@ -36,6 +36,24 @@ def _grade_from_score(score) -> str | None:
     return "C"
 
 
+def load_timeline(ticker: str, market: str) -> list[dict]:
+    """오늘 포함 직전 14 달력일의 등급·진입 이력. 날짜 오름차순."""
+    today = date.today()
+    out: list[dict] = []
+    for back in range(_MAX_LOOKBACK_DAYS - 1, -1, -1):
+        d = today - timedelta(days=back)
+        snap = _load(market, d)
+        rec = snap.get(ticker) if snap else None
+        if rec:
+            grade = _grade_from_score(rec.get("score"))
+            entry = rec.get("entry")
+        else:
+            grade = None
+            entry = None
+        out.append({"date": d.isoformat(), "grade": grade, "entry": entry})
+    return out
+
+
 def _snap_path(market: str, day: date) -> str:
     return os.path.join(_SNAP_DIR, f"scanner_{market}_{day.isoformat()}.json")
 

@@ -619,11 +619,104 @@
     });
   }
 
+  /* ══════════════════════════════════════════════════════════════
+   *  6. 이스터에그 — 날짜·시간 기반 연출
+   *     접속 시각(Asia/Seoul)을 보고 특정 날짜·장 시작에 깜짝 연출.
+   *     핵심 스캐너 기능과 완전히 격리(전체 try/catch) — 실패해도 무해.
+   * ══════════════════════════════════════════════════════════════ */
+
+  // 음력 명절 등은 양력 날짜가 매년 바뀌므로 'MM-DD' 키로 하드코딩.
+  // 새 연도가 시작되면 설날·추석·부처님오신날 날짜만 갱신하면 됨.
+  var EGG_DATES = {
+    '01-01': { effect: 'confetti', msg: '🎉 새해 복 많이 받으세요!' },
+    '12-25': { effect: 'snow',     msg: '🎄 메리 크리스마스!' },
+    '12-31': { effect: 'confetti', msg: '🎊 올 한 해 수고 많으셨어요' },
+    // 2026 음력 명절 (매년 갱신 필요)
+    '02-17': { effect: 'confetti', msg: '🎊 설날 복 많이 받으세요!' },
+    '09-25': { effect: 'toast',    msg: '🌕 풍요로운 한가위 되세요' }
+  };
+
+  /** 현재 시각을 Asia/Seoul 기준으로 분해. PC 시계가 틀려도 그대로 사용. */
+  function seoulNow() {
+    var parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit',
+      day: '2-digit', hour: '2-digit', minute: '2-digit',
+      weekday: 'short', hour12: false
+    }).formatToParts(new Date());
+    var o = {};
+    parts.forEach(function (p) { o[p.type] = p.value; });
+    if (o.hour === '24') o.hour = '00';  // 일부 환경에서 자정을 24로 표기
+    return o;
+  }
+
+  /** 세션당 1회만 — 이미 본 연출이면 false. */
+  function eggSeen(key) {
+    try {
+      if (sessionStorage.getItem('ix_egg_' + key)) return true;
+      sessionStorage.setItem('ix_egg_' + key, '1');
+      return false;
+    } catch (e) {
+      return false;  // sessionStorage 불가 환경 — 그냥 보여줌
+    }
+  }
+
+  /** 화면 가득 떨어지는 눈 연출 (약 8초). */
+  function snowfall() {
+    if (prefersReducedMotion()) return;
+    var container = document.createElement('div');
+    container.className = 'ix-snow-container';
+    container.setAttribute('aria-hidden', 'true');
+    var flakes = ['❄', '❅', '❆'];
+    for (var i = 0; i < 40; i++) {
+      var flake = document.createElement('span');
+      flake.className = 'ix-snowflake';
+      flake.textContent = flakes[i % flakes.length];
+      flake.style.left = (Math.random() * 100) + 'vw';
+      flake.style.fontSize = (8 + Math.random() * 14) + 'px';
+      flake.style.opacity = (0.4 + Math.random() * 0.6).toFixed(2);
+      flake.style.animationDuration = (5 + Math.random() * 5) + 's';
+      flake.style.animationDelay = (Math.random() * 5) + 's';
+      container.appendChild(flake);
+    }
+    document.body.appendChild(container);
+    setTimeout(function () { container.remove(); }, 13000);
+  }
+
+  function runEasterEgg() {
+    try {
+      var now = seoulNow();
+      var mmdd = now.month + '-' + now.day;
+      var hour = parseInt(now.hour, 10);
+      var minute = parseInt(now.minute, 10);
+      var isWeekday = ['Sat', 'Sun'].indexOf(now.weekday) === -1;
+
+      // 1) 날짜 연출
+      var egg = EGG_DATES[mmdd];
+      if (egg && !eggSeen(now.year + '-' + mmdd)) {
+        if (egg.effect === 'confetti') confetti(document.body, 40);
+        else if (egg.effect === 'snow') snowfall();
+        showToast(egg.msg, 4000);
+        return;  // 날짜 연출과 장 시작 연출이 겹치지 않게
+      }
+
+      // 2) 장 시작 연출 — 평일 09:00~09:04
+      if (isWeekday && hour === 9 && minute < 5 &&
+          !eggSeen(now.year + '-' + mmdd + '-open')) {
+        showToast('🔔 장이 열렸습니다. 오늘도 좋은 매매 되세요!', 4000);
+      }
+    } catch (e) {
+      /* 이스터에그 실패는 무시 — 핵심 기능에 영향 없음 */
+    }
+  }
+
   /* ── 초기화 ──────────────────────────────────────────────── */
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', hookIntoApp);
   } else {
     hookIntoApp();
   }
+
+  // 이스터에그는 핵심 훅과 분리하여 별도 실행 (실패 격리)
+  setTimeout(runEasterEgg, 1200);
 
 })();

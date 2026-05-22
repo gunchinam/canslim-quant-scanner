@@ -2160,6 +2160,8 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
             <span class="dp-score-unit">점</span>
           </div>
           <div id="dp-signal" class="dp-signal-badge">—</div>
+          <div id="dp-leader-badge" style="display:none;margin-top:6px;display:inline-flex;align-items:center;gap:4px;
+               background:rgba(22,163,74,0.12);color:#16A34A;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;"></div>
           <!-- 핸드드로잉 워터마크 차트 -->
           <svg style="position:absolute;bottom:8px;right:8px;opacity:0.12;pointer-events:none;"
                width="110" height="64" viewBox="0 0 110 64" fill="none">
@@ -2295,6 +2297,13 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
       <!-- Right: Tabs + Breakdown -->
       <div class="dp-right">
+        <!-- 최신 뉴스 한 줄 바 (KR 전용) -->
+        <div id="dp-news-bar" style="display:none;align-items:center;gap:6px;padding:6px 10px;margin-bottom:8px;
+             background:var(--surface-subtle);border-radius:8px;border:1px solid var(--border);font-size:12px;overflow:hidden;">
+          <span style="flex-shrink:0;font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.03em;">뉴스</span>
+          <a id="dp-news-bar-link" href="#" target="_blank" rel="noopener"
+             style="color:var(--text-primary);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;">—</a>
+        </div>
         <nav class="dp-tab-nav">
           <button class="dp-tab-btn active" data-tab="canslim" onclick="switchDpTab('canslim')">CAN SLIM 분석</button>
           <button class="dp-tab-btn" data-tab="tech" onclick="switchDpTab('tech')">기술 지표</button>

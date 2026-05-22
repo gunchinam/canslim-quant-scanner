@@ -1687,6 +1687,10 @@ function closeDetailBtn() {
 function _clearPanelDetail() {
   const _ab = document.getElementById('dp-about-box');
   if (_ab) _ab.style.display = 'none';
+  const _lb = document.getElementById('dp-leader-badge');
+  if (_lb) _lb.style.display = 'none';
+  const _nb = document.getElementById('dp-news-bar');
+  if (_nb) _nb.style.display = 'none';
   ['dp-name','dp-ticker','dp-sector','dp-about','dp-score','dp-signal',
    'dp-price','dp-day-chg','dp-target','dp-broker-target','dp-rsi','dp-conviction',
    'dp-axis-eps-val','dp-axis-roe-val','dp-axis-mom-val','dp-axis-rs-val'].forEach(id => setText(id, '…'));
@@ -1824,6 +1828,8 @@ function _populatePanelDetail(d, skipFourAxis) {
   const dnBtn = document.getElementById('dp-btn-dartnews');
   if (dnBtn) dnBtn.style.display = currentMarket === 'KR' ? '' : 'none';
   _dpDartNewsLoaded = false;  // 종목 변경 시 리셋
+  // KR이면 뉴스 바를 위해 즉시 fetch (탭 클릭 전에도 표시)
+  if (currentMarket === 'KR' && d.Ticker) loadDpDartNews(d.Ticker);
 
   // US 마켓일 때 US 인사이트 탭 표시
   const usBtn = document.getElementById('dp-btn-usinsight');
@@ -2217,8 +2223,30 @@ async function loadDpDartNews(ticker) {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     _renderDartNews(container, data);
+    // 뉴스 한 줄 바 채우기
+    _fillNewsBar(data);
   } catch (e) {
     container.innerHTML = `<div class="dn-empty">공시·뉴스를 불러올 수 없습니다: ${e.message}</div>`;
+  }
+}
+
+function _fillNewsBar(data) {
+  const bar = document.getElementById('dp-news-bar');
+  const link = document.getElementById('dp-news-bar-link');
+  if (!bar || !link) return;
+  const news = data.news || {};
+  const first = (news.top_positive || []).concat(news.top_negative || []).find(i => i.title);
+  if (first) {
+    link.textContent = first.title;
+    link.href = (first.link && /^https?:\/\//.test(first.link)) ? first.link : '#';
+    bar.style.display = 'flex';
+  } else if ((data.filings || []).length) {
+    const f = data.filings[0];
+    link.textContent = f.title || f.report_nm || '공시 확인';
+    link.href = f.url || f.rcept_url || '#';
+    bar.style.display = 'flex';
+  } else {
+    bar.style.display = 'none';
   }
 }
 
@@ -2303,6 +2331,16 @@ async function loadDpFourAxis(ticker) {
     const _haText = _rec?.EntryPlan?.headline_action;
     const _meaningText = _haText || _starMeaningTbl[_stars] || '';
     set('dp-fa-stars-meaning', _meaningText ? `· ${_meaningText}` : '');
+    // 주도주 배지: RS Rating 80+ + EPS 가속 동시 충족
+    const _leaderBadge = document.getElementById('dp-leader-badge');
+    if (_leaderBadge) {
+      if ((d.RSRating ?? 0) >= 80 && d.EPSAcceleration) {
+        _leaderBadge.textContent = '⚡ 주도주 확정';
+        _leaderBadge.style.display = 'inline-flex';
+      } else {
+        _leaderBadge.style.display = 'none';
+      }
+    }
     // 1008-풀 OneLiner는 populateDetailPanel에서 이미 설정함 — 여기서 덮어쓰지 않음
     set('dp-fa-trend-score',   d.trend?.score    ?? '-');
     set('dp-fa-trend-verdict', d.trend?.verdict  ?? '');

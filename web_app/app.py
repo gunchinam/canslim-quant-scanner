@@ -1345,6 +1345,20 @@ def api_score_history(ticker: str):
     return jsonify({"ticker": ticker, "market": market, "points": points})
 
 
+@app.route("/api/signal-history/<ticker>")
+def api_signal_history(ticker):
+    market = request.args.get("market")
+    if market not in ("KR", "US"):
+        return jsonify({"error": "market must be KR or US"}), 400
+    try:
+        import history
+        timeline = history.load_timeline(ticker, market)
+    except Exception as e:
+        logging.warning("signal-history failed (%s): %s", ticker, e)
+        return jsonify({"ticker": ticker, "market": market, "timeline": []}), 500
+    return jsonify({"ticker": ticker, "market": market, "timeline": timeline})
+
+
 @app.route("/api/deep-analysis/<ticker>")
 def api_deep_analysis(ticker: str):
     """Gemini 2.0 Flash + Google Search 그라운딩 기반 8-Phase 종목 심층 분석.

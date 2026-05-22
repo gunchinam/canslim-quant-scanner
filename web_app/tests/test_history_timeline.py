@@ -94,3 +94,28 @@ def test_load_timeline_ticker_missing(tmp_path, monkeypatch):
     _write_snap(tmp_path, "US", today, {"BBB": {"score": 80, "rank": 1, "entry": "STRONG"}})
     tl = h.load_timeline("AAA", "US")
     assert all(item["grade"] is None and item["entry"] is None for item in tl)
+
+
+def test_endpoint_ok(monkeypatch):
+    import app as flask_app
+    monkeypatch.setattr("history.load_timeline",
+                        lambda t, m: [{"date": "2026-05-22", "grade": "S", "entry": "STRONG"}])
+    client = flask_app.app.test_client()
+    resp = client.get("/api/signal-history/AAPL?market=US")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ticker"] == "AAPL"
+    assert data["market"] == "US"
+    assert isinstance(data["timeline"], list)
+
+
+def test_endpoint_missing_market(monkeypatch):
+    import app as flask_app
+    client = flask_app.app.test_client()
+    assert client.get("/api/signal-history/AAPL").status_code == 400
+
+
+def test_endpoint_bad_market(monkeypatch):
+    import app as flask_app
+    client = flask_app.app.test_client()
+    assert client.get("/api/signal-history/AAPL?market=XX").status_code == 400

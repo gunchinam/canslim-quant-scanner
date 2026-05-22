@@ -1619,6 +1619,7 @@ async function openDetail(ticker) {
   loadDpFourAxis(ticker);
   _loadAqSignal(ticker, seq);
   loadConsensus(ticker, 'dp-consensus-card', 'dpcons');
+  loadSignalHistory(ticker, currentMarket);
 
   try {
     const p   = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
@@ -3000,6 +3001,56 @@ async function loadAgentQuant(ticker) {
   } catch (e) {
     console.debug('loadAgentQuant:', e);
   }
+}
+
+// ── 시그널 이력 타임라인 ─────────────────────────────────────────────
+
+// 진입 상태 → 색 클래스 매핑
+function _entryColorClass(entry) {
+  if (entry === 'STRONG' || entry === 'GREEN') return 'entry-green';
+  if (entry === 'NEUTRAL' || entry === 'YELLOW') return 'entry-yellow';
+  if (entry === 'AVOID' || entry === 'RED') return 'entry-red';
+  return 'history-cell-empty';
+}
+
+function loadSignalHistory(ticker, market) {
+  var card = document.getElementById('dp-history-card');
+  fetch('/api/signal-history/' + encodeURIComponent(ticker) + '?market=' + encodeURIComponent(market))
+    .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+    .then(function (d) { _renderSignalHistory(d.timeline || []); })
+    .catch(function () { if (card) card.style.display = 'none'; });
+}
+
+function _renderSignalHistory(items) {
+  var card = document.getElementById('dp-history-card');
+  var strip = document.getElementById('dp-history-strip');
+  var startEl = document.getElementById('dp-history-start');
+  var endEl = document.getElementById('dp-history-end');
+  if (!card || !strip) return;
+  card.style.display = '';
+  var hasData = items.some(function (it) { return it.grade || it.entry; });
+  if (!items.length || !hasData) {
+    strip.className = '';
+    strip.innerHTML = '<div class="history-empty-msg">이력 데이터가 아직 없어요</div>';
+    if (startEl) startEl.textContent = '';
+    if (endEl) endEl.textContent = '';
+    return;
+  }
+  var gradeRow = '', entryRow = '';
+  items.forEach(function (it) {
+    var gCls = it.grade ? 'grade-' + it.grade : 'history-cell-empty';
+    var eCls = _entryColorClass(it.entry);
+    var entryLabel = _ENTRY_LABEL[it.entry] || '-';
+    var tip = esc(it.date + ' · ' + (it.grade || '-') + '등급 · ' + entryLabel);
+    gradeRow += '<div class="history-cell ' + gCls + '" title="' + tip + '"></div>';
+    entryRow += '<div class="history-cell ' + eCls + '" title="' + tip + '"></div>';
+  });
+  strip.className = 'history-strip';
+  strip.innerHTML = '<div class="history-row">' + gradeRow + '</div>' +
+                    '<div class="history-row">' + entryRow + '</div>';
+  function md(iso) { var p = iso.split('-'); return Number(p[1]) + '/' + Number(p[2]); }
+  if (startEl) startEl.textContent = esc(md(items[0].date));
+  if (endEl) endEl.textContent = esc(md(items[items.length - 1].date));
 }
 
 // ── 증권사 컨센서스 상세 로딩 ─────────────────────────────────────────

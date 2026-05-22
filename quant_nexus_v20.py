@@ -4755,7 +4755,15 @@ class QuantNexusApp:
             if not _name:
                 _name = info.get("longName") or info.get("shortName")
             name = (_name or ticker)[:20]
-            day_chg = safe_div(cur - prev, prev)
+            # regularMarketChangePercent를 우선 사용 (yfinance 원자값 — 캐시 지연 없음)
+            _rt_chg_pct = info.get("regularMarketChangePercent")
+            if _rt_chg_pct is not None:
+                try:
+                    day_chg = float(_rt_chg_pct) / 100.0
+                except (TypeError, ValueError):
+                    day_chg = safe_div(cur - prev, prev)
+            else:
+                day_chg = safe_div(cur - prev, prev)
 
             # ── 유동성 체크 (Low Liquidity Gate) ───────────────────
             # 임계치 상향(2026-05): "관심 없는 종목" 제외 — US $1M→$20M, KR 5억→100억.
@@ -8389,6 +8397,11 @@ class QuantNexusApp:
         # 003410 쌍용C&E는 2024 한앤컴퍼니 상장폐지(매핑 삭제)
         "011930.KS": "신성이엔지",          # 반도체 클린룸·태양광
         # 015350 부산가스 FDR 미확인(상폐 의심) — 매핑 삭제
+        # ── 팹리스·AI반도체 보강 ──────────────────────────────────────────
+        "394280.KQ": "오픈엣지테크놀로지",  # AI 반도체 IP·뉴럴 프로세서
+        "361390.KQ": "모빌린트",            # 엣지AI 비전 반도체
+        "102120.KQ": "어보브반도체",        # MCU 팹리스
+        "123860.KQ": "아나패스",            # Display IC 팹리스
         "029780.KS": "삼성카드",            # 신용카드
         "053450.KQ": "세코닉스",            # 차량용 카메라 렌즈
         "047310.KQ": "파워로직스",          # 카메라모듈·배터리보호회로
@@ -9042,6 +9055,8 @@ class QuantNexusApp:
         "122640.KQ": "반도체·DP장비", "448900.KQ": "자동차부품",
         "493280.KQ": "이중항체신약", "093320.KQ": "인터넷연동(IX)",
         "457370.KQ": "반도체·전자소재화학",
+        "394280.KQ": "AI반도체IP", "361390.KQ": "엣지AI비전반도체",
+        "102120.KQ": "MCU팹리스", "123860.KQ": "DisplayIC팹리스",
     }
 
     # ─────────────────────────────────────────────────────────────────────
@@ -11315,7 +11330,11 @@ class QuantNexusApp:
                 "시스템반도체":       [                                       "031980.KQ","033640.KQ",
                                        "054450.KQ","080220.KQ",
                                        "089030.KQ","200710.KQ",
-                                       "240810.KQ","396270.KQ"],  # 넥스트칩, 아이닉스
+                                       "240810.KQ","396270.KQ",   # 넥스트칩, 아이닉스
+                                       "440110.KQ","394280.KQ",   # 파두(SSD컨트롤러), 오픈엣지(AI IP)
+                                       "399720.KQ","094360.KQ",   # 가온칩스(AI ASIC), 칩스앤미디어(비디오IP)
+                                       "361390.KQ","102120.KQ",   # 모빌린트(엣지AI), 어보브반도체(MCU)
+                                       "123860.KQ"],               # 아나패스(Display IC)
 
                 # 장비·소재 — 노광·식각·세정·CVD + 포토레지스트·CMP
                 "반도체장비·소재":    [                                       "005290.KQ","014680.KS",

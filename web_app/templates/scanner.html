@@ -1866,11 +1866,35 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   transform: translateX(-50%) translateY(0);
 }
 
+/* Easter egg — snowfall */
+.ix-snow-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9997;
+  overflow: hidden;
+}
+.ix-snowflake {
+  position: absolute;
+  top: -24px;
+  color: #cfe6ff;
+  user-select: none;
+  will-change: transform;
+  animation-name: ixSnowFall;
+  animation-timing-function: linear;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+@keyframes ixSnowFall {
+  to { transform: translateY(108vh) rotate(360deg); }
+}
+
 /* prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   .ix-stat-roll,
   .ix-confetti-dot,
   .ix-star-particle,
+  .ix-snowflake,
   .ix-disc-enter { animation: none !important; }
   .ix-toast { transition: none !important; }
 }
@@ -2086,6 +2110,15 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           </svg>
         </div>
 
+        <!-- 실적 한눈에 (Hero 바로 아래) -->
+        <div id="dp-earnings-card" class="dp-metrics-card" style="display:none; padding:14px 16px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <span style="font-size:13px; font-weight:700; color:var(--text-primary);">📈 실적 한눈에</span>
+            <span style="font-size:10px; font-weight:500; color:var(--text-tertiary);">자세히는 재무 지표 탭</span>
+          </div>
+          <div id="dp-earnings-chips" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+        </div>
+
         <!-- 종합×진입 2축 사분면 배지 -->
         <div id="dp-quadrant-card" class="dp-metrics-card" style="display:none; padding:14px 16px;">
           <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;margin-bottom:1px;">🧭 회사 가치 × 진입 타이밍</div>
@@ -2103,16 +2136,6 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
             <span id="dp-day-chg" class="dp-metric-val">—</span>
           </div>
           <div class="dp-metric-row">
-            <span class="dp-metric-label">
-              증권사 목표가
-              <span id="dp-broker-src" class="dp-metric-sublabel">컨센서스</span>
-            </span>
-            <span style="display:flex;align-items:baseline;gap:6px;">
-              <span id="dp-broker-target" class="dp-metric-val">—</span>
-              <span id="dp-broker-upside" style="font-size:12px;font-weight:700;"></span>
-            </span>
-          </div>
-          <div class="dp-metric-row">
             <span class="dp-metric-label">RSI</span>
             <span id="dp-rsi" class="dp-metric-val">—</span>
           </div>
@@ -2120,6 +2143,21 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
             <span class="dp-metric-label">Conviction</span>
             <span id="dp-conviction" class="dp-metric-val">—</span>
           </div>
+        </div>
+
+        <!-- 증권사 컨센서스 -->
+        <div id="dp-consensus-card" class="dp-metrics-card" style="display:none; padding:14px 16px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <span style="font-size:13px; font-weight:700; color:var(--text-primary);">증권사 컨센서스</span>
+            <span id="dpcons-opinion-badge" style="font-size:11px; font-weight:600; padding:2px 10px; border-radius:100px; background:var(--brand-tint); color:var(--brand);"></span>
+          </div>
+          <div style="display:flex; gap:16px; font-size:12px; color:var(--text-secondary); margin-bottom:8px; flex-wrap:wrap;">
+            <span>최저 <strong id="dpcons-low">—</strong></span>
+            <span>평균 <strong id="dpcons-mean">—</strong></span>
+            <span>최고 <strong id="dpcons-high">—</strong></span>
+            <span id="dpcons-count-wrap" style="color:var(--text-tertiary);"></span>
+          </div>
+          <div id="dpcons-reports" style="display:flex; flex-direction:column; gap:0;"></div>
         </div>
 
         <!-- 진입 타이밍 카드 -->
@@ -2183,29 +2221,6 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           </div>
           <div class="entry-detail-toggle" onclick="document.getElementById('dp-entry-detail').classList.toggle('open'); this.querySelector('.arrow').textContent = document.getElementById('dp-entry-detail').classList.contains('open') ? '▲' : '▼';">
             <span class="arrow">▼</span> 상세 분석
-          </div>
-        </div>
-
-        <div class="dp-axis-grid">
-          <div class="dp-axis-item">
-            <div class="dp-axis-label">EPS 성장</div>
-            <div id="dp-axis-eps-val" class="dp-axis-val">—</div>
-            <div id="dp-axis-eps-meta" class="dp-axis-meta">분기 실적</div>
-          </div>
-          <div class="dp-axis-item">
-            <div class="dp-axis-label">ROE</div>
-            <div id="dp-axis-roe-val" class="dp-axis-val">—</div>
-            <div id="dp-axis-roe-meta" class="dp-axis-meta">자기자본이익률</div>
-          </div>
-          <div class="dp-axis-item">
-            <div class="dp-axis-label">12M 수익률</div>
-            <div id="dp-axis-mom-val" class="dp-axis-val">—</div>
-            <div id="dp-axis-mom-meta" class="dp-axis-meta">모멘텀</div>
-          </div>
-          <div class="dp-axis-item">
-            <div class="dp-axis-label">RS 등급</div>
-            <div id="dp-axis-rs-val" class="dp-axis-val">—</div>
-            <div id="dp-axis-rs-meta" class="dp-axis-meta">시장 대비 상대강도</div>
           </div>
         </div>
 

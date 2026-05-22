@@ -4643,7 +4643,9 @@ class QuantNexusApp:
             # DataCache 내부를 수정하지 않고, 호출부에서 복합 키를 조합한다.
             # _path()의 replace 규칙("."->"_", "/"->"_")과 충돌하지 않도록
             # 구분자로 "__" (이중 언더스코어)를 사용한다.
-            strategy_key = f"{ticker}__{self._scan_strategy}"
+            # 날짜 포함 캐시 키 — 날짜가 바뀌면 자동으로 새 스캔 (어제 DayChg 고착 방지)
+            _today = datetime.now().strftime("%Y%m%d")
+            strategy_key = f"{ticker}__{self._scan_strategy}__{_today}"
             # rate-limit 회피: 캐시 TTL 4시간 (KR 풀스캔 부하 경감)
             cached = self.cache.get(strategy_key, max_age_minutes=240)
             if cached:
@@ -4716,8 +4718,17 @@ class QuantNexusApp:
                 except Exception:
                     info = {}
 
-            cur  = safe_get(float(hist["Close"].iloc[-1]))
-            prev = safe_get(float(hist["Close"].iloc[-2])) if len(hist) > 1 else cur
+            # 실시간 현재가 우선 (장중 등락 정확도): info > fast_info > hist 마지막 봉
+            _rt_price = (safe_get(info.get("regularMarketPrice"))
+                         or safe_get(info.get("currentPrice"))
+                         or safe_get(info.get("ask")) or 0.0)
+            _hist_last = safe_get(float(hist["Close"].iloc[-1]))
+            cur  = _rt_price if _rt_price > 0 else _hist_last
+            # prev: 전일 종가 — hist 마지막 봉(어제 종가) 또는 info.previousClose
+            _prev_close = safe_get(info.get("previousClose") or info.get("regularMarketPreviousClose"))
+            prev = (_prev_close if _prev_close and _prev_close > 0
+                    else (_hist_last if _rt_price > 0 and _hist_last > 0
+                          else (safe_get(float(hist["Close"].iloc[-2])) if len(hist) > 1 else cur)))
             # 한국 종목 종목명 조회 우선순위 (KRX 공식명 우선):
             #   1) swing_scan.config.stock_names (FDR/pykrx → KRX 공식 한글명, 권위 소스)
             #   2) KR_NAMES 하드코딩 사전 (KRX 미스 시 큐레이팅 폴백)
@@ -5848,12 +5859,31 @@ class QuantNexusApp:
                 _rr_v = round(_rr_adj, 2)
                 _rr_now_v = atr.get("rr_ratio", 0.0) or 0.0
                 _disc = entry_discount  # 0~1
+                _ph_joined = " ".join(_phrases)
                 if entry_status == "STRONG":
-                    headline_action = "지금 매수 가능" if _disc < 0.015 else "풀백 대기"
+                    headline_action = "지금 매수 가능" if _disc < 0.015 else "풀백 오면 매수"
                 elif entry_status == "NEUTRAL":
-                    headline_action = "관망"
-                else:
-                    headline_action = "회피"
+                    if any(k in _ph_joined for k in ("과열", "RSI", "과매수")):
+                        headline_action = "눌림 기다린 후 진입"
+                    elif any(k in _ph_joined for k in ("추세", "이평", "골든", "데드")):
+                        headline_action = "추세 확인 후 진입"
+                    elif any(k in _ph_joined for k in ("거래량", "볼륨", "OBV")):
+                        headline_action = "거래량 터질 때 진입"
+                    elif any(k in _ph_joined for k in ("변동", "ATR", "VIX")):
+                        headline_action = "변동성 잡히면 진입"
+                    elif any(k in _ph_joined for k in ("VWAP", "지지", "지지선")):
+                        headline_action = "지지 확인 후 진입"
+                    else:
+                        headline_action = "신호 혼조 — 다음 기회 대기"
+                else:  # AVOID
+                    if any(k in _ph_joined for k in ("하락", "데드크로스", "약세")):
+                        headline_action = "하락 추세 — 지금은 아님"
+                    elif any(k in _ph_joined for k in ("변동", "VIX", "ATR")):
+                        headline_action = "변동성 과다 — 지금은 아님"
+                    elif any(k in _ph_joined for k in ("공매도", "숏")):
+                        headline_action = "공매도 압력 — 관망"
+                    else:
+                        headline_action = "지금 말고 다음 기회 노려라"
 
                 _low_wr = _wr > 0 and _wr < 40
                 _low_rr = (_rr_now_v > 0 and _rr_now_v < 1.5) or (_rr_v > 0 and _rr_v < 1.5)
@@ -11670,9 +11700,9 @@ class QuantNexusApp:
                 # 굴착기·건설장비
                 "건설기계":           [                                       "267270.KS","241560.KS"],  # HD현대건설기계, 두산밥캣
 
-                # 중공업·산업기계
-                "중공업·플랜트":      [                                       "034020.KS","298040.KS",
-                                       "017800.KS","009160.KS"],  # 두산에너빌리티, 효성중공업, 현대엘리베이, SIMPAC(프레스)
+                # 중공업·산업기계 (두산에너빌리티는 원전·SMR 섹터로 분류 — 딥테크 보정 적용)
+                "중공업·플랜트":      [                                       "298040.KS",
+                                       "017800.KS","009160.KS"],  # 효성중공업, 현대엘리베이, SIMPAC(프레스)
             },
 
             # ── 23. 바이오 CDMO ──────────────────────────────────────────────

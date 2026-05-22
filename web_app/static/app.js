@@ -1248,9 +1248,54 @@ function populateDetail(d) {
     _detTgtSrc.textContent = d.TargetSource ? `검증: ${d.TargetSource}` : '';
   }
 
+  // 실적 한눈에 카드 (Hero 바로 아래)
+  _renderEarningsSummary(d);
+
   // 기술/재무 탭 렌더링 (detail.html에도 dp-tech-content, dp-finance-content 존재)
   _renderTechTab(d);
   _renderFinanceTab(d);
+}
+
+function _renderEarningsSummary(d, cardId = 'detail-earnings-card', wrapId = 'detail-earnings-chips') {
+  const card = document.getElementById(cardId);
+  const wrap = document.getElementById(wrapId);
+  if (!card || !wrap) return;
+
+  // 페이지에 재무 데이터가 하나도 없으면 카드 자체를 숨김
+  const hasAnyFinance = d._EPSGrowth || d._ROE || d._OperatingMargin || d._PER || d._PBR || d._MarketCap;
+  if (!hasAnyFinance) { card.style.display = 'none'; return; }
+
+  const metrics = [];
+
+  if (d._EPSGrowth != null && d._EPSGrowth !== 0) {
+    const v = d._EPSGrowth * 100;
+    metrics.push(['EPS 성장률', (v >= 0 ? '+' : '') + fmt(v, 1) + '%',
+      v >= 25 ? 'var(--success)' : v < 0 ? 'var(--destructive)' : null, '분기 순이익 전년비']);
+  } else {
+    metrics.push(['EPS 성장률', '—', null, '분기 순이익 전년비']);
+  }
+
+  if (d._ROE) {
+    metrics.push(['ROE', fmt(d._ROE * 100, 1) + '%',
+      d._ROE >= 0.15 ? 'var(--success)' : d._ROE < 0 ? 'var(--destructive)' : null, '자기자본이익률']);
+  } else {
+    metrics.push(['ROE', '—', null, '자기자본이익률']);
+  }
+
+  if (d._OperatingMargin) {
+    metrics.push(['영업이익률', fmt(d._OperatingMargin * 100, 1) + '%',
+      d._OperatingMargin >= 0.20 ? 'var(--success)' : d._OperatingMargin <= 0 ? 'var(--destructive)' : null, '매출 대비 영업이익']);
+  } else {
+    metrics.push(['영업이익률', '—', null, '매출 대비 영업이익']);
+  }
+
+  wrap.innerHTML = metrics.map(([l, v, c, s]) => `
+    <div style="flex:1; min-width:92px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--bg-tertiary);">
+      <div style="font-size:10px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">${l}</div>
+      <div style="font-size:16px; font-weight:800; color:${c || 'var(--text-primary)'};">${v}</div>
+      <div style="font-size:9px; color:var(--text-tertiary); margin-top:2px;">${s}</div>
+    </div>`).join('');
+  card.style.display = '';
 }
 
 async function loadScoreSparkline(ticker) {
@@ -1387,7 +1432,9 @@ function _breakdownItemHtml(item) {
       const bm = line.match(/^\[([^\]]+)\]\s*(.*)/);
       const lm = line.match(/^([CANSLIM])\S*\s+(.*)/);
       const em = line.match(/^[⛔⭐]\s*(.*)/);
-      if (bm) { aux.push({b: bm[1].replace(/[^\w]/g,''), t: bm[2], st}); }
+      const dm = line.match(/^\ud83d\udc8e\s*(.*)/);  // \ud83d\udc8e \uc9c0\uc8fc\uc0ac NAV
+      if (dm) { main.unshift({b: '\ud83d\udc8e', t: dm[1] || line, st: /\uc800\ud3c9\uac00/.test(line) ? 'pass' : /\uace0\ud3c9\uac00/.test(line) ? 'fail' : 'neutral'}); }
+      else if (bm) { aux.push({b: bm[1].replace(/[^\w]/g,''), t: bm[2], st}); }
       else if (lm) { main.push({b: lm[1], t: lm[2], st}); }
       else if (em) { const badge = line.startsWith('\u26d4') ? 'FS' : 'SG'; aux.push({b: badge, t: em[1], st}); }
       else { aux.push({b: '\u00b7', t: line, st}); }
@@ -1530,6 +1577,9 @@ async function openDetail(ticker) {
   overlay.classList.add('visible');
   panel.classList.add('open');
   document.body.style.overflow = 'hidden';
+  const _dpLink = document.getElementById('dp-detail-link');
+  if (_dpLink) _dpLink.href = '/detail/' + encodeURIComponent(ticker) + '?market=' + currentMarket + '&strategy=' + currentStrategy;
+  window.TICKER = ticker;
 
   // 스캔 데이터가 이미 있으면 즉시 렌더링 (빈 드로어 방지)
   const cached = _stockMap[ticker];
@@ -1621,6 +1671,13 @@ function _clearPanelDetail() {
   if (tc) tc.innerHTML = loading;
   const fc = document.getElementById('dp-finance-content');
   if (fc) fc.innerHTML = loading;
+  const dc = document.getElementById('deep-content');
+  const defaultDeep = '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:12px;"><b>분석 시작</b> 버튼을 눌러 Gemini 심층분석을 실행하세요.</div>';
+  if (dc) dc.innerHTML = defaultDeep;
+  const ds = document.getElementById('deep-sources');
+  if (ds) ds.innerHTML = '';
+  const dm = document.getElementById('deep-meta');
+  if (dm) dm.textContent = '';
 }
 
 function _populatePanelDetail(d, skipFourAxis) {
@@ -1723,6 +1780,9 @@ function _populatePanelDetail(d, skipFourAxis) {
   setText('dp-axis-roe-val', roe);
   setText('dp-axis-mom-val', mom);
   setText('dp-axis-rs-val',  rsr);
+
+  // 실적 한눈에 카드 (Hero 바로 아래)
+  _renderEarningsSummary(d, 'dp-earnings-card', 'dp-earnings-chips');
 
   // 진입 타이밍 카드
   _renderEntryCard(d);

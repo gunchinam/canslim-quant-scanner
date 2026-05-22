@@ -395,7 +395,18 @@ function _entryLight(stock) {
 function _renderSignalHtml(signal, stock) {
   const { base, tags } = _splitSignal(signal);
   const tr = _trKo(base || '—');
-  let h = `<div class="signal-row">${_entryLight(stock)}<span class="signal-badge" style="color:${signalColor(base)};background:${signalBg(base)}">${esc(tr)}</span></div>`;
+  // 종목 퀄리티 축: STORY_STOCK 버킷은 "스토리" 칩, 그 외는 TotalScore 파생 등급.
+  // 등급/칩을 못 만들면 기존 시그널 라벨로 폴백.
+  let qualityHtml;
+  if (stock && stock.OneLinerTag === 'STORY_STOCK') {
+    qualityHtml = `<span class="story-chip" title="스토리 종목 — 등급 척도 비적용">스토리</span>`;
+  } else {
+    const g = stock ? _stockGrade(stock.TotalScore) : null;
+    qualityHtml = g
+      ? `<span class="grade-badge grade-${g}" title="종합점수 ${Math.round(Number(stock.TotalScore))} 기준 등급">${g}</span>`
+      : `<span class="signal-badge" style="color:${signalColor(base)};background:${signalBg(base)}">${esc(tr)}</span>`;
+  }
+  let h = `<div class="signal-row">${_entryLight(stock)}${qualityHtml}</div>`;
   if (tags.length) {
     h += '<div class="signal-tags">';
     for (const t of tags) {
@@ -2262,14 +2273,17 @@ async function loadDpFourAxis(ticker) {
     else _stars = 1;
     set('dp-fa-stars', '★'.repeat(_stars) + '☆'.repeat(5 - _stars));
     const _starMeaningTbl = {
-      5: '진입 타이밍 매우 좋음',
-      4: '진입 강함',
-      3: '관망 — 신호 혼재',
-      2: '진입 보류 권장',
-      1: '진입 부적합',
+      5: '지금 매수 가능',
+      4: '진입 타이밍 양호',
+      3: '추세 확인 후 진입',
+      2: '눌림 대기 후 진입',
+      1: '지금 말고 다음 기회',
       0: '데이터 부족',
     };
-    set('dp-fa-stars-meaning', _starMeaningTbl[_stars] ? `· ${_starMeaningTbl[_stars]}` : '');
+    // 백엔드 headline_action(구체적 맥락 포함)을 우선 사용, 없으면 별점 테이블 폴백
+    const _haText = _rec?.EntryPlan?.headline_action;
+    const _meaningText = _haText || _starMeaningTbl[_stars] || '';
+    set('dp-fa-stars-meaning', _meaningText ? `· ${_meaningText}` : '');
     // 1008-풀 OneLiner는 populateDetailPanel에서 이미 설정함 — 여기서 덮어쓰지 않음
     set('dp-fa-trend-score',   d.trend?.score    ?? '-');
     set('dp-fa-trend-verdict', d.trend?.verdict  ?? '');

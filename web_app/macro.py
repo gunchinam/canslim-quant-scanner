@@ -147,8 +147,10 @@ def _signal(vix, usdkrw) -> dict:
     """VIX·원달러 기반 시장 신호등. 데이터 없으면 unknown."""
     if vix is None and usdkrw is None:
         return {"level": "unknown", "emoji": "⚪", "label": "정보없음"}
-    danger = (vix is not None and vix >= 28) or (usdkrw is not None and usdkrw > 1400)
-    caution = (vix is not None and vix >= 20) or (usdkrw is not None and usdkrw > 1350)
+    # VIX 기준: ≥30 위험 / ≥22 주의 / <22 안정
+    # USD/KRW: 1400대는 근래 평상 범위 — 1480↑ 위험, 1430↑ 주의
+    danger  = (vix is not None and vix >= 30) or (usdkrw is not None and usdkrw > 1480)
+    caution = (vix is not None and vix >= 22) or (usdkrw is not None and usdkrw > 1430)
     if danger:
         return {"level": "danger", "emoji": "🔴", "label": "위험"}
     if caution:

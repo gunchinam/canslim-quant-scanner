@@ -874,14 +874,15 @@ def _compute_entry_status(
     if trend_tag and abs(trend_pts) >= 6:
         _phrases.append(trend_tag)
 
-    # 3) 거래량 점프
-    if _vol_jump_up:
+    # 3) 거래량 점프 — pivot+s_conf(돌파 거래량)와 mutex: volume 이중 산입 방지
+    _breakout_active = _pivot and _s_conf
+    if _vol_jump_up and not _breakout_active:
         _e_score += 12; _phrases.append("거래량 점프")
     elif _atr_squeeze and _ma_aligned:
         _e_score += 4
 
     # 4) 돌파 + 거래량
-    if _pivot and _s_conf:
+    if _breakout_active:
         _e_score += 10; _phrases.append("거래량 동반 돌파")
 
     # 5) MACD
@@ -908,9 +909,9 @@ def _compute_entry_status(
     breakdown: dict = {}
     if mr_pts != 0: breakdown["MeanRev"] = {"pts": mr_pts, "tag": mr_tag or ""}
     if trend_pts != 0: breakdown["Trend"] = {"pts": trend_pts, "tag": trend_tag or ""}
-    if _vol_jump_up: breakdown["Volume"] = {"pts": 12, "tag": "거래량 점프"}
+    if _vol_jump_up and not _breakout_active: breakdown["Volume"] = {"pts": 12, "tag": "거래량 점프"}
     elif _atr_squeeze and _ma_aligned: breakdown["Volume"] = {"pts": 4, "tag": "변동성 수축"}
-    if _pivot and _s_conf: breakdown["Breakout"] = {"pts": 10, "tag": "돌파"}
+    if _breakout_active: breakdown["Breakout"] = {"pts": 10, "tag": "돌파"}
     if _macd_div == "BULLISH": breakdown["MACD"] = {"pts": 3, "tag": "골든크로스"}
     elif _macd_div == "BEARISH": breakdown["MACD"] = {"pts": -4, "tag": "데드크로스"}
     if _atr_p > 8.0: breakdown["Volatility"] = {"pts": -10, "tag": "변동성 과대"}
@@ -2448,13 +2449,14 @@ class WallStreetQuantStrategies:
             c = hist["Close"]
             n = len(c)
 
-            # 3M, 6M, 12M 수익률 가중 RS 계산 (오닐 방식 근사)
-            r3  = (float(c.iloc[-1]) - float(c.iloc[-63])) / float(c.iloc[-63])  if n >= 63  else 0.0
+            # 1M·3M·6M·12M 수익률 가중 RS 계산 (스윙 호흡 — 단기 가속도 강조)
+            r1  = (float(c.iloc[-1]) - float(c.iloc[-21])) / float(c.iloc[-21])  if n >= 21  else 0.0
+            r3  = (float(c.iloc[-1]) - float(c.iloc[-63])) / float(c.iloc[-63])  if n >= 63  else r1
             r6  = (float(c.iloc[-1]) - float(c.iloc[-126])) / float(c.iloc[-126]) if n >= 126 else r3
             r12 = (float(c.iloc[-1]) - float(c.iloc[-252])) / float(c.iloc[-252]) if n >= 252 else r6 * 0.8
 
-            # 가중 수익률 (최근 강조)
-            weighted_ret = r3 * 0.4 + r6 * 0.2 + r12 * 0.4
+            # 가중 수익률 — 단기(1M·3M) 비중 ↑, 장기(12M)는 momentum 팩터가 담당하므로 축소
+            weighted_ret = r1 * 0.25 + r3 * 0.40 + r6 * 0.20 + r12 * 0.15
             result["rs"] = weighted_ret
 
             # RS Rating 계산 (시장 기준 SPY 연 10% 가정)
@@ -2462,17 +2464,17 @@ class WallStreetQuantStrategies:
             rs_excess = r3 - mkt_3m
             result["outperform"] = rs_excess > 0
 
-            # RS Rating → 0~100
-            if weighted_ret > 1.50:   result["rs_rating"] = 99
-            elif weighted_ret > 1.00: result["rs_rating"] = 97
-            elif weighted_ret > 0.60: result["rs_rating"] = 93
-            elif weighted_ret > 0.40: result["rs_rating"] = 88
-            elif weighted_ret > 0.25: result["rs_rating"] = 82
-            elif weighted_ret > 0.15: result["rs_rating"] = 74
-            elif weighted_ret > 0.05: result["rs_rating"] = 62
+            # RS Rating → 0~100 (스윙 호흡 가중 수익률에 맞춰 임계값 하향 보정)
+            if weighted_ret > 0.90:   result["rs_rating"] = 99
+            elif weighted_ret > 0.60: result["rs_rating"] = 97
+            elif weighted_ret > 0.38: result["rs_rating"] = 93
+            elif weighted_ret > 0.25: result["rs_rating"] = 88
+            elif weighted_ret > 0.15: result["rs_rating"] = 82
+            elif weighted_ret > 0.09: result["rs_rating"] = 74
+            elif weighted_ret > 0.03: result["rs_rating"] = 62
             elif weighted_ret > 0.00: result["rs_rating"] = 52
-            elif weighted_ret > -0.10: result["rs_rating"] = 38
-            elif weighted_ret > -0.25: result["rs_rating"] = 25
+            elif weighted_ret > -0.07: result["rs_rating"] = 38
+            elif weighted_ret > -0.18: result["rs_rating"] = 25
             else:                      result["rs_rating"] = 12
 
             # ── [L] Leader / Laggard 판정 ─────────────────────────────
@@ -8038,7 +8040,8 @@ class QuantNexusApp:
         "007660.KS": "이수페타시스",       "011070.KS": "LG이노텍",
         "011790.KS": "SKC",               "178920.KS": "PI첨단소재",
         "005290.KQ": "동진쎄미켐",         "166090.KQ": "하나머티리얼즈",
-        "281820.KS": "케이씨텍",           "222800.KQ": "심텍",
+        "457370.KQ": "한켐",               "281820.KS": "케이씨텍",
+        "222800.KQ": "심텍",
         "253840.KQ": "수젠텍",      "036540.KQ": "SFA반도체",
         "036810.KQ": "에프에스티",          # 046080은 코다코(웰크론한텍=076080 매핑 오류 삭제)
         # ── AI 인프라 ──────────────────────────────────────────────────────
@@ -8509,7 +8512,10 @@ class QuantNexusApp:
         "332570.KQ": "PS일렉트로닉스", "041960.KQ": "코미팜",
         "122640.KQ": "예스티", "448900.KQ": "한국피아이엠",
         "493280.KQ": "아이엠바이오로직스", "093320.KQ": "케이아이엔엑스",
+        "457370.KQ": "한켐",               # 반도체·디스플레이 전자소재
     }
+
+
 
     # ─────────────────────────────────────────────────────────────────────
     # KR_DESC — 국내 종목 한줄 설명 (Name 컬럼 옆에 표시)
@@ -9005,6 +9011,7 @@ class QuantNexusApp:
         "332570.KQ": "전력증폭기모듈", "041960.KQ": "동물약품",
         "122640.KQ": "반도체·DP장비", "448900.KQ": "자동차부품",
         "493280.KQ": "이중항체신약", "093320.KQ": "인터넷연동(IX)",
+        "457370.KQ": "반도체·전자소재화학",
     }
 
     # ─────────────────────────────────────────────────────────────────────

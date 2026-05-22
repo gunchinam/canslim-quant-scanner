@@ -1,5 +1,5 @@
 """
-app.py — (.)(.)검색기 Flask 웹 서버
+app.py — (.)(.)분석기 Flask 웹 서버
 engine_adapter.ScanAdapter를 JSON API로 서빙하고 HTML 템플릿을 렌더링한다.
 
 실행: python web_app/app.py
@@ -1323,6 +1323,28 @@ def api_us_insight(ticker: str):
     return jsonify(result)
 
 
+@app.route("/api/score-history/<ticker>")
+def api_score_history(ticker: str):
+    """최근 N일간 TotalScore + 순위 히스토리 (snapshots/ JSON 파일 기반)."""
+    market = (request.args.get("market") or "KR").upper()
+    days = min(int(request.args.get("days") or 30), 90)
+    import history as hist_mod
+    from datetime import date, timedelta
+    today = date.today()
+    points = []
+    for back in range(days, -1, -1):
+        d = today - timedelta(days=back)
+        snap = hist_mod._load(market, d)  # noqa: SLF001
+        if snap and ticker in snap:
+            entry = snap[ticker]
+            points.append({
+                "date": d.isoformat(),
+                "score": entry.get("score"),
+                "rank": entry.get("rank"),
+            })
+    return jsonify({"ticker": ticker, "market": market, "points": points})
+
+
 @app.route("/api/deep-analysis/<ticker>")
 def api_deep_analysis(ticker: str):
     """Gemini 2.0 Flash + Google Search 그라운딩 기반 8-Phase 종목 심층 분석.
@@ -1382,4 +1404,7 @@ if __name__ == "__main__":
         port = int(port_raw)
     except ValueError:
         port = 5000
-    socketio.run(app, debug=debug, port=port, host=host, allow_unsafe_werkzeug=True)
+    # allow_unsafe_werkzeug: dev runner(werkzeug)에서 SocketIO 스레드 호환 필요.
+    # PRODUCTION=1 환경에서는 gunicorn이 기동하므로 이 분기 자체가 실행되지 않음.
+    is_production = os.environ.get("PRODUCTION", "").strip() in ("1", "true", "yes")
+    socketio.run(app, debug=debug, port=port, host=host, allow_unsafe_werkzeug=not is_production)

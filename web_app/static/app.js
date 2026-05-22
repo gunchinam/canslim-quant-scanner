@@ -1,5 +1,5 @@
 /**
- * app.js — (.)(.)검색기 웹 프론트엔드
+ * app.js — (.)(.)분석기 웹 프론트엔드
  * scanner.html (데스크탑 테이블) / detail.html 공용 스크립트
  */
 
@@ -770,10 +770,8 @@ function renderStockRow(stock, rank) {
 
   const starred = _watchlist.has(stock.Ticker);
   const checked = _selectedStocks.has(stock.Ticker);
-  const compareChecked = _compareSet.has(stock.Ticker);
   return `
 <tr onclick="openDetail('${esc(stock.Ticker)}')" style="cursor:pointer;">
-  <td class="center"><input type="checkbox" class="compare-checkbox" value="${esc(stock.Ticker)}" ${compareChecked ? 'checked' : ''} onclick="toggleCompareStock('${esc(stock.Ticker)}', event)" style="cursor:pointer;width:16px;height:16px;accent-color:#16A34A;"></td>
   <td class="center"><input type="checkbox" ${checked ? 'checked' : ''} onclick="toggleSelectStock('${esc(stock.Ticker)}', event)" style="cursor:pointer;width:16px;height:16px;accent-color:#3182F6;"></td>
   <td class="center"><button class="star-btn${starred ? ' starred' : ''}" onclick="toggleWatchlist('${esc(stock.Ticker)}', event)" title="${starred ? '워치리스트에서 제거' : '워치리스트에 추가'}">${starred ? '★' : '☆'}</button></td>
   <td class="center"><span class="rank-cell ${rankClass}">${rank}</span></td>
@@ -1082,7 +1080,7 @@ async function loadDetail(ticker) {
   const p = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
   const cacheKey = `ticker:${ticker}:${currentMarket}:${currentStrategy}`;
   const cached = _clientCache.get(cacheKey);
-  if (cached) { populateDetail(cached); return; }
+  if (cached) { populateDetail(cached); loadScoreSparkline(ticker); return; }
   try {
     const res = await fetch(`/api/ticker/${ticker}?${p}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1090,6 +1088,7 @@ async function loadDetail(ticker) {
     if (data.error) throw new Error(data.error);
     _clientCache.set(cacheKey, data);
     populateDetail(data);
+    loadScoreSparkline(ticker);
   } catch (e) {
     console.error('loadDetail 실패:', e);
     setText('detail-name', '데이터를 불러올 수 없습니다');
@@ -1252,6 +1251,46 @@ function populateDetail(d) {
   // 기술/재무 탭 렌더링 (detail.html에도 dp-tech-content, dp-finance-content 존재)
   _renderTechTab(d);
   _renderFinanceTab(d);
+}
+
+async function loadScoreSparkline(ticker) {
+  const wrap = document.getElementById('score-sparkline-wrap');
+  const svg  = document.getElementById('score-sparkline');
+  const meta = document.getElementById('score-sparkline-meta');
+  if (!wrap || !svg || !meta) return;
+
+  try {
+    const res = await fetch(`/api/score-history/${encodeURIComponent(ticker)}?market=${encodeURIComponent(currentMarket)}&days=30`);
+    if (!res.ok) return;
+    const { points } = await res.json();
+    if (!points || points.length < 2) return;
+
+    const scores = points.map(p => p.score).filter(s => s != null);
+    if (scores.length < 2) return;
+
+    const W = 200, H = 40, PAD = 3;
+    const minS = Math.min(...scores), maxS = Math.max(...scores);
+    const range = maxS - minS || 1;
+    const toX = i => PAD + (i / (scores.length - 1)) * (W - PAD * 2);
+    const toY = s => H - PAD - ((s - minS) / range) * (H - PAD * 2);
+
+    const pts = scores.map((s, i) => `${toX(i).toFixed(1)},${toY(s).toFixed(1)}`).join(' ');
+    const last = scores[scores.length - 1], first = scores[0];
+    const delta = last - first;
+    const color = delta >= 0 ? 'var(--success, #22c55e)' : 'var(--destructive, #ef4444)';
+
+    svg.innerHTML = `
+      <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="${toX(scores.length-1).toFixed(1)}" cy="${toY(last).toFixed(1)}" r="2.5" fill="${color}"/>`;
+
+    const dateFirst = points.find(p => p.score != null)?.date || '';
+    const dateLast  = [...points].reverse().find(p => p.score != null)?.date || '';
+    const sign = delta >= 0 ? '+' : '';
+    meta.innerHTML = `<span style="color:${color}">${sign}${delta.toFixed(1)}pt</span> · ${dateFirst} ~ ${dateLast} (${scores.length}일)`;
+    wrap.style.display = '';
+  } catch (e) {
+    console.warn('sparkline 로드 실패:', e);
+  }
 }
 
 function setText(id, text) {
@@ -3017,7 +3056,7 @@ function exportCSV() {
   const a    = document.createElement('a');
   a.href     = url;
   const date = new Date().toISOString().slice(0, 10);
-  a.download = `검색기_${currentMarket}_${currentStrategy}_${date}.csv`;
+  a.download = `분석기_${currentMarket}_${currentStrategy}_${date}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -3075,8 +3114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSearch();
     initOneLinerFilter();
     initSort();
-    ensureCompareHeader();
-    updateCompareActions();
+      updateCompareActions();
     document.getElementById('btn-scan')?.addEventListener('click', runScan);
     loadSectors();
     runScan();
@@ -3250,24 +3288,14 @@ async function loadComparePage(tickers) {
   }));
 }
 
-function ensureCompareHeader() {
-  const row = document.querySelector('.stock-table thead tr');
-  if (!row || row.querySelector('.compare-header-cell')) return;
-  const th = document.createElement('th');
-  th.className = 'center compare-header-cell';
-  th.style.width = '32px';
-  th.title = '비교 선택';
-  row.insertBefore(th, row.firstElementChild || null);
-  const stateMsg = document.querySelector('#stock-list .state-msg');
-  if (stateMsg) stateMsg.setAttribute('colspan', String(_colCount()));
-}
+
 
 function updateCompareActions() {
   const group = document.getElementById('compare-fab-group');
   const openBtn = document.getElementById('compare-open-btn');
   const clearBtn = document.getElementById('compare-clear-btn');
   if (!group || !openBtn || !clearBtn) return;
-  const size = _compareSet.size;
+  const size = _selectedStocks.size;
   group.hidden = size === 0;
   openBtn.hidden = size < 2;
   openBtn.disabled = size < 2;
@@ -3293,7 +3321,11 @@ function toggleCompareStock(ticker, ev) {
 
 function clearCompareSelection() {
   _compareSet.clear();
-  document.querySelectorAll('.compare-checkbox').forEach(cb => { cb.checked = false; });
+  _selectedStocks.clear();
+  document.querySelectorAll('.stock-table tbody input[type=checkbox]').forEach(cb => { cb.checked = false; });
+  const allCb = document.getElementById('select-all-cb');
+  if (allCb) allCb.checked = false;
+  _updateShareCount();
   updateCompareActions();
 }
 
@@ -3311,10 +3343,13 @@ function _updateShareCount() {
 
 function toggleSelectStock(ticker, ev) {
   ev.stopPropagation();
-  if (_selectedStocks.has(ticker)) _selectedStocks.delete(ticker);
-  else _selectedStocks.add(ticker);
+  if (_selectedStocks.has(ticker)) { _selectedStocks.delete(ticker); _compareSet.delete(ticker); }
+  else {
+    if (_compareSet.size >= 4) { alert('비교는 최대 4개 종목까지 가능합니다.'); if (ev?.target) ev.target.checked = false; return; }
+    _selectedStocks.add(ticker); _compareSet.add(ticker);
+  }
   _updateShareCount();
-  // 전체선택 체크박스 동기화
+  updateCompareActions();
   const allCb = document.getElementById('select-all-cb');
   if (allCb) allCb.checked = allStocks.length > 0 && _selectedStocks.size === allStocks.length;
 }
@@ -3323,12 +3358,12 @@ function toggleSelectAll() {
   const allCb = document.getElementById('select-all-cb');
   if (!allCb) return;
   if (allCb.checked) {
-    allStocks.forEach(s => _selectedStocks.add(s.Ticker));
+    allStocks.forEach(s => { _selectedStocks.add(s.Ticker); _compareSet.add(s.Ticker); });
   } else {
-    _selectedStocks.clear();
+    _selectedStocks.clear(); _compareSet.clear();
   }
   _updateShareCount();
-  // 각 행의 체크박스 동기화
+  updateCompareActions();
   document.querySelectorAll('.stock-table tbody input[type=checkbox]').forEach(cb => {
     cb.checked = allCb.checked;
   });
@@ -3408,7 +3443,7 @@ function generateShareCard() {
     <div style="background:linear-gradient(135deg,#3182F6,#1B64DA);padding:20px 20px 16px;">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div>
-          <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">(.)(.) 검색기</div>
+          <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">(.)(.) 분석기</div>
           <div style="font-size:12px;color:rgba(255,255,255,0.75);margin-top:4px;">${mkt} · ${dateStr}</div>
         </div>
         <div style="background:rgba(255,255,255,0.2);border-radius:8px;padding:6px 12px;">

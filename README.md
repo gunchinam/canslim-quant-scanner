@@ -1,6 +1,6 @@
 <div align="center">
 
-# (.)(.) 검색기
+# (.)(.) 분석기
 
 **CAN SLIM + Quant Factor + Entry Timing**
 

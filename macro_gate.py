@@ -27,19 +27,19 @@ def get_regime() -> Dict[str, Any]:
         {regime, vix, reason, ts}
         regime ∈ {'Risk-On','Neutral','Risk-Off','Unknown'}
     임계값:
-        VIX < 18  → Risk-On
-        18~28     → Neutral
-        ≥ 28      → Risk-Off
+        VIX < 20  → Risk-On  (저변동성, 진입 우호)
+        20~30     → Neutral  (평상 변동성, 선별 진입)
+        ≥ 30      → Risk-Off (고변동성, 진입 보류)
     """
     vix = _fetch_vix()
     ts  = dt.datetime.now().isoformat(timespec="seconds")
     if vix is None:
         return {"regime": "Unknown", "vix": None,
                 "reason": "VIX 조회 실패 — 데이터 소스 점검 필요", "ts": ts}
-    if vix < 18:
+    if vix < 20:
         regime = "Risk-On"
         reason = f"VIX {vix:.1f} — 변동성 낮음, 신규 진입 우호적"
-    elif vix < 28:
+    elif vix < 30:
         regime = "Neutral"
         reason = f"VIX {vix:.1f} — 평상 변동성, 종목 선별 진입"
     else:

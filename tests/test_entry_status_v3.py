@@ -20,6 +20,21 @@ def _flat_hist(n: int = 250, start: float = 100.0, end: float = 150.0) -> pd.Dat
     )
 
 
+def _vol_spike_hist(n: int = 250, start: float = 100.0, end: float = 150.0) -> pd.DataFrame:
+    """마지막 봉에 거래량 급등(>2×평균) + 양봉 → vol_jump_up 트리거."""
+    idx = pd.date_range("2025-01-01", periods=n, freq="D")
+    close = np.linspace(start, end, n)
+    open_ = close.copy()
+    open_[-1] = close[-1] * 0.99  # 마지막 봉 양봉(close > open)
+    volume = [1_000_000] * n
+    volume[-1] = 3_000_000         # 평균(1M) × 3 → 2× 기준 초과
+    return pd.DataFrame(
+        {"Open": open_, "High": close * 1.01, "Low": close * 0.99,
+         "Close": close, "Volume": volume},
+        index=idx,
+    )
+
+
 def _make(rsi=50.0, bb=0.0, macd="NONE", vwap_d=0.0,
           atr_p=2.0, regime="SIDEWAYS", pivot=False, s_conf=False,
           day_chg=0.0, fail_safe=False, bear_cap=False, hist=None, cur=150.0):
@@ -38,13 +53,14 @@ def _make(rsi=50.0, bb=0.0, macd="NONE", vwap_d=0.0,
 
 # ── ET3-004: mutex pivot/vol_jump ──────────────────────────────
 def test_mutex_pivot_breakout_blocks_vol_jump():
-    """pivot+s_conf 발동 시 vol_jump_up 가중 0 (double-count 차단)."""
-    # _flat_hist에서 vol_jump_up 직접 트리거 어려우니, breakdown만 확인
-    out = _make(pivot=True, s_conf=True)
+    """pivot+s_conf 발동 시 vol_jump_up breakdown 제외 (double-count 차단)."""
+    hist = _vol_spike_hist()
+    out = _make(pivot=True, s_conf=True, hist=hist)
+    # vol_jump_up이 실제로 트리거됐는지 확인 (hist가 조건을 충족해야 테스트가 유효)
+    assert out["signals"].get("vol_jump_up"), "사전조건: vol_jump_up이 트리거되어야 mutex 테스트 유효"
+    # pivot+s_conf mutex → Volume 항목이 breakdown에서 제거되어야 함
     assert "Breakout" in out["breakdown"]
-    # vol_jump가 트리거됐다면 Volume도 있겠지만 mutex로 차단
-    if out["signals"].get("vol_jump_up"):
-        assert "Volume" not in out["breakdown"]
+    assert "Volume" not in out["breakdown"], "mutex 미작동: pivot+s_conf 발동 시 Volume double-count 차단 실패"
 
 
 # ── ET3-002: ATR-normalized day_chg ───────────────────────────

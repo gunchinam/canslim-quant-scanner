@@ -197,7 +197,8 @@ function _renderEntryCard(d) {
   // 우선 백엔드 파생필드(headline_action/one_reason)를 그대로 표시.
   // 구버전 캐시 스캔(파생필드 없음)만 "관망 · BB 과확장 · …" 문자열을 분해.
   const _pp = phrase.split(' · ');
-  const _headline = plan.headline_action || _pp[0] || phrase;
+  // 진입 타이밍 라벨은 리스트 배지와 같은 어휘(진입적기/눌림대기/부적합)로 통일.
+  const _headline = _ENTRY_LABEL[st] || plan.headline_action || _pp[0] || phrase;
   const _reason = plan.one_reason || _pp.slice(1).filter(Boolean).slice(0, 2).join(' · ');
   setText('dp-entry-phrase', _headline);
   const _subEl = document.getElementById('dp-entry-subreason');
@@ -2057,6 +2058,13 @@ function _renderTechTab(d) {
   const volRaw  = d.VolRatio != null ? fmt(d.VolRatio, 2)+'x'
                   + (d.VolRatio > 2 ? ' · 급증' : d.VolRatio > 1.3 ? ' · 증가' : d.VolRatio < 0.7 ? ' · 감소' : ' · 보통') : '—';
 
+  const macdRaw = d._MACDHist != null
+    ? (d._MACDHist > 0 ? '상승 전환 중' : d._MACDHist < 0 ? '하락 중' : '중립')
+    : '—';
+  const macdCol = d._MACDHist > 0 ? 'var(--success)' : d._MACDHist < 0 ? 'var(--destructive)' : null;
+  const sectorRankRaw = d.SectorRank && d.SectorRank !== '-' ? d.SectorRank : (d.SectorRank === '-' ? '스캔 필요' : '—');
+  const sectorRankCol = d.SectorRank === 'Top 10%' ? 'var(--success)' : d.SectorRank === 'Bottom' ? 'var(--destructive)' : null;
+
   const rows = [
     ['RSI (14)',    rsiVal,  '70↑ 과매수(조정 주의) · 30↓ 과매도(매수 기회)', rsiCol],
     ['ADX',        adxRaw,  '25↑ 추세 존재 · 40↑ 강한 추세 · 25↓ 횡보',     adxCol],
@@ -2068,10 +2076,12 @@ function _renderTechTab(d) {
     ['3M 수익률',  d._Mom3M != null ? (d._Mom3M >= 0 ? '+' : '') + fmt(d._Mom3M,1)+'%' : '—',
      '3개월간 주가 등락 — 단기 추세 확인', d._Mom3M > 0 ? 'var(--success)' : 'var(--destructive)'],
     ['거래량 비율',volRaw,  '1↑ 평소보다 활발 · 2↑ 기관 참여 가능성',        d.VolRatio > 1.5 ? 'var(--success)' : null],
+    ['MACD 방향',  macdRaw, '히스토그램 양수=상승 모멘텀 · 음수=하락 모멘텀', macdCol],
     ['ORB 신호',   _orbNr7Label(d.ORBSignal), '시초가 범위 돌파 시 매수 신호',     _orbNr7Color(d.ORBSignal)],
     ['NR7 압축',   _orbNr7Label(d.NR7Signal), '변동폭 수축 후 큰 움직임 대비',     _orbNr7Color(d.NR7Signal)],
     ['볼린저밴드', _trKo(d.BBSignal   || '—'), '하단 반등=매수 기회 · 상단=과열 주의', null],
     ['확신도',     _trKo(d.Conviction || '—'), '높음=팩터 방향 일치 · 낮음=신호 혼재', null],
+    ['섹터 순위',  sectorRankRaw, '스캔 결과 기준 섹터 내 상대 위치 (목록 스캔 후 표시)', sectorRankCol],
   ];
 
   el.innerHTML = rows.map(([l, v, s, c]) => _indicatorRowHtml(l, v, s, c)).join('');

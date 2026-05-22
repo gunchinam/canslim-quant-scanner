@@ -93,8 +93,9 @@ function _signalTier(signal) {
 
 // 종합점수(TotalScore) → 종목 등급 S/A/B/C. 숫자가 아니면 null.
 function _stockGrade(totalScore) {
+  if (totalScore == null || (typeof totalScore === 'string' && totalScore.trim() === '')) return null;
   const n = Number(totalScore);
-  if (totalScore == null || totalScore === '' || Number.isNaN(n)) return null;
+  if (Number.isNaN(n)) return null;
   if (n >= 75) return 'S';
   if (n >= 60) return 'A';
   if (n >= 45) return 'B';
@@ -2108,12 +2109,20 @@ function _renderFinanceTab(d) {
   const pbrLbl = d._PBR ? (d._PBR < 1 ? ' · 자산 대비 저평가' : d._PBR > 5 ? ' · 고평가' : '') : '';
   const dbtLbl = d._DebtRatio ? (d._DebtRatio > 200 ? ' · 위험' : d._DebtRatio > 100 ? ' · 주의' : ' · 안정') : '';
   const omLbl  = d._OperatingMargin ? (d._OperatingMargin > 0.20 ? ' · 우수' : d._OperatingMargin > 0.10 ? ' · 양호' : d._OperatingMargin > 0 ? ' · 보통' : ' · 손실') : '';
+  const epsAccelRaw = d.EPSAcceleration ? '가속 중 🚀' : (d.EPSAcceleration === false ? '가속 아님' : '—');
+  const epsAccelCol = d.EPSAcceleration ? 'var(--success)' : null;
+  const divRaw  = d._DivYield && d._DivYield > 0 ? fmt(d._DivYield * 100, 2) + '%' : '—';
+  const revRaw  = d._RevenueGrowth != null && d._RevenueGrowth !== 0
+    ? (d._RevenueGrowth >= 0 ? '+' : '') + fmt(d._RevenueGrowth * 100, 1) + '%' : '—';
 
   const rows = [
     ['PER',       d._PER   ? fmt(d._PER, 1) + perLbl  : '—', '주가÷순이익 · 15↓ 저평가 · 40↑ 고평가',    d._PER && d._PER < 15 ? 'var(--success)' : d._PER > 40 ? 'var(--destructive)' : null],
     ['PBR',       d._PBR   ? fmt(d._PBR, 2) + pbrLbl  : '—', '주가÷순자산 · 1↓ 자산 대비 저렴',           null],
     ['ROE',       roeRaw,                                      '자기자본이익률 · 17%↑ 오닐 기준 합격',     d._ROE > 0.15 ? 'var(--success)' : null],
     ['EPS 성장률',epsRaw,                                      '분기 순이익 전년비 · 25%↑ 성장주 기준',    d._EPSGrowth > 0 ? 'var(--success)' : 'var(--destructive)'],
+    ['EPS 가속',  epsAccelRaw,                                 '전분기 대비 성장 가속 중인가 (CAN SLIM C원칙)', epsAccelCol],
+    ['매출 성장', revRaw,                                      '전년비 매출 성장률 — 양수=매출 확장 중',   d._RevenueGrowth > 0 ? 'var(--success)' : d._RevenueGrowth < 0 ? 'var(--destructive)' : null],
+    ['배당수익률',divRaw,                                      '연간 배당금 ÷ 현재가 (배당주 참고)',        null],
     ['영업이익률',d._OperatingMargin ? fmt(d._OperatingMargin*100,1)+'%' + omLbl : '—', '매출 대비 영업이익 · 20%↑ 우수',  null],
     ['부채비율',  d._DebtRatio ? fmt(d._DebtRatio, 1)+'%' + dbtLbl : '—', '100%↓ 양호 · 200%↑ 위험', d._DebtRatio > 150 ? 'var(--destructive)' : d._DebtRatio < 50 ? 'var(--success)' : null],
     ['시가총액',  d._MarketCap ? _fmtCap(d._MarketCap) : '—',          '기업 규모 — 클수록 안정적',         null],

@@ -555,13 +555,29 @@ def healthz():
     })
 
 
+import re as _ticker_re_mod
+
+# 화이트리스트: 1~12자 [A-Z0-9.-]. US(AAPL/BRK.B) + KR(005930/005930.KS) 모두 통과.
+# path traversal / SSRF / prompt injection 1차 방어.
+_TICKER_RE = _ticker_re_mod.compile(r"^[A-Za-z0-9.\-]{1,12}$")
+
+
+def _validate_ticker(ticker) -> str | None:
+    """티커가 화이트리스트 통과하면 정규화된 값, 아니면 None."""
+    if not ticker or not isinstance(ticker, str):
+        return None
+    t = ticker.strip()
+    if not _TICKER_RE.match(t):
+        return None
+    return t
+
+
 @app.route("/detail/<ticker>")
 def detail(ticker: str):
-    import re as _re
-    ticker = _re.sub(r"[^A-Za-z0-9.\-]", "", ticker)
-    if not ticker:
+    safe = _validate_ticker(ticker)
+    if not safe:
         return "Invalid ticker", 400
-    safe_ticker = html.escape(ticker, quote=True)
+    safe_ticker = html.escape(safe, quote=True)
     return _render_static_template("detail.html", {
         "{{ ticker }}": safe_ticker,
     })

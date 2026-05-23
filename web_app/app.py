@@ -203,7 +203,7 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
         try:
             adapter_cls = _get_scan_adapter_cls()
             adapter = adapter_cls(market=market, strategy=strategy)
-            results = adapter.scan_sector(sector) if sector else adapter.scan_all()
+            results = adapter.scan_sector(sector, prefer_cache=True) if sector else adapter.scan_all(prefer_cache=True, max_workers=8)
             try:
                 import history
                 results = history.annotate_deltas(results, market)
@@ -345,22 +345,45 @@ def _release_warmer_file_lock(handle) -> None:
             pass
 
 
+def _warmup_fill_cache(market: str) -> None:
+    """prefer_cache=True로 pickle에서 in-memory cache를 빠르게 채운다 (quick-warm pass)."""
+    try:
+        adapter_cls = _get_scan_adapter_cls()
+        adapter = adapter_cls(market=market, strategy="BALANCED")
+        results = adapter.scan_all(prefer_cache=True, cache_only=True, max_workers=8)
+        if results:
+            try:
+                results = _annotate_one_liners(results)
+            except Exception:
+                pass
+            with _scan_results_cache_lock:
+                _scan_results_cache[(market, "BALANCED", "")] = {
+                    "_ts": int(time.time()), "data": results,
+                }
+            logging.info("%s quick-warm done: %d tickers (from pickle)", market, len(results))
+    except Exception as e:
+        logging.warning("%s quick-warm failed: %s", market, e)
+
+
 def _kr_warmup_loop(interval_sec: int = 1800) -> None:
     """KR 전체 스캔을 주기적으로 BG 실행. 파일잠금으로 multi-process duplication 방지."""
+    first_run = True
     while True:
         handle = _acquire_warmer_file_lock()
         if handle is None:
             logging.info("KR warm-up skipped: another worker holds lock")
         else:
             try:
-                logging.info("KR warm-up started")
+                # 첫 실행 시 quick-warm으로 캐시를 빠르게 채운 후 slow-refresh
+                if first_run:
+                    _warmup_fill_cache("KR")
+                    first_run = False
+                logging.info("KR warm-up started (slow-refresh)")
                 try:
                     adapter_cls = _get_scan_adapter_cls()
                     adapter = adapter_cls(market="KR", strategy="BALANCED")
-                    # 워머는 Semaphore(8)로 throttle: scan_all max_workers=8 로 호출
                     results = adapter.scan_all(max_workers=8)
                     logging.info("KR warm-up done: %d tickers", len(results) if results else 0)
-                    # 스캔 결과 전체 캐시 갱신
                     if results:
                         try:
                             results = _annotate_one_liners(results)
@@ -397,6 +420,7 @@ _us_warmup_lock = threading.Lock()
 
 def _us_warmup_loop(interval_sec: int = 1800) -> None:
     """US 전체 스캔을 주기적으로 BG 실행. 파일잠금으로 multi-process duplication 방지."""
+    first_run = True
     while True:
         handle = None
         try:
@@ -429,7 +453,11 @@ def _us_warmup_loop(interval_sec: int = 1800) -> None:
                 logging.info("US warm-up skipped: another worker holds lock")
             else:
                 try:
-                    logging.info("US warm-up started")
+                    # 첫 실행 시 quick-warm으로 캐시를 빠르게 채운 후 slow-refresh
+                    if first_run:
+                        _warmup_fill_cache("US")
+                        first_run = False
+                    logging.info("US warm-up started (slow-refresh)")
                     adapter_cls = _get_scan_adapter_cls()
                     adapter = adapter_cls(market="US", strategy="BALANCED")
                     results = adapter.scan_all(max_workers=8)
@@ -707,15 +735,13 @@ def api_scan():
         results = []
         warming_in_progress = False
         if market in ("US", "KR"):
+            # pickle 캐시에서 빠르게 읽기 (동기 yfinance 풀스캔 없음)
             results = adapter.scan_sector(sector, prefer_cache=True, cache_only=True) if sector else adapter.scan_all(prefer_cache=True, cache_only=True)
             if results:
                 _refresh_scan_background(market, strategy, sector)
-            elif market == "US":
-                # US는 캐시 미스 시 동기 풀 스캔 fallback
-                results = adapter.scan_sector(sector) if sector else adapter.scan_all()
             else:
-                # KR: 섹터 캐시 미스 → 1) 전체 스캔 캐시에서 필터링, 2) 동기 섹터 스캔
-                if sector:
+                # KR 섹터: in-memory 전체 캐시에서 필터링 시도
+                if market == "KR" and sector:
                     with _scan_results_cache_lock:
                         _full = _scan_results_cache.get((market, strategy, ""))
                     if _full:
@@ -725,16 +751,9 @@ def api_scan():
                                 _scan_results_cache[(market, strategy, sector)] = {
                                     "_ts": _full["_ts"], "data": results,
                                 }
+                # 캐시 없으면 BG 갱신만 트리거, 즉시 빈 결과 반환
+                _refresh_scan_background(market, strategy, sector)
                 if not results:
-                    # 전체 캐시도 없으면 해당 섹터만 동기 스캔
-                    try:
-                        results = adapter.scan_sector(sector, max_workers=8) if sector else []
-                    except Exception as _ke:
-                        logging.warning("KR sync sector scan failed: %s", _ke)
-                if results:
-                    _refresh_scan_background(market, strategy, sector)
-                else:
-                    _refresh_scan_background(market, strategy, sector)
                     warming_in_progress = True
         else:
             results = adapter.scan_sector(sector) if sector else adapter.scan_all()

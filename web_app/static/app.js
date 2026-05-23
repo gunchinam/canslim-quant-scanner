@@ -607,6 +607,14 @@ async function runScan() {
     _scanStocks  = allStocks;
     const visibleTickers = new Set(allStocks.map(s => s.Ticker));
     _compareSet = new Set([..._compareSet].filter(ticker => visibleTickers.has(ticker)));
+    // 서버가 워밍 중이고 결과가 없으면 15초 후 자동 재시도
+    if (allStocks.length === 0 && res.headers.get('X-Warming-In-Progress') === 'true') {
+      stopScanLoading();
+      if (btn) btn.disabled = false;
+      setStockListMsg('데이터 준비 중… 잠시 후 자동으로 불러옵니다 (약 15초)');
+      setTimeout(() => { if (!document.hidden) runScan(); }, 15000);
+      return;
+    }
     _refreshFilteredView();
   } catch (e) {
     console.error('runScan 실패:', e);
@@ -2430,11 +2438,11 @@ async function loadDpFourAxis(ticker) {
     else _stars = 1;
     set('dp-fa-stars', '★'.repeat(_stars) + '☆'.repeat(5 - _stars));
     const _starMeaningTbl = {
-      5: '지금 매수 가능',
-      4: '진입 타이밍 양호',
-      3: '추세 확인 후 진입',
-      2: '눌림 대기 후 진입',
-      1: '지금 말고 다음 기회',
+      5: '진입조건 모두 충족',
+      4: '진입조건 대부분 충족',
+      3: '추세 확인 필요',
+      2: '눌림 대기 구간',
+      1: '진입조건 미충족',
       0: '데이터 부족',
     };
     // 백엔드 headline_action(구체적 맥락 포함)을 우선 사용, 없으면 별점 테이블 폴백

@@ -28,10 +28,7 @@ if _BASE not in sys.path:
 
 from flask import Flask, request, jsonify, render_template, Response
 from chat import socketio
-from config_manager import (
-    SETTINGS_SCHEMA, load_config, save_config,
-    apply_to_environ, get_masked, get_connection_status,
-)
+from config_manager import apply_to_environ
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
@@ -625,57 +622,6 @@ def compare_page():
         "{{ tickers|tojson }}": json.dumps(tickers, ensure_ascii=False),
         "{{ market|tojson }}": json.dumps(market, ensure_ascii=False),
     })
-
-
-@app.route("/settings")
-def settings_page():
-    return _render_static_template("settings.html", {
-        "{{ schema | tojson }}": json.dumps(SETTINGS_SCHEMA, ensure_ascii=False),
-    })
-
-
-# ── 설정 API ─────────────────────────────────────────────────────────
-
-@app.route("/api/settings", methods=["GET"])
-def api_settings_get():
-    """현재 저장된 설정 조회 (민감값 마스킹)."""
-    data = load_config()
-    return jsonify({
-        "values": data,
-        "values_masked": get_masked(data),
-        "status": get_connection_status(data),
-        "schema": SETTINGS_SCHEMA,
-    })
-
-
-@app.route("/api/settings", methods=["POST"])
-def api_settings_post():
-    """?? ?? ? ????? ?? ??."""
-    try:
-        incoming = request.get_json(force=True) or {}
-        existing = load_config()
-        for key, value in incoming.items():
-            if value is not None and value != "":
-                existing[key] = value
-        save_config(existing)
-        apply_to_environ(existing)
-        return jsonify({"ok": True})
-    except Exception as e:
-        logging.exception("api_settings_post")
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-
-@app.route("/api/settings", methods=["DELETE"])
-def api_settings_delete():
-    """?? ???."""
-    try:
-        save_config({})
-        apply_to_environ({})
-        return jsonify({"ok": True})
-    except Exception as e:
-        logging.exception("api_settings_delete")
-        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ?? JSON API ?????????????????????????????????????????????????????????????

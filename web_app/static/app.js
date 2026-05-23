@@ -731,6 +731,7 @@ function renderStockTable(stocks) {
       : '필터 조건에 맞는 종목이 없습니다.';
     tbody.innerHTML = `<tr><td colspan="${_colCount()}" class="state-msg">${esc(_currentFilter === 'all' ? '결과 없음' : emptyMsg)}</td></tr>`;
     _updateMobileList([], _currentFilter === 'all' ? '결과 없음' : emptyMsg);
+    _updateHeatmap([]);
     return;
   }
 
@@ -752,7 +753,87 @@ function renderStockTable(stocks) {
   }
   tbody.innerHTML = view.map((s, i) => renderStockRow(s, i + 1)).join('');
   _updateMobileList(view);
+  _updateHeatmap(view);
 }
+
+/* ── 히트맵 뷰 (스캔 결과 격자 시각화) ──────────────────────── */
+let _viewMode = 'table'; // 'table' | 'heatmap'
+
+function setViewMode(mode) {
+  if (mode !== 'table' && mode !== 'heatmap') return;
+  _viewMode = mode;
+  const tableWrap  = document.querySelector('.stock-table-wrap');
+  const mobileList = document.getElementById('mobile-stock-list');
+  const heatmap    = document.getElementById('heatmap-view');
+  const btnT = document.getElementById('view-mode-table');
+  const btnH = document.getElementById('view-mode-heatmap');
+  if (btnT) { btnT.classList.toggle('active', mode === 'table'); btnT.setAttribute('aria-selected', mode === 'table'); }
+  if (btnH) { btnH.classList.toggle('active', mode === 'heatmap'); btnH.setAttribute('aria-selected', mode === 'heatmap'); }
+  if (mode === 'heatmap') {
+    if (heatmap)    heatmap.hidden = false;
+    if (tableWrap)  tableWrap.style.display  = 'none';
+    if (mobileList) mobileList.style.display = 'none';
+  } else {
+    if (heatmap)    heatmap.hidden = true;
+    if (tableWrap)  tableWrap.style.display  = '';
+    if (mobileList) mobileList.style.display = '';
+  }
+  try { localStorage.setItem('scanner_view_mode', mode); } catch (e) {}
+}
+
+function _heatmapTierClass(chgPct, isUp) {
+  const a = Math.abs(chgPct);
+  if (a < 0.2) return 'flat';
+  const lvl = a >= 5 ? 3 : a >= 2 ? 2 : 1;
+  return (isUp ? 'up' : 'down') + (lvl === 1 ? '' : lvl);
+}
+
+function _updateHeatmap(view) {
+  const el = document.getElementById('heatmap-view');
+  if (!el) return;
+  if (!view || view.length === 0) {
+    el.innerHTML = '<div class="hm-empty">표시할 종목이 없습니다.</div>';
+    return;
+  }
+  el.innerHTML = view.map((s, i) => {
+    const rank   = i + 1;
+    const score  = Math.round(s.TotalScore || 0);
+    const chg    = (s.DayChg || 0) * 100;
+    const up     = chg > 0;
+    const cls    = _heatmapTierClass(chg, up);
+    const sign   = up ? '+' : (chg < 0 ? '' : '±');
+    const chgTxt = `${sign}${chg.toFixed(2)}%`;
+    const name   = esc(s.Name || s.Ticker);
+    const ticker = esc(s.Ticker);
+    return `
+<div class="hm-tile ${cls}" data-ticker="${ticker}" onclick="openDetail('${ticker}')" title="${name} · ${score}점 · ${chgTxt}">
+  <div class="hm-tile-top">
+    <span class="hm-tile-rank">#${rank}</span>
+    <span class="hm-tile-score">${score}</span>
+  </div>
+  <div>
+    <div class="hm-tile-name">${name}</div>
+    <div class="hm-tile-ticker">${ticker}</div>
+  </div>
+  <div class="hm-tile-chg">${chgTxt}</div>
+</div>`;
+  }).join('');
+}
+
+// 초기화: 저장된 뷰 모드 복원
+(function restoreViewMode() {
+  try {
+    const saved = localStorage.getItem('scanner_view_mode');
+    if (saved === 'heatmap') {
+      // DOM 준비 후 적용
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => setViewMode('heatmap'));
+      } else {
+        setViewMode('heatmap');
+      }
+    }
+  } catch (e) {}
+})();
 
 function _deltaBadge(stock) {
   if (stock && stock.IsNew) {
@@ -809,7 +890,7 @@ function renderStockRow(stock, rank) {
   const starred = _watchlist.has(stock.Ticker);
   const checked = _selectedStocks.has(stock.Ticker);
   return `
-<tr onclick="openDetail('${esc(stock.Ticker)}')" style="cursor:pointer;">
+<tr onclick="openDetail('${esc(stock.Ticker)}')" data-ticker="${esc(stock.Ticker)}" style="cursor:pointer;">
   <td class="center"><input type="checkbox" ${checked ? 'checked' : ''} onclick="toggleSelectStock('${esc(stock.Ticker)}', event)" style="cursor:pointer;width:16px;height:16px;accent-color:#3182F6;"></td>
   <td class="center"><button class="star-btn${starred ? ' starred' : ''}" onclick="toggleWatchlist('${esc(stock.Ticker)}', event)" title="${starred ? '워치리스트에서 제거' : '워치리스트에 추가'}">${starred ? '★' : '☆'}</button></td>
   <td class="center"><span class="rank-cell ${rankClass}">${rank}</span></td>
@@ -864,7 +945,7 @@ function renderMobileCard(stock, rank) {
     : '';
 
   return `
-<div class="stock-card" onclick="openDetail('${esc(stock.Ticker)}')">
+<div class="stock-card" data-ticker="${esc(stock.Ticker)}" onclick="openDetail('${esc(stock.Ticker)}')">
   <div class="stock-card-row1">
     <div class="stock-card-main">
       <span class="stock-card-rank">${rank}</span>
@@ -3438,11 +3519,18 @@ document.addEventListener('DOMContentLoaded', () => {
 // ── 매크로 신호등 띠 ────────────────────────────────────────────────────────
 
 const _MACRO_DEFS = [
-  { key: 'vix',     label: 'VIX',      fixed: 2, invert: true  },
-  { key: 'usdkrw',  label: '원/달러',  fixed: 1, invert: true  },
-  { key: 'kospi',   label: 'KOSPI',    fixed: 2, invert: false },
-  { key: 'sp500',   label: 'S&P500',   fixed: 2, invert: false },
-  { key: 'kr_rate', label: '기준금리', fixed: 2, invert: false, suffix: '%' },
+  { key: 'vix',     label: 'VIX',         fixed: 2, invert: true  },
+  { key: 'sp500',   label: 'S&P500',      fixed: 2, invert: false },
+  { key: 'nasdaq',  label: '나스닥',      fixed: 2, invert: false },
+  { key: 'kospi',   label: 'KOSPI',       fixed: 2, invert: false },
+  { key: 'usdkrw',  label: '원/달러',     fixed: 1, invert: true  },
+  { key: 'dxy',     label: 'DXY',         fixed: 2, invert: true  },
+  { key: 'us10y',   label: '美10Y',       fixed: 2, invert: false, suffix: '%' },
+  { key: 'gold',    label: '금',          fixed: 1, invert: false },
+  { key: 'wti',     label: 'WTI',         fixed: 2, invert: false },
+  { key: 'btc',     label: 'BTC',         fixed: 0, invert: false },
+  { key: 'us_rate', label: '美기준금리',  fixed: 2, invert: false, suffix: '%' },
+  { key: 'kr_rate', label: '韓기준금리',  fixed: 2, invert: false, suffix: '%' },
 ];
 
 async function loadMacro() {
@@ -3960,3 +4048,161 @@ async function captureDetail() {
     cleanup();
   }
 }
+
+/* ── Hover Sparkline (desktop only) ───────────────────────────
+ * 종목 행/카드에 마우스를 올리면 30일 점수 추이 미니차트 표시.
+ * - 이벤트 위임: #stock-list, #mobile-stock-list
+ * - 220ms 지연 후 fetch (스쳐 지나가는 호버 무시)
+ * - 티커별 메모리 캐시
+ * - 모바일/터치 환경에서는 자동 비활성화
+ */
+(function initHoverSparkline() {
+  if (typeof window === 'undefined') return;
+  // 터치 디바이스에서는 비활성 (mobile에서는 onclick이 우선)
+  const isTouch = window.matchMedia && window.matchMedia('(hover: none)').matches;
+  if (isTouch) return;
+
+  const cache = new Map();        // ticker -> { points } | 'loading' | 'empty'
+  let tip = null;
+  let hoverTimer = null;
+  let currentTicker = null;
+
+  function ensureTip() {
+    if (tip) return tip;
+    tip = document.createElement('div');
+    tip.id = 'hover-sparkline-tip';
+    tip.setAttribute('role', 'tooltip');
+    tip.innerHTML = `
+      <div class="hst-head">
+        <span class="hst-ticker"></span>
+        <span class="hst-delta"></span>
+      </div>
+      <svg class="hst-svg" width="220" height="56" viewBox="0 0 220 56" preserveAspectRatio="none"></svg>
+      <div class="hst-meta"></div>`;
+    document.body.appendChild(tip);
+    return tip;
+  }
+
+  function position(ev) {
+    if (!tip) return;
+    const W = 240, H = 100;
+    const pad = 12;
+    let x = ev.clientX + 16;
+    let y = ev.clientY + 16;
+    if (x + W > window.innerWidth - pad)  x = ev.clientX - W - 16;
+    if (y + H > window.innerHeight - pad) y = ev.clientY - H - 16;
+    tip.style.left = Math.max(pad, x) + 'px';
+    tip.style.top  = Math.max(pad, y) + 'px';
+  }
+
+  function render(ticker, points) {
+    const t = ensureTip();
+    const scores = (points || []).map(p => p.score).filter(s => s != null);
+    if (scores.length < 2) {
+      t.querySelector('.hst-ticker').textContent = ticker;
+      t.querySelector('.hst-delta').textContent  = '';
+      t.querySelector('.hst-svg').innerHTML      = '';
+      t.querySelector('.hst-meta').textContent   = '히스토리 부족';
+      t.classList.add('show');
+      return;
+    }
+    const W = 220, H = 56, PAD = 4;
+    const minS = Math.min(...scores), maxS = Math.max(...scores);
+    const range = maxS - minS || 1;
+    const toX = i => PAD + (i / (scores.length - 1)) * (W - PAD * 2);
+    const toY = s => H - PAD - ((s - minS) / range) * (H - PAD * 2);
+    const pts = scores.map((s, i) => `${toX(i).toFixed(1)},${toY(s).toFixed(1)}`).join(' ');
+    const areaPts = `${PAD.toFixed(1)},${H} ${pts} ${(W-PAD).toFixed(1)},${H}`;
+    const first = scores[0], last = scores[scores.length - 1];
+    const delta = last - first;
+    const up = delta >= 0;
+    const color = up ? 'var(--success, #00C073)' : 'var(--destructive, #F04452)';
+    const fillId = `hst-grad-${up ? 'u' : 'd'}`;
+
+    const dateFirst = points.find(p => p.score != null)?.date || '';
+    const dateLast  = [...points].reverse().find(p => p.score != null)?.date || '';
+    const sign = up ? '+' : '';
+
+    t.querySelector('.hst-ticker').textContent = ticker;
+    const dEl = t.querySelector('.hst-delta');
+    dEl.textContent = `${sign}${delta.toFixed(1)}pt`;
+    dEl.style.color = color;
+    t.querySelector('.hst-svg').innerHTML = `
+      <defs>
+        <linearGradient id="${fillId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"  stop-color="${up ? '#00C073' : '#F04452'}" stop-opacity="0.28"/>
+          <stop offset="100%" stop-color="${up ? '#00C073' : '#F04452'}" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <polygon points="${areaPts}" fill="url(#${fillId})"/>
+      <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="${toX(scores.length-1).toFixed(1)}" cy="${toY(last).toFixed(1)}" r="2.8" fill="${color}"/>`;
+    t.querySelector('.hst-meta').textContent =
+      `${dateFirst} ~ ${dateLast} · ${scores.length}일 · ${Math.round(last)}점`;
+    t.classList.add('show');
+  }
+
+  async function load(ticker) {
+    const market = (typeof currentMarket !== 'undefined' && currentMarket) ? currentMarket : 'KR';
+    const key = `${market}:${ticker}`;
+    if (cache.has(key)) {
+      const v = cache.get(key);
+      if (v !== 'loading' && currentTicker === ticker) render(ticker, v);
+      return;
+    }
+    cache.set(key, 'loading');
+    try {
+      const res = await fetch(`/api/score-history/${encodeURIComponent(ticker)}?market=${encodeURIComponent(market)}&days=30`);
+      if (!res.ok) { cache.set(key, []); return; }
+      const { points } = await res.json();
+      cache.set(key, points || []);
+      if (currentTicker === ticker) render(ticker, points || []);
+    } catch (e) {
+      cache.set(key, []);
+    }
+  }
+
+  function findTickerEl(target) {
+    if (!target) return null;
+    return target.closest('[data-ticker]');
+  }
+
+  function onOver(ev) {
+    const el = findTickerEl(ev.target);
+    if (!el) return;
+    // 검색 자동완성·기타 컴포넌트 제외
+    if (el.classList.contains('search-suggest-item')) return;
+    const ticker = el.getAttribute('data-ticker');
+    if (!ticker || ticker === currentTicker) return;
+    currentTicker = ticker;
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(() => {
+      if (currentTicker !== ticker) return;
+      load(ticker);
+    }, 220);
+  }
+
+  function onOut(ev) {
+    const el = findTickerEl(ev.target);
+    const next = findTickerEl(ev.relatedTarget);
+    if (el && next && el === next) return;
+    clearTimeout(hoverTimer);
+    currentTicker = null;
+    if (tip) tip.classList.remove('show');
+  }
+
+  function onMove(ev) {
+    if (!tip || !tip.classList.contains('show')) {
+      if (currentTicker) position(ev);
+      return;
+    }
+    position(ev);
+  }
+
+  // 컨테이너 위임 — 동적 갱신에도 자동 적용
+  document.addEventListener('mouseover', onOver, true);
+  document.addEventListener('mouseout',  onOut,  true);
+  document.addEventListener('mousemove', onMove);
+  // 스크롤 시 숨김 — 위치 어긋남 방지
+  window.addEventListener('scroll', () => { if (tip) tip.classList.remove('show'); currentTicker = null; }, true);
+})();

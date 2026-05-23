@@ -682,12 +682,13 @@ def api_scan():
         except (TypeError, ValueError):
             aq_top = 0
 
-        # ── 스캔 결과 전체 캐시 조회 (pickle 재읽기 완전 회피) ──
+        # ── 스캔 결과 전체 캐시 조회 (stale-while-revalidate) ──
+        # 캐시가 있으면 나이 무관 즉시 반환 + BG 갱신. 없을 때만 동기 스캔.
         _sr_key = (market, strategy, sector)
         _sr_now = int(time.time())
         with _scan_results_cache_lock:
             _sr_cached = _scan_results_cache.get(_sr_key)
-        if _sr_cached and (_sr_now - _sr_cached.get("_ts", 0)) < _SCAN_RESULTS_TTL_SEC:
+        if _sr_cached:
             _refresh_scan_background(market, strategy, sector)
             resp = jsonify(_sr_cached["data"])
             try:
@@ -696,7 +697,8 @@ def api_scan():
                     resp.headers["X-Cache-Age-Min"] = str(cache_age_min)
                 if as_of_iso:
                     resp.headers["X-As-Of"] = as_of_iso
-                resp.headers["X-Warming-In-Progress"] = "false"
+                _age_sec = _sr_now - _sr_cached.get("_ts", 0)
+                resp.headers["X-Warming-In-Progress"] = "true" if _age_sec > _SCAN_RESULTS_TTL_SEC else "false"
             except Exception:
                 pass
             return resp

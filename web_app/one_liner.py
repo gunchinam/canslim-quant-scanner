@@ -118,6 +118,8 @@ _STRAND_DETERMINER = frozenset({
     # 한정/소유 관형사 — 뒤 체언과 분리 시 어색("단 / 한 번도",
     # "내 / 계좌가", "본 / 자리는").
     "단", "내", "네", "제", "딴", "본", "전", "타",
+    # 추가 관형사(첫 분기/온 종일/각 기업/매 분기) — 선명한 관형사 용법.
+    "첫", "온", "각", "매",
 })
 
 # L이 명사형 -기로 끝나면("늦기", "지나기", "되기") 다음 어절이 시간
@@ -4038,17 +4040,37 @@ def get_oneliner_data(d: dict, bucket: str | None = None) -> str:
     return _ok(_data_tag(d, bucket))
 
 
+_FORBIDDEN_FINAL = (
+    "매수하세요", "매도하세요", "사세요", "파세요", "지금 사", "지금 팔",
+    "추천합니다", "강력 매수", "강력매수", "확정 수익", "100% 수익",
+    "보장", "필승", "원금보장",
+)
+
+_SAFE_FALLBACK = "AI 코멘트 점검 중"
+
+
+def _scrub_oneliner(text: str) -> str:
+    """공개 사이트용 최종 안전망 — 권유/단정/보장 표현은 폴백으로 교체."""
+    if not text:
+        return ""
+    s = text.strip()
+    if any(w in s for w in _FORBIDDEN_FINAL):
+        _log.warning("OneLiner scrubbed (forbidden phrase): %r", s)
+        return _SAFE_FALLBACK
+    return s
+
+
 def annotate(results: list[dict]) -> list[dict]:
     """리스트에 OneLiner / OneLinerTag / OneLinerData 필드를 추가해 반환."""
     for r in results:
         try:
             bucket = _bucket(r)
             r["OneLinerTag"] = bucket
-            r["OneLiner"] = wrap_oneliner(_friendly_one_liner(r))
-            r["OneLinerData"] = get_oneliner_data(r, bucket)
+            r["OneLiner"] = _scrub_oneliner(wrap_oneliner(_friendly_one_liner(r)))
+            r["OneLinerData"] = _scrub_oneliner(get_oneliner_data(r, bucket))
         except Exception:
             _log.exception("OneLiner.annotate failed for ticker=%s", r.get("Ticker"))
-            r.setdefault("OneLiner", "")
+            r.setdefault("OneLiner", _SAFE_FALLBACK)
             r.setdefault("OneLinerTag", "NEUTRAL")
             r.setdefault("OneLinerData", "")
     return results

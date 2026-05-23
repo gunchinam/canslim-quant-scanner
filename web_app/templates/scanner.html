@@ -1936,6 +1936,29 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   .scan-loading-trivia-text { font-size: 13px; }
 
   /* Chat panel already handled */
+
+  /* Scroll-to-top FAB */
+  .scroll-top-fab {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    right: 16px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #fff;
+    border: none;
+    font-size: 20px;
+    line-height: 44px;
+    text-align: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    z-index: 200;
+    transition: opacity .2s;
+    opacity: 0;
+  }
+  .scroll-top-fab.visible { display: block; opacity: 1; }
 }
 
 /* ── Responsive: Small Mobile (≤480px) ─────────────────────── */
@@ -2307,6 +2330,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         <div class="mobile-stock-list-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</div>
       </div>
     </main>
+    <button id="scroll-top-fab" class="scroll-top-fab" onclick="document.getElementById('mobile-stock-list').scrollTo({top:0,behavior:'smooth'})" aria-label="맨 위로">↑</button>
   </div>
 
 </div>
@@ -2705,6 +2729,40 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 <script src="/static/interactive.js" defer></script>
 <script>
 /* ── Mobile Sidebar Toggle ─────────────────────────────────── */
+/* ── Scroll-to-top FAB ─────────────────────────────────────── */
+(function() {
+  var fab = document.getElementById('scroll-top-fab');
+  var list = document.getElementById('mobile-stock-list');
+  if (!fab || !list) return;
+  list.addEventListener('scroll', function() {
+    if (list.scrollTop > 200) { fab.classList.add('visible'); }
+    else { fab.classList.remove('visible'); }
+  }, { passive: true });
+})();
+
+/* ── Swipe left/right on detail panel to switch tabs ───────── */
+(function() {
+  var panel = document.getElementById('detail-panel');
+  if (!panel) return;
+  var _sx = 0, _sy = 0;
+  panel.addEventListener('touchstart', function(e) {
+    _sx = e.touches[0].clientX;
+    _sy = e.touches[0].clientY;
+  }, { passive: true });
+  panel.addEventListener('touchend', function(e) {
+    var dx = e.changedTouches[0].clientX - _sx;
+    var dy = e.changedTouches[0].clientY - _sy;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+    var tabs = Array.from(document.querySelectorAll('.dp-tab-btn')).filter(function(b) {
+      return b.style.display !== 'none' && b.offsetParent !== null;
+    });
+    var cur = tabs.findIndex(function(b) { return b.classList.contains('active'); });
+    if (cur < 0) return;
+    var next = dx < 0 ? Math.min(cur + 1, tabs.length - 1) : Math.max(cur - 1, 0);
+    if (next !== cur) tabs[next].click();
+  }, { passive: true });
+})();
+
 function toggleMobileSidebar() {
   var sb = document.getElementById('sidebar');
   var bd = document.getElementById('sidebar-backdrop');
@@ -2850,5 +2908,39 @@ document.addEventListener('click', function(e) {
   });
 })();
 </script>
+
+<!-- 운영자 정보 / 면책 푸터 -->
+<footer class="site-footer" role="contentinfo">
+  <div class="sf-row sf-disclaimer">
+    <b>면책</b>
+    <span>본 사이트는 정보 제공 목적의 알고리즘 스크리닝 결과이며, 투자 권유·자문이 아닙니다. 모든 투자 판단·손익 책임은 사용자 본인에게 있습니다. 데이터 지연·오류·누락이 발생할 수 있습니다.</span>
+  </div>
+  <div class="sf-row sf-meta">
+    <span>운영: 종목스캐너 (개인 운영) · <a href="mailto:hyan.narek@gmail.com">hyan.narek@gmail.com</a></span>
+    <span>데이터: Yahoo Finance · Naver 증권 · DART · Finnhub · SEC EDGAR</span>
+    <span>AI: OpenAI · Gemini · Anthropic · Grok (한줄평/심층분석)</span>
+  </div>
+  <div class="sf-row sf-meta">
+    <span>본 서비스는 자본시장법상 투자자문업·투자일임업·금융투자상품 판매업이 아닙니다.</span>
+    <span><a href="mailto:hyan.narek@gmail.com?subject=%5B%EC%A2%85%EB%AA%A9%EC%8A%A4%EC%BA%90%EB%84%88%5D%20%EC%98%A4%EB%A5%98%20%EC%A0%9C%EB%B3%B4">오류 제보</a></span>
+  </div>
+</footer>
+<style>
+.site-footer {
+  margin-top: 24px;
+  padding: 16px 24px 32px;
+  border-top: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.site-footer .sf-row { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 6px; }
+.site-footer .sf-disclaimer { color: var(--text-secondary); }
+.site-footer .sf-disclaimer b { color: var(--warning, #f59e0b); margin-right: 6px; }
+.site-footer a { color: var(--brand); text-decoration: none; }
+.site-footer a:hover { text-decoration: underline; }
+@media (max-width: 768px) { .site-footer { padding: 12px 16px 24px; font-size: 10.5px; } }
+</style>
 </body>
 </html>

@@ -46,6 +46,13 @@ app = Flask(
     static_folder="static",
 )
 
+# Gzip 압축 — JSON API 응답 크기 60~70% 절감
+try:
+    from flask_compress import Compress as _Compress
+    _Compress(app)
+except ImportError:
+    pass
+
 
 def _render_deployment() -> bool:
     return bool((os.environ.get("RENDER") or "").strip())
@@ -64,7 +71,7 @@ _consensus_cache: dict[str, dict] = {}
 _consensus_cache_lock = threading.Lock()
 
 # ── 티커 상세 응답 캐시 (드로어 재오픈 시 즉시 응답) ──
-_TICKER_DETAIL_TTL_SEC = 300  # 5분
+_TICKER_DETAIL_TTL_SEC = 1800  # 30분
 _TICKER_DETAIL_MAX = 200
 _ticker_detail_cache: dict[str, dict] = {}
 _ticker_detail_cache_lock = threading.Lock()
@@ -345,6 +352,20 @@ def _release_warmer_file_lock(handle) -> None:
             pass
 
 
+def _populate_sector_caches(market: str, strategy: str, results: list, ts: int) -> None:
+    """full scan 결과를 섹터별로 분할해 sector cache도 함께 채운다."""
+    from collections import defaultdict
+    by_sector: dict[str, list] = defaultdict(list)
+    for r in results:
+        s = r.get("Sector") or ""
+        if s:
+            by_sector[s].append(r)
+    with _scan_results_cache_lock:
+        for sector, rows in by_sector.items():
+            _scan_results_cache[(market, strategy, sector)] = {"_ts": ts, "data": rows}
+    logging.info("%s sector-cache populated: %d sectors", market, len(by_sector))
+
+
 def _warmup_fill_cache(market: str) -> None:
     """prefer_cache=True로 pickle에서 in-memory cache를 빠르게 채운다 (quick-warm pass)."""
     try:
@@ -356,10 +377,10 @@ def _warmup_fill_cache(market: str) -> None:
                 results = _annotate_one_liners(results)
             except Exception:
                 pass
+            ts = int(time.time())
             with _scan_results_cache_lock:
-                _scan_results_cache[(market, "BALANCED", "")] = {
-                    "_ts": int(time.time()), "data": results,
-                }
+                _scan_results_cache[(market, "BALANCED", "")] = {"_ts": ts, "data": results}
+            _populate_sector_caches(market, "BALANCED", results, ts)
             logging.info("%s quick-warm done: %d tickers (from pickle)", market, len(results))
     except Exception as e:
         logging.warning("%s quick-warm failed: %s", market, e)
@@ -389,10 +410,12 @@ def _kr_warmup_loop(interval_sec: int = 1800) -> None:
                             results = _annotate_one_liners(results)
                         except Exception:
                             pass
+                        ts = int(time.time())
                         with _scan_results_cache_lock:
                             _scan_results_cache[("KR", "BALANCED", "")] = {
-                                "_ts": int(time.time()), "data": results,
+                                "_ts": ts, "data": results,
                             }
+                        _populate_sector_caches("KR", "BALANCED", results, ts)
                 except Exception as e:
                     logging.warning("KR warm-up failed: %s", e)
             finally:
@@ -467,10 +490,12 @@ def _us_warmup_loop(interval_sec: int = 1800) -> None:
                             results = _annotate_one_liners(results)
                         except Exception:
                             pass
+                        ts = int(time.time())
                         with _scan_results_cache_lock:
                             _scan_results_cache[("US", "BALANCED", "")] = {
-                                "_ts": int(time.time()), "data": results,
+                                "_ts": ts, "data": results,
                             }
+                        _populate_sector_caches("US", "BALANCED", results, ts)
                 except Exception as e:
                     logging.warning("US warm-up failed: %s", e)
                 finally:
@@ -869,6 +894,9 @@ def api_search():
 @app.route("/api/ticker/<ticker>")
 def api_ticker(ticker: str):
     """GET /api/ticker/AAPL?market=US&strategy=BALANCED → {Ticker, TotalScore, ...}"""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
     market_arg = (request.args.get("market") or "US").upper()
     strategy_arg = request.args.get("strategy", "BALANCED")
     # ── 응답 캐시 조회 (동일 종목 재오픈 시 즉시 반환) ──
@@ -918,7 +946,9 @@ def api_ticker(ticker: str):
             # US 종목: yfinance 수급/센티먼트 데이터
             try:
                 import yfinance as yf
-                yf_info = yf.Ticker(ticker).info
+                yf_info = _run_with_timeout(
+                    lambda: yf.Ticker(ticker).info, 10, f"yf_info {ticker}"
+                ) or {}
                 short_pct = yf_info.get("shortPercentOfFloat")
                 inst_pct = yf_info.get("heldPercentInstitutions")
                 rec_mean = yf_info.get("recommendationMean")
@@ -974,6 +1004,9 @@ def api_ticker(ticker: str):
 @app.route("/api/aq_signal/<ticker>")
 def api_aq_signal(ticker: str):
     """GET /api/aq_signal/AAPL?market=US → AgentQuant 진입 타이밍 (lazy-load)."""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
     market = (request.args.get("market") or "US").upper()
     try:
         from agentquant_signal import get_regime_signal
@@ -999,6 +1032,9 @@ def api_aq_signal(ticker: str):
 @app.route("/api/consensus/<ticker>")
 def api_consensus(ticker: str):
     """??? ???? ??: ??? ??, ??/??, ?? ???."""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
     import urllib.request
     import json as _json
 
@@ -1087,6 +1123,9 @@ def api_consensus(ticker: str):
 @app.route("/api/regime/<ticker>")
 def api_regime(ticker: str):
     """AgentQuant 기반 시장 레짐 + 진입 타이밍 시그널."""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
     market = (request.args.get("market") or "US").upper()
     try:
         from agentquant_signal import get_regime_signal
@@ -1102,6 +1141,9 @@ def api_regime(ticker: str):
 @app.route("/api/four_axis/<ticker>")
 def api_four_axis(ticker: str):
     """4축 핸드드로윙 차트 + 분석 데이터 반환 (base64 PNG)."""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
     market = (request.args.get("market") or "US").upper()
     cache_key = f"{ticker}:{market}"
     now = int(time.time())
@@ -1273,6 +1315,9 @@ def api_four_axis(ticker: str):
 @app.route("/api/dart-news/<ticker>")
 def api_dart_news(ticker: str):
     """KR 종목 공시 목록 + 뉴스 감성분석 결합 반환."""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
     market = (request.args.get("market") or "US").upper()
     if market != "KR":
         return jsonify({"error": "KR 종목만 지원"}), 400
@@ -1406,6 +1451,9 @@ def _get_sec_filings(ticker: str, count: int = 10) -> list:
 @app.route("/api/us-insight/<ticker>")
 def api_us_insight(ticker: str):
     """US 종목 인사이트: 뉴스 감성 + 기관보유/공매도 + 어닝캘린더 + SEC 공시."""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
     market = (request.args.get("market") or "US").upper()
     if market != "US":
         return jsonify({"error": "US 종목만 지원"}), 400
@@ -1497,6 +1545,9 @@ def api_us_insight(ticker: str):
 @app.route("/api/score-history/<ticker>")
 def api_score_history(ticker: str):
     """최근 N일간 TotalScore + 순위 히스토리 (snapshots/ JSON 파일 기반)."""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
     market = (request.args.get("market") or "KR").upper()
     days = min(int(request.args.get("days") or 30), 90)
     import history as hist_mod
@@ -1518,6 +1569,9 @@ def api_score_history(ticker: str):
 
 @app.route("/api/signal-history/<ticker>")
 def api_signal_history(ticker):
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
     market = request.args.get("market")
     if market not in ("KR", "US"):
         return jsonify({"error": "market must be KR or US"}), 400
@@ -1532,6 +1586,10 @@ def api_signal_history(ticker):
 
 @app.route("/api/deep-analysis/<ticker>")
 def api_deep_analysis(ticker: str):
+    ticker_valid = _validate_ticker(ticker)
+    if not ticker_valid:
+        return jsonify({"error": "invalid ticker"}), 400
+    ticker = ticker_valid
     """Gemini 2.0 Flash + Google Search 그라운딩 기반 8-Phase 종목 심층 분석.
 
     Query: market=KR|US, mode=brief|standard|detail, force=1 (캐시 무시)

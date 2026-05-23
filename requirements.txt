@@ -2,6 +2,7 @@
 # install: pip install -r requirements.txt
 
 flask>=3.0
+flask-compress>=1.14
 flask-socketio>=5.3
 simple-websocket>=1.0
 gunicorn>=22.0

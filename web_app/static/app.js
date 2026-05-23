@@ -832,42 +832,6 @@ function renderStockRow(stock, rank) {
 </tr>`;
 }
 
-function renderMobileCard(stock, rank) {
-  const score    = Math.round(stock.TotalScore || 0);
-  const sc       = scoreClass(score);
-  const dayChg   = stock.DayChg || 0;
-  const chgPct   = (dayChg * 100).toFixed(2);
-  const chgClass = dayChg > 0 ? 'chg-up' : dayChg < 0 ? 'chg-down' : 'chg-flat';
-  const chgSign  = dayChg > 0 ? '+' : '';
-  const starred  = _watchlist.has(stock.Ticker);
-  const olTag    = stock.OneLinerTag || '';
-  const olText   = stock.OneLiner   || '';
-
-  const olHtml = olText
-    ? `<div class="stock-oneliner stock-card-oneliner" data-tag="${esc(olTag)}">${esc(olText)}</div>`
-    : '';
-
-  return `
-<div class="stock-card" onclick="openDetail('${esc(stock.Ticker)}')">
-  <div class="stock-card-row1">
-    <span class="stock-card-rank">${rank}</span>
-    <button class="star-btn${starred ? ' starred' : ''}"
-            onclick="toggleWatchlist('${esc(stock.Ticker)}', event)"
-            title="${starred ? '워치리스트에서 제거' : '워치리스트에 추가'}">${starred ? '★' : '☆'}</button>
-    <div class="stock-card-name">
-      <span class="stock-card-name-main">${esc(stock.Name || stock.Ticker)}</span>
-      <span class="stock-card-ticker">${esc(stock.Ticker)} · ${esc(stock.Sector || '')}</span>
-    </div>
-    <span class="stock-card-score ${sc}">${score}</span>
-    <span class="stock-card-chg ${chgClass}">${chgSign}${chgPct}%</span>
-  </div>
-  ${olHtml}
-  <div class="stock-card-row2">
-    ${_renderSignalHtml(stock.Signal, stock)}
-  </div>
-</div>`;
-}
-
 function _updateMobileList(view, emptyMsg) {
   const el = document.getElementById('mobile-stock-list');
   if (!el) return;

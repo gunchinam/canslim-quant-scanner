@@ -389,6 +389,81 @@ def _start_kr_warmup_once() -> None:
     threading.Thread(target=_kr_warmup_loop, daemon=True, name="kr-warmup").start()
 
 
+# ── US 캐시 워밍 (서버 기동 시 + 30분 주기) ───────────────────────────────
+_US_WARMUP_LOCK_PATH = os.path.join(_BASE, "cache_v19", ".warmer_us.lock")
+_us_warmup_started = False
+_us_warmup_lock = threading.Lock()
+
+
+def _us_warmup_loop(interval_sec: int = 1800) -> None:
+    """US 전체 스캔을 주기적으로 BG 실행. 파일잠금으로 multi-process duplication 방지."""
+    while True:
+        handle = None
+        try:
+            os.makedirs(os.path.dirname(_US_WARMUP_LOCK_PATH), exist_ok=True)
+            fh = open(_US_WARMUP_LOCK_PATH, "a+b")
+            locked = False
+            try:
+                if os.name == "nt":
+                    import msvcrt
+                    try:
+                        msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+                        handle = (fh, "win")
+                        locked = True
+                    except OSError:
+                        fh.close()
+                else:
+                    import fcntl
+                    try:
+                        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        handle = (fh, "posix")
+                        locked = True
+                    except OSError:
+                        fh.close()
+            except Exception:
+                try:
+                    fh.close()
+                except Exception:
+                    pass
+            if not locked:
+                logging.info("US warm-up skipped: another worker holds lock")
+            else:
+                try:
+                    logging.info("US warm-up started")
+                    adapter_cls = _get_scan_adapter_cls()
+                    adapter = adapter_cls(market="US", strategy="BALANCED")
+                    results = adapter.scan_all(max_workers=8)
+                    logging.info("US warm-up done: %d tickers", len(results) if results else 0)
+                    if results:
+                        try:
+                            results = _annotate_one_liners(results)
+                        except Exception:
+                            pass
+                        with _scan_results_cache_lock:
+                            _scan_results_cache[("US", "BALANCED", "")] = {
+                                "_ts": int(time.time()), "data": results,
+                            }
+                except Exception as e:
+                    logging.warning("US warm-up failed: %s", e)
+                finally:
+                    _release_warmer_file_lock(handle)
+        except Exception as e:
+            logging.warning("US warm-up loop error: %s", e)
+        time.sleep(interval_sec)
+
+
+def _start_us_warmup_once() -> None:
+    global _us_warmup_started
+    with _us_warmup_lock:
+        if _us_warmup_started:
+            return
+        _us_warmup_started = True
+    if os.environ.get("DISABLE_US_WARMUP", "").strip() in ("1", "true", "yes"):
+        logging.info("US warm-up disabled by env DISABLE_US_WARMUP")
+        return
+    threading.Thread(target=_us_warmup_loop, daemon=True, name="us-warmup").start()
+
+
 def _get_config_int(name: str, default: int, minimum: int | None = None, maximum: int | None = None) -> int:
     raw = os.environ.get(name)
     try:
@@ -1463,11 +1538,15 @@ def api_deep_analysis(ticker: str):
 # SocketIO 초기화 (gunicorn / 직접 실행 모두 대응)
 socketio.init_app(app)
 
-# KR 캐시 워밍 시작 (gunicorn import 시점에도 트리거; file-lock으로 중복 방지)
+# KR/US 캐시 워밍 시작 (gunicorn import 시점에도 트리거; file-lock으로 중복 방지)
 try:
     _start_kr_warmup_once()
 except Exception as _e:
     logging.warning("KR warm-up bootstrap failed: %s", _e)
+try:
+    _start_us_warmup_once()
+except Exception as _e:
+    logging.warning("US warm-up bootstrap failed: %s", _e)
 
 if __name__ == "__main__":
     debug = (os.environ.get("FLASK_DEBUG") or "0").strip().lower() in ("1", "true", "yes")

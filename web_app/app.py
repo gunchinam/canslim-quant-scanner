@@ -816,6 +816,92 @@ def api_macro():
         })
 
 
+# ── 워치리스트 영속화 ─────────────────────────────────────────────────────
+# 브라우저 localStorage 단독 저장은 캐시 삭제/기기 변경 시 손실되므로
+# 서버 측 SQLite(watchlist.db)에 영속화한다.
+_WL_DB_PATH = os.path.join(_BASE, "watchlist.db")
+_wl_lock = threading.Lock()
+
+
+def _wl_is_kr(ticker: str) -> bool:
+    t = ticker.upper()
+    return t.endswith(".KS") or t.endswith(".KQ")
+
+
+def _wl_db():
+    from watchlist import WatchlistDB
+    return WatchlistDB(_WL_DB_PATH)
+
+
+@app.route("/api/watchlist", methods=["GET"])
+def api_watchlist_list():
+    """GET /api/watchlist?market=KR|US → ["TICKER", ...]"""
+    market = (request.args.get("market") or "US").upper()
+    with _wl_lock:
+        db = _wl_db()
+        try:
+            tickers = db.list()
+        finally:
+            db.close()
+    if market == "KR":
+        out = [t for t in tickers if _wl_is_kr(t)]
+    else:
+        out = [t for t in tickers if not _wl_is_kr(t)]
+    return jsonify(out)
+
+
+@app.route("/api/watchlist", methods=["POST"])
+def api_watchlist_add():
+    """POST /api/watchlist {ticker, note?} → {ok, added}"""
+    data = request.get_json(silent=True) or {}
+    ticker = (data.get("ticker") or "").strip().upper()
+    note = (data.get("note") or "").strip()
+    if not ticker:
+        return jsonify({"ok": False, "error": "ticker required"}), 400
+    with _wl_lock:
+        db = _wl_db()
+        try:
+            added = db.add(ticker, note)
+        finally:
+            db.close()
+    return jsonify({"ok": True, "added": added, "ticker": ticker})
+
+
+@app.route("/api/watchlist/<path:ticker>", methods=["DELETE"])
+def api_watchlist_remove(ticker: str):
+    """DELETE /api/watchlist/<ticker> → {ok, removed}"""
+    ticker = (ticker or "").strip().upper()
+    if not ticker:
+        return jsonify({"ok": False, "error": "ticker required"}), 400
+    with _wl_lock:
+        db = _wl_db()
+        try:
+            removed = db.remove(ticker)
+        finally:
+            db.close()
+    return jsonify({"ok": True, "removed": removed, "ticker": ticker})
+
+
+@app.route("/api/watchlist/bulk", methods=["POST"])
+def api_watchlist_bulk():
+    """POST /api/watchlist/bulk {tickers: [...]} → 일괄 추가 (localStorage 마이그레이션용)"""
+    data = request.get_json(silent=True) or {}
+    tickers = data.get("tickers") or []
+    if not isinstance(tickers, list):
+        return jsonify({"ok": False, "error": "tickers must be list"}), 400
+    added = 0
+    with _wl_lock:
+        db = _wl_db()
+        try:
+            for t in tickers:
+                t = str(t or "").strip().upper()
+                if t and db.add(t):
+                    added += 1
+        finally:
+            db.close()
+    return jsonify({"ok": True, "added": added, "total": len(tickers)})
+
+
 @app.route("/api/search")
 def api_search():
     """GET /api/search?q=rf&market=KR → [{ticker, name}, ...] 이름/티커 부분매칭."""

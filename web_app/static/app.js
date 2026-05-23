@@ -42,21 +42,68 @@ const _clientCache = {
 };
 
 function _wlKey(market) { return `scanner_watchlist_${market || currentMarket}`; }
-function loadWatchlist(market) {
+
+// 서버 영속화 워치리스트 + localStorage 폴백/마이그레이션
+async function loadWatchlist(market) {
+  const m = market || currentMarket;
+  // 1) 우선 localStorage로 즉시 채워서 UI 반응성 유지
   try {
-    const raw = localStorage.getItem(_wlKey(market));
+    const raw = localStorage.getItem(_wlKey(m));
     _watchlist = new Set(raw ? JSON.parse(raw) : []);
   } catch { _watchlist = new Set(); }
+  // 2) 서버에서 fetch
+  try {
+    const res = await fetch(`/api/watchlist?market=${encodeURIComponent(m)}`);
+    if (!res.ok) return;
+    const serverList = await res.json();
+    if (!Array.isArray(serverList)) return;
+    const serverSet = new Set(serverList);
+    // 3) localStorage에만 있던 종목이 있으면 서버로 마이그레이션 (1회성)
+    const localOnly = [..._watchlist].filter(t => !serverSet.has(t));
+    if (localOnly.length) {
+      try {
+        await fetch('/api/watchlist/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tickers: localOnly })
+        });
+        localOnly.forEach(t => serverSet.add(t));
+      } catch {}
+    }
+    _watchlist = serverSet;
+    // 4) localStorage도 동기화 유지
+    try { localStorage.setItem(_wlKey(m), JSON.stringify([...serverSet])); } catch {}
+    if (typeof _refreshFilteredView === 'function') _refreshFilteredView();
+  } catch (e) {
+    // 서버 장애 시 localStorage 그대로 사용
+    console.warn('watchlist server load failed, using localStorage', e);
+  }
 }
+
 function saveWatchlist() {
+  // localStorage 백업 (서버 장애 대비)
   try { localStorage.setItem(_wlKey(), JSON.stringify([..._watchlist])); } catch {}
 }
+
 function toggleWatchlist(ticker, ev) {
   if (ev) { ev.stopPropagation(); }
-  if (_watchlist.has(ticker)) _watchlist.delete(ticker);
-  else _watchlist.add(ticker);
+  const adding = !_watchlist.has(ticker);
+  if (adding) _watchlist.add(ticker);
+  else _watchlist.delete(ticker);
   saveWatchlist();
   _refreshFilteredView();
+  // 서버 동기 (fire-and-forget)
+  try {
+    if (adding) {
+      fetch('/api/watchlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker })
+      }).catch(() => {});
+    } else {
+      fetch(`/api/watchlist/${encodeURIComponent(ticker)}`, { method: 'DELETE' }).catch(() => {});
+    }
+  } catch {}
 }
 
 // ── 공통 유틸 ────────────────────────────────────────────────────────────

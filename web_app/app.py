@@ -357,8 +357,8 @@ def _kr_warmup_loop(interval_sec: int = 1800) -> None:
                 try:
                     adapter_cls = _get_scan_adapter_cls()
                     adapter = adapter_cls(market="KR", strategy="BALANCED")
-                    # 워머는 Semaphore(4)로 throttle: scan_all max_workers=4 로 호출
-                    results = adapter.scan_all(max_workers=4)
+                    # 워머는 Semaphore(8)로 throttle: scan_all max_workers=8 로 호출
+                    results = adapter.scan_all(max_workers=8)
                     logging.info("KR warm-up done: %d tickers", len(results) if results else 0)
                     # 스캔 결과 전체 캐시 갱신
                     if results:
@@ -637,9 +637,28 @@ def api_scan():
                 # US는 캐시 미스 시 동기 풀 스캔 fallback
                 results = adapter.scan_sector(sector) if sector else adapter.scan_all()
             else:
-                # KR: 첫 배포·캐시 전체 미스 → BG 워밍만 트리거하고 빈 응답 반환
-                _refresh_scan_background(market, strategy, sector)
-                warming_in_progress = True
+                # KR: 섹터 캐시 미스 → 1) 전체 스캔 캐시에서 필터링, 2) 동기 섹터 스캔
+                if sector:
+                    with _scan_results_cache_lock:
+                        _full = _scan_results_cache.get((market, strategy, ""))
+                    if _full:
+                        results = [r for r in _full["data"] if r.get("Sector") == sector]
+                        if results:
+                            with _scan_results_cache_lock:
+                                _scan_results_cache[(market, strategy, sector)] = {
+                                    "_ts": _full["_ts"], "data": results,
+                                }
+                if not results:
+                    # 전체 캐시도 없으면 해당 섹터만 동기 스캔
+                    try:
+                        results = adapter.scan_sector(sector, max_workers=8) if sector else []
+                    except Exception as _ke:
+                        logging.warning("KR sync sector scan failed: %s", _ke)
+                if results:
+                    _refresh_scan_background(market, strategy, sector)
+                else:
+                    _refresh_scan_background(market, strategy, sector)
+                    warming_in_progress = True
         else:
             results = adapter.scan_sector(sector) if sector else adapter.scan_all()
         # 히스토리 델타 주석/스냅샷 저장

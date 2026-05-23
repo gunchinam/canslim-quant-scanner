@@ -2845,7 +2845,12 @@ document.addEventListener('click', function(e) {
     });
   });
   socket.on('chat', (data) => { addMsg(data.nick, data.msg, data.ts, data.id); });
-  socket.on('system', (data) => { addSys(data.msg); onlineEl.textContent = data.online + '명 접속'; });
+  // 입장/퇴장 알림은 실제 대화를 덮어버리므로 메시지로 띄우지 않고 접속 수만 갱신.
+  // (차단/공지 등 다른 시스템 메시지는 그대로 표시)
+  socket.on('system', (data) => {
+    if (typeof data.online === 'number') onlineEl.textContent = data.online + '명 접속';
+    if (!/(입장|퇴장)$/.test(String(data.msg || ''))) addSys(data.msg);
+  });
   socket.on('announce', (data) => { addAnnounce(data.msg, data.ts); });
   socket.on('msg_deleted', (data) => {
     const el = msgs.querySelector('.msg[data-id="' + data.id + '"]');

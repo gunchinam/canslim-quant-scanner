@@ -609,8 +609,6 @@ async function runScan() {
     _compareSet = new Set([..._compareSet].filter(ticker => visibleTickers.has(ticker)));
     // 서버가 워밍 중이고 결과가 없으면 15초 후 자동 재시도
     if (allStocks.length === 0 && res.headers.get('X-Warming-In-Progress') === 'true') {
-      stopScanLoading();
-      if (btn) btn.disabled = false;
       setStockListMsg('데이터 준비 중… 잠시 후 자동으로 불러옵니다 (약 15초)');
       setTimeout(() => { if (!document.hidden) runScan(); }, 15000);
       return;
@@ -618,7 +616,6 @@ async function runScan() {
     _refreshFilteredView();
   } catch (e) {
     console.error('runScan 실패:', e);
-    stopScanLoading();
     setStockListMsg('스캔 실패. 서버 상태를 확인하세요.');
   } finally {
     stopScanLoading();

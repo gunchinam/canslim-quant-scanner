@@ -47,11 +47,18 @@ app = Flask(
 )
 
 # Gzip 압축 — JSON API 응답 크기 60~70% 절감
+# (스캔 응답이 10MB+ 가 될 수 있어 모바일/원거리 클라이언트에서 비압축 시 타임아웃 발생)
+_FLASK_COMPRESS_OK = False
 try:
     from flask_compress import Compress as _Compress
     _Compress(app)
+    _FLASK_COMPRESS_OK = True
 except ImportError:
-    pass
+    logging.warning(
+        "flask_compress NOT installed — JSON responses are not gzip compressed. "
+        "11MB+ scan payloads may timeout on mobile/slow networks. "
+        "Run: pip install -r requirements.txt"
+    )
 
 
 def _render_deployment() -> bool:
@@ -577,6 +584,7 @@ def healthz():
         "ok": True,
         "service": "canslim-quant-scanner",
         "render": _render_deployment(),
+        "gzip": _FLASK_COMPRESS_OK,
     })
 
 

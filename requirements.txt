@@ -23,3 +23,5 @@ Pillow>=10.0
 
 plyer>=2.1
 xlsxwriter>=3.1
+
+# rebuild-trigger: 2026-05-23 — ensure flask-compress is installed on prod (silent gzip fail caused 11MB JSON timeouts)

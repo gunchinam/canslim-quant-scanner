@@ -135,9 +135,18 @@ def _get_scan_adapter_cls():
     return ScanAdapter
 
 
-def _annotate_one_liners(results: list):
+def _annotate_one_liners(results: list, force: bool = False):
+    """results에 OneLiner/OneLinerTag/OneLinerData를 채운다.
+    force=False면 이미 채워진 dict는 스킵해 BG/sync 중복 계산을 피한다."""
     from one_liner import annotate
-    return annotate(results)
+    if not results:
+        return results
+    if force:
+        return annotate(results)
+    pending = [r for r in results if isinstance(r, dict) and not r.get("OneLiner")]
+    if pending:
+        annotate(pending)
+    return results
 
 
 def _override_kr_day_chg(results: list) -> list:
@@ -222,8 +231,14 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
                     history.save_snapshot(results, market)
             except Exception as he:
                 logging.warning("background history annotate/save failed: %s", he)
+            # 네이버 KR 실시간 등락률 오버라이드도 BG에서 처리 — 사용자 응답 지연 회피
+            if market == "KR":
+                try:
+                    results = _override_kr_day_chg(results)
+                except Exception as ne:
+                    logging.warning("background naver DayChg override failed: %s", ne)
             try:
-                results = _annotate_one_liners(results)
+                results = _annotate_one_liners(results, force=True)
             except Exception as oe:
                 logging.warning("background one_liner annotate failed: %s", oe)
             # 스캔 결과 전체 캐시 갱신
@@ -761,13 +776,9 @@ def api_scan():
                 history.save_snapshot(results, market)
         except Exception as he:
             logging.warning("history annotate/save failed: %s", he)
-        # KR 등락률 네이버 실시간 오버라이드 (yfinance 장중 고착 회피)
-        if market == "KR":
-            try:
-                results = _override_kr_day_chg(results)
-            except Exception as ne:
-                logging.warning("naver DayChg override failed: %s", ne)
-        # 촌철살인 한줄평 추가
+        # 네이버 실시간 등락률은 BG refresh에서만 처리 (콜드 캐시 응답 지연 회피).
+        # 콜드 첫 응답은 yfinance DayChg로 즉시 반환 → BG가 캐시에 신선값 채워둠.
+        # 촌철살인 한줄평 추가 (이미 채워진 경우 스킵)
         try:
             results = _annotate_one_liners(results)
         except Exception as oe:

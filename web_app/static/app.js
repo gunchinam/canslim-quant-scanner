@@ -778,7 +778,6 @@ function renderStockTable(stocks) {
       : '필터 조건에 맞는 종목이 없습니다.';
     tbody.innerHTML = `<tr><td colspan="${_colCount()}" class="state-msg">${esc(_currentFilter === 'all' ? '결과 없음' : emptyMsg)}</td></tr>`;
     _updateMobileList([], _currentFilter === 'all' ? '결과 없음' : emptyMsg);
-    _updateHeatmap([]);
     return;
   }
 
@@ -800,87 +799,7 @@ function renderStockTable(stocks) {
   }
   tbody.innerHTML = view.map((s, i) => renderStockRow(s, i + 1)).join('');
   _updateMobileList(view);
-  _updateHeatmap(view);
 }
-
-/* ── 히트맵 뷰 (스캔 결과 격자 시각화) ──────────────────────── */
-let _viewMode = 'table'; // 'table' | 'heatmap'
-
-function setViewMode(mode) {
-  if (mode !== 'table' && mode !== 'heatmap') return;
-  _viewMode = mode;
-  const tableWrap  = document.querySelector('.stock-table-wrap');
-  const mobileList = document.getElementById('mobile-stock-list');
-  const heatmap    = document.getElementById('heatmap-view');
-  const btnT = document.getElementById('view-mode-table');
-  const btnH = document.getElementById('view-mode-heatmap');
-  if (btnT) { btnT.classList.toggle('active', mode === 'table'); btnT.setAttribute('aria-selected', mode === 'table'); }
-  if (btnH) { btnH.classList.toggle('active', mode === 'heatmap'); btnH.setAttribute('aria-selected', mode === 'heatmap'); }
-  if (mode === 'heatmap') {
-    if (heatmap)    heatmap.hidden = false;
-    if (tableWrap)  tableWrap.style.display  = 'none';
-    if (mobileList) mobileList.style.display = 'none';
-  } else {
-    if (heatmap)    heatmap.hidden = true;
-    if (tableWrap)  tableWrap.style.display  = '';
-    if (mobileList) mobileList.style.display = '';
-  }
-  try { localStorage.setItem('scanner_view_mode', mode); } catch (e) {}
-}
-
-function _heatmapTierClass(chgPct, isUp) {
-  const a = Math.abs(chgPct);
-  if (a < 0.2) return 'flat';
-  const lvl = a >= 5 ? 3 : a >= 2 ? 2 : 1;
-  return (isUp ? 'up' : 'down') + (lvl === 1 ? '' : lvl);
-}
-
-function _updateHeatmap(view) {
-  const el = document.getElementById('heatmap-view');
-  if (!el) return;
-  if (!view || view.length === 0) {
-    el.innerHTML = '<div class="hm-empty">표시할 종목이 없습니다.</div>';
-    return;
-  }
-  el.innerHTML = view.map((s, i) => {
-    const rank   = i + 1;
-    const score  = Math.round(s.TotalScore || 0);
-    const chg    = (s.DayChg || 0) * 100;
-    const up     = chg > 0;
-    const cls    = _heatmapTierClass(chg, up);
-    const sign   = up ? '+' : (chg < 0 ? '' : '±');
-    const chgTxt = `${sign}${chg.toFixed(2)}%`;
-    const name   = esc(s.Name || s.Ticker);
-    const ticker = esc(s.Ticker);
-    return `
-<div class="hm-tile ${cls}" data-ticker="${ticker}" onclick="openDetail('${ticker}')" title="${name} · ${score}점 · ${chgTxt}">
-  <div class="hm-tile-top">
-    <span class="hm-tile-rank">#${rank}</span>
-    <span class="hm-tile-score">${score}</span>
-  </div>
-  <div>
-    <div class="hm-tile-name">${name}</div>
-    <div class="hm-tile-ticker">${ticker}</div>
-  </div>
-  <div class="hm-tile-chg">${chgTxt}</div>
-</div>`;
-  }).join('');
-}
-
-// 초기화: 저장된 뷰 모드 복원
-(function restoreViewMode() {
-  try {
-    const saved = localStorage.getItem('scanner_view_mode');
-    if (saved === 'heatmap') {
-      // DOM 준비 후 적용
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => setViewMode('heatmap'));
-      } else {
-        setViewMode('heatmap');
-      }
-    }
-  } catch (e) {}
-})();
 
 function _deltaBadge(stock) {
   if (stock && stock.IsNew) {
@@ -1302,10 +1221,15 @@ function initSearch() {
   inp.setAttribute('placeholder', '종목명 또는 티커 검색 (예: RF, 삼성, AAPL)');
   const box = _createSuggestBox(inp);
 
+  // 필터 재렌더 debounce (큰 리스트 reflow 폭탄 회피)
+  let _filterDebounceTimer = null;
   inp.addEventListener('input', () => {
     const q = inp.value.trim();
-    // 스캔 결과 내 필터
-    if (_searchBaseStocks().length) _refreshFilteredView();
+    // 스캔 결과 내 필터 — 150ms debounce
+    if (_searchBaseStocks().length) {
+      clearTimeout(_filterDebounceTimer);
+      _filterDebounceTimer = setTimeout(_refreshFilteredView, 150);
+    }
     // 자동완성 제안
     clearTimeout(_searchTimer);
     if (q.length < 1) { _hideSuggest(); return; }

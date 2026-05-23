@@ -958,7 +958,7 @@ def api_ticker(ticker: str):
         if _td_cached and (_td_now - _td_cached.get("_ts", 0)) < _TICKER_DETAIL_TTL_SEC:
             # 한줄평은 항상 최신 로직으로 재생성 (캐시는 raw 데이터만 재사용)
             try:
-                fresh = _annotate_one_liners([_td_cached["data"]])[0]
+                fresh = _annotate_one_liners([_td_cached["data"]], force=True)[0]
             except Exception:
                 fresh = _td_cached["data"]
             return jsonify(fresh)

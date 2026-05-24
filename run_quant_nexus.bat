@@ -1,5 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
+rem ── 콘솔 코드페이지를 UTF-8로 전환 (한글 깨짐 방지) ──
+chcp 65001 >nul
 pushd "%~dp0"
 
 set "PROJ_DIR=%CD%\"

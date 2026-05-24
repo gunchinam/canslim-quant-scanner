@@ -228,7 +228,9 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
                 import history
                 results = history.annotate_deltas(results, market)
                 if not sector:
-                    history.save_snapshot(results, market)
+                    # 전체 유니버스를 같이 넘겨 실패 종목도 missing=True로 기록
+                    universe = {t for ts in adapter._sectors.values() for t in ts}
+                    history.save_snapshot(results, market, universe=universe)
             except Exception as he:
                 logging.warning("background history annotate/save failed: %s", he)
             # 네이버 KR 실시간 등락률 오버라이드도 BG에서 처리 — 사용자 응답 지연 회피
@@ -460,11 +462,33 @@ _us_warmup_started = False
 _us_warmup_lock = threading.Lock()
 
 
+def _is_us_market_open_window() -> bool:
+    """US 정규장 + 프리/애프터까지 넉넉히 — KST 기준 22:00~06:00, 토/일은 휴장."""
+    from datetime import datetime, timezone, timedelta
+    now_kst = datetime.now(timezone(timedelta(hours=9)))
+    # 토(5)/일(6) 휴장. 월요일 새벽까지 금요일 애프터 여진이 있을 수 있으나
+    # 한국 시간 기준 일요일 종일·토요일 종일은 확실히 휴장.
+    if now_kst.weekday() in (5, 6):
+        return False
+    h = now_kst.hour
+    # 정규장은 KST 22:30(서머타임) ~ 05:00, 여기에 프리·애프터 마진 ±2h
+    return h >= 22 or h < 6
+
+
 def _us_warmup_loop(interval_sec: int = 1800) -> None:
-    """US 전체 스캔을 주기적으로 BG 실행. 파일잠금으로 multi-process duplication 방지."""
+    """US 전체 스캔을 주기적으로 BG 실행. 파일잠금으로 multi-process duplication 방지.
+
+    장 닫혀 있을 땐 어차피 시세가 안 움직이니 외부 호출을 건너뛴다
+    (yfinance 호출 절감 + 라이브 로그 깔끔). 첫 실행만 캐시 채우기.
+    """
     first_run = True
     while True:
         handle = None
+        # 장 외 시간엔 스캔 자체를 스킵 (yfinance 호출 0).
+        # 단, 캐시가 아직 비어있는 첫 실행은 한 번 채워둔다.
+        if not first_run and not _is_us_market_open_window():
+            time.sleep(interval_sec)
+            continue
         try:
             os.makedirs(os.path.dirname(_US_WARMUP_LOCK_PATH), exist_ok=True)
             fh = open(_US_WARMUP_LOCK_PATH, "a+b")
@@ -773,7 +797,8 @@ def api_scan():
             results = history.annotate_deltas(results, market)
             # 섹터 스캔이 아닐 때만 스냅샷 저장 (전체 스캔만 저장)
             if not sector:
-                history.save_snapshot(results, market)
+                universe = {t for ts in adapter._sectors.values() for t in ts}
+                history.save_snapshot(results, market, universe=universe)
         except Exception as he:
             logging.warning("history annotate/save failed: %s", he)
         # KR 종목은 네이버 실시간 등락률로 즉시 오버라이드 (yfinance 장중 고착 회피).

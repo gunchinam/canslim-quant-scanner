@@ -1053,12 +1053,18 @@ td.score-col {
 .entry-bar-fill { position:absolute; left:0; top:0; height:100%; background:linear-gradient(90deg,#DC2626 0%,#F59E0B 50%,#16A34A 100%); border-radius:6px; transition:width .3s; }
 .entry-prices { padding:10px 16px; border-top:1px solid var(--border); background:var(--bg-tertiary,var(--surface-muted)); }
 .entry-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; font-size:13px; }
+.entry-grid > * { min-width:0; }
 .entry-grid .lbl { color:var(--text-tertiary); font-size:12px; margin-bottom:2px; display:block; }
-.entry-grid .val { font-weight:700; color:var(--text-primary); font-size:14px; }
+.entry-grid .val { font-weight:700; color:var(--text-primary); font-size:14px; display:block; word-break:keep-all; overflow-wrap:anywhere; line-height:1.2; }
 /* 3존 스파이크: 행동존 = 진입/손절/목표가1 3숫자, 진입가 시각 강조 */
-.entry-grid-3 { grid-template-columns:1.4fr 1fr 1fr; align-items:end; }
+.entry-grid-3 { grid-template-columns:1.3fr 1fr 1.1fr; align-items:end; gap:8px; }
 .entry-grid-3 .eg-primary .lbl { color:var(--brand); font-weight:700; }
-.entry-grid-3 .eg-primary .val { font-size:20px; }
+.entry-grid-3 .eg-primary .val { font-size:19px; }
+@media (max-width: 480px) {
+  .entry-grid-3 { grid-template-columns:1.2fr 1fr 1.1fr; gap:6px; }
+  .entry-grid-3 .eg-primary .val { font-size:17px; }
+  .entry-grid .val { font-size:13px; }
+}
 .entry-meta-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:6px 16px; margin-top:10px; font-size:12px; }
 .entry-meta-grid .meta-lbl { color:var(--text-tertiary); font-size:11px; }
 .entry-meta-grid .meta-val { font-weight:600; color:var(--text-secondary); }

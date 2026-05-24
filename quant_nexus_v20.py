@@ -11058,7 +11058,7 @@ class QuantNexusApp:
                 "Mag 7":              ["AAPL","AMZN","GOOGL","META","MSFT","NVDA","TSLA"],
 
                 # AI 플랫폼·클라우드·엔터프라이즈
-                "AI Platform & Cloud":["ADBE","AI","AMZN","BBAI","BOX","CFLT","CRM","DDOG",
+                "AI Platform & Cloud":["ADBE","AI","AMZN","BBAI","BOX","CRM","DDOG",
                                        "DOCN","ESTC","GOOGL","GRRR","GTLB","HUBS","IBM","INTU",
                                        "MDB","MNDY","MSFT","NOW","NTNX","ORCL","PATH","PLTR",
                                        "RBRK","SNOW","SOUN","TEAM","TEM","WDAY"],
@@ -11074,7 +11074,7 @@ class QuantNexusApp:
                                        "OKTA","PANW","QLYS","RPD","S","TENB","VRNS","ZS"],
 
                 # SaaS·소프트웨어 고성장
-                "SaaS & Software":    ["ADBE","ADSK","ANSS","APP","BILL","CDNS","CRM","CTSH","DOCU","DUOL",
+                "SaaS & Software":    ["ADBE","ADSK","APP","BILL","CDNS","CRM","CTSH","DOCU","DUOL",
                                        "EPAM","FFIV","GLOB","GTLB","HUBS","JKHY","MGNI","MNDY","NOW",
                                        "PCOR","PCTY","PTC","RAMP","RNG","SHOP","SNPS","TRMB","TWLO",
                                        "TTD","TYL","VEEV","ZBRA","ZM"]},

@@ -776,8 +776,13 @@ def api_scan():
                 history.save_snapshot(results, market)
         except Exception as he:
             logging.warning("history annotate/save failed: %s", he)
-        # 네이버 실시간 등락률은 BG refresh에서만 처리 (콜드 캐시 응답 지연 회피).
-        # 콜드 첫 응답은 yfinance DayChg로 즉시 반환 → BG가 캐시에 신선값 채워둠.
+        # KR 종목은 네이버 실시간 등락률로 즉시 오버라이드 (yfinance 장중 고착 회피).
+        # 8-worker 병렬 호출이라 50종목 기준 ~1~2초 추가. 사용자가 fallback을 원치 않음.
+        if market == "KR":
+            try:
+                results = _override_kr_day_chg(results)
+            except Exception as ne:
+                logging.warning("naver DayChg override failed: %s", ne)
         # 촌철살인 한줄평 추가 (이미 채워진 경우 스킵)
         try:
             results = _annotate_one_liners(results)

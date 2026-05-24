@@ -93,7 +93,7 @@ def annotate_deltas(results: list[dict], market: str) -> list[dict]:
     days = (today - base_day).days if base_day else 0
     # 오늘 순위 산출 (TotalScore 내림차순 가정 — 이미 정렬됨)
     sorted_by_score = sorted(
-        results, key=lambda x: x.get("TotalScore", 0), reverse=True
+        results, key=lambda x: x.get("TotalScore") or 0, reverse=True
     )
     today_rank = {r.get("Ticker"): i + 1 for i, r in enumerate(sorted_by_score)}
 
@@ -137,7 +137,7 @@ def save_snapshot(results: list[dict], market: str, universe: list[str] | set[st
         return
     today = date.today()
     sorted_by_score = sorted(
-        results, key=lambda x: x.get("TotalScore", 0), reverse=True
+        results, key=lambda x: x.get("TotalScore") or 0, reverse=True
     )
     snap = {
         r["Ticker"]: {

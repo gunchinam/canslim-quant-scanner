@@ -4320,16 +4320,20 @@ def _positive_for(d: dict, score: float) -> str:
     roe    = _num(d.get("_ROE")) * 100
     eps_g  = _num(d.get("_EPSGrowth")) * 100
     mom12  = _num(d.get("Mom12M")) * 100
+    mom3   = _num(d.get("_Mom3M"))
     near_h = bool(d.get("NearHighPass"))
     eps_acc = bool(d.get("EPSAcceleration"))
     leader = bool(d.get("IsLeader"))
 
-    if leader:
+    # SECTOR_LEADER 는 IsLeader 만으로 단정하지 않는다 — 점수 컷이 함께 있어야
+    # _raw_bucket(score>=60 + leader) 게이트와 동일한 기준이 된다.
+    if leader and score >= 60:
         return "SECTOR_LEADER"
     if near_h and mom12 >= 30:
         return "BREAKOUT"
-    # 가속만 보면 테마 상승 종목까지 실적주 풀로 빠진다 → EPS 성장률 동반 필수.
-    if eps_acc and eps_g >= 10:
+    # 가속만 보면 테마 상승 종목까지 실적주 풀로 빠진다 → EPS 성장률 + 단기 가격 컨펌 동반 필수.
+    # _raw_bucket 의 EARNINGS_BEAT 게이트와 동일 조건으로 정렬.
+    if eps_acc and eps_g >= 10 and (mom3 >= 3 or near_h):
         return "EARNINGS_BEAT"
     if mom12 >= 20:
         return "MOMENTUM_LEADER"
@@ -4594,31 +4598,39 @@ def get_oneliner_data(d: dict, bucket: str | None = None) -> str:
     if bucket is None:
         bucket = _bucket(d)
 
-    def _ok(text: str) -> str:
-        # 길이 클램프는 절단보다 거절이 안전(잘린 문장은 톤이 깨짐).
+    def _ok_data(text: str) -> str:
+        # 수치/수급 태그 — '내부자 매수', '컨센서스 매수(N명)', '기관 +1.5만주' 같은
+        # 객관 데이터 표현을 'CTA(매수)' 부분일치로 떨어내지 않는다. 길이만 컷.
+        # (최종 CTA 안전망은 _scrub_oneliner 의 _FORBIDDEN_FINAL 이 담당.)
+        if text and len(text) <= _DATA_MAX_LEN:
+            return text
+        return ""
+
+    def _ok_phrase(text: str) -> str:
+        # 자유 문구(플레이버/액션) — 길이 + 권유성 단어 차단을 모두 통과해야 채택.
         if text and len(text) <= _DATA_MAX_LEN and _safe_for_bucket(text, bucket):
             return text
         return ""
 
     # 1) 수치(B): 신호가 진짜 튈 때만.
     if _signal_strength(d) >= _SIGNAL_GATE:
-        out = _ok(_data_tag(d, bucket))
+        out = _ok_data(_data_tag(d, bucket))
         if out:
             return out
 
     # 2) 액션 힌트(C): 관찰형 표현만, 권유 단어 차단.
     if bucket in _ACTION_BUCKETS:
-        out = _ok(_pick_action(d, bucket))
+        out = _ok_phrase(_pick_action(d, bucket))
         if out:
             return out
 
     # 3) 플레이버(A): 짧은 톤 라인. 정적 풀이라 길이는 사실상 안전.
-    out = _ok(_pick_flavor(d, bucket))
+    out = _ok_phrase(_pick_flavor(d, bucket))
     if out:
         return out
 
     # 최종 폴백: 수치라도 시도(게이트 못 넘어도 일부 버킷은 결과 있음).
-    return _ok(_data_tag(d, bucket))
+    return _ok_data(_data_tag(d, bucket))
 
 
 _FORBIDDEN_FINAL = (

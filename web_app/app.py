@@ -30,7 +30,31 @@ from flask import Flask, request, jsonify, render_template, Response
 from chat import socketio
 from config_manager import apply_to_environ
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+from logging.handlers import RotatingFileHandler
+
+_root_logger = logging.getLogger()
+_root_logger.setLevel(logging.INFO)
+_app_fmt = logging.Formatter("%(levelname)s %(message)s")
+
+# RotatingFileHandler (UTF-8) — 중복 방지
+_app_log_path = 'quant_nexus_v20.log'
+_app_fh_exists = any(
+    isinstance(h, RotatingFileHandler) and getattr(h, 'baseFilename', '').endswith('quant_nexus_v20.log')
+    for h in _root_logger.handlers
+)
+if not _app_fh_exists:
+    _app_fh = RotatingFileHandler(_app_log_path, maxBytes=5_000_000, backupCount=3, encoding='utf-8', errors='replace')
+    _app_fh.setLevel(logging.INFO)
+    _app_fh.setFormatter(_app_fmt)
+    _root_logger.addHandler(_app_fh)
+
+# StreamHandler (콘솔) — 중복 방지
+_app_sh_exists = any(isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler) for h in _root_logger.handlers)
+if not _app_sh_exists:
+    _app_sh = logging.StreamHandler(sys.stderr)
+    _app_sh.setLevel(logging.INFO)
+    _app_sh.setFormatter(_app_fmt)
+    _root_logger.addHandler(_app_sh)
 
 # 앱 시작 시 저장된 설정을 환경변수에 반영
 apply_to_environ()
@@ -254,7 +278,7 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
                 results = history.annotate_deltas(results, market)
                 if not sector:
                     # 전체 유니버스를 같이 넘겨 실패 종목도 missing=True로 기록
-                    universe = {t for ts in adapter._sectors.values() for t in ts}
+                    universe = {t for ts in adapter.get_sectors().values() for t in ts}
                     history.save_snapshot(results, market, universe=universe)
             except Exception as he:
                 logging.warning("background history annotate/save failed: %s", he)
@@ -280,7 +304,13 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
             with _scan_refresh_lock:
                 _scan_refresh_inflight.discard(key)
 
-    threading.Thread(target=_worker, daemon=True).start()
+    try:
+        threading.Thread(target=_worker, daemon=True).start()
+    except Exception as te:
+        # 스레드 생성 자체 실패 — inflight 키를 풀어줘야 다음 요청이 영구 차단되지 않는다.
+        logging.warning("background scan thread start failed: %s", te)
+        with _scan_refresh_lock:
+            _scan_refresh_inflight.discard(key)
 
 
 # ── 캐시 메타데이터 (stale-data UX 헤더용) ─────────────────────────────────
@@ -829,7 +859,7 @@ def api_scan():
             results = history.annotate_deltas(results, market)
             # 섹터 스캔이 아닐 때만 스냅샷 저장 (전체 스캔만 저장)
             if not sector:
-                universe = {t for ts in adapter._sectors.values() for t in ts}
+                universe = {t for ts in adapter.get_sectors().values() for t in ts}
                 history.save_snapshot(results, market, universe=universe)
         except Exception as he:
             logging.warning("history annotate/save failed: %s", he)
@@ -1282,11 +1312,10 @@ def api_four_axis(ticker: str):
         hist = None
         tried = []
         periods = ("2y", "1y", "6mo", "3mo")
-        rate_limited_break = False
         for yt in candidates:
-            if rate_limited_break:
-                # 직전 후보가 rate-limit 으로 끝났으면 다음 후보도 거의 확실히 막힘
-                break
+            # rate-limit 은 후보(ticker suffix)별로 따로 판단 — .KS 가 막혔다고
+            # .KQ 까지 포기하면 멀쩡한 대체 후보를 놓친다.
+            rate_limited_break = False
             for period in periods:
                 tried.append(f"{yt}({period})")
                 try:

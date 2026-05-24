@@ -188,11 +188,22 @@ except Exception:
     _notifier = None
 
 # ─── 로깅 설정 ──────────────────────────────────────────────────────────
-logging.basicConfig(
-    filename='quant_nexus_v20.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+from logging.handlers import RotatingFileHandler
+
+_root_logger = logging.getLogger()
+_root_logger.setLevel(logging.INFO)
+_LOG_FMT = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# 중복 방지: 같은 baseFilename 핸들러가 이미 있으면 추가하지 않음
+_log_path_qn = 'quant_nexus_v20.log'
+_already = any(
+    isinstance(h, RotatingFileHandler) and getattr(h, 'baseFilename', '').endswith('quant_nexus_v20.log')
+    for h in _root_logger.handlers
 )
+if not _already:
+    _fh = RotatingFileHandler(_log_path_qn, maxBytes=5_000_000, backupCount=3, encoding='utf-8', errors='replace')
+    _fh.setLevel(logging.INFO)
+    _fh.setFormatter(_LOG_FMT)
+    _root_logger.addHandler(_fh)
 
 # ─── High DPI 인식 (Windows 고해상도 흐림 현상 해결) ────────────────────
 def _apply_dpi_awareness():
@@ -8747,7 +8758,6 @@ class QuantNexusApp:
         "036540.KQ": "반도체후공정·패키징",      # SFA반도체
         "036810.KQ": "BMS·배터리보호회로",
         "178920.KS": "PI필름·배터리절연소재",
-        "950170.KQ": "반도체후공정소재",
         "011790.KS": "FC-BGA기판·동박",          # SKC
         "131290.KQ": "반도체식각액·세정소재",   # 이엔에프테크놀로지
         "222800.KQ": "메모리모듈기판",            # 심텍
@@ -11642,7 +11652,7 @@ class QuantNexusApp:
             '🔬 반도체': {
                 '메모리·HBM': ['000660.KS', '000990.KS', '005930.KS', '007660.KS', '110990.KQ', '402340.KS', '166090.KQ', '168360.KQ', '067310.KQ', '356860.KQ', '042700.KS', '089030.KQ', '131290.KQ', '222800.KQ', '195870.KS', '036540.KQ', '033640.KQ', '432720.KQ', '252990.KQ', '080220.KQ', '102120.KQ', '319660.KQ', '031980.KQ'],
                 '시스템반도체': ['031980.KQ', '033640.KQ', '054450.KQ', '080220.KQ', '089030.KQ', '200710.KQ', '240810.KQ', '396270.KQ', '440110.KQ', '394280.KQ', '399720.KQ', '094360.KQ', '102120.KQ', '123860.KQ', '000990.KS', '108320.KS', '094170.KQ', '490470.KQ', '424980.KQ', '456010.KQ', '045970.KQ'],
-                '반도체장비·소재': ['005290.KQ', '014680.KS', '322310.KQ', '036540.KQ', '036810.KQ', '036930.KQ', '178920.KS', '281820.KS', '357780.KQ', '403870.KQ', '950170.KQ', '240810.KQ', '272290.KQ', '357550.KQ', '058470.KQ', '104830.KQ', '140860.KQ', '108320.KS', '095340.KQ', '108860.KQ', '228760.KQ', '064760.KQ', '039030.KQ', '417840.KQ', '098460.KQ', '095610.KQ', '084370.KQ', '112290.KQ', '064290.KQ', '053610.KQ', '089890.KQ', '089970.KQ', '122640.KQ', '348210.KQ', '101490.KQ', '131970.KQ', '457370.KQ', '054620.KQ', '083450.KQ', '030530.KQ', '327260.KQ', '170920.KQ'],
+                '반도체장비·소재': ['005290.KQ', '014680.KS', '322310.KQ', '036540.KQ', '036810.KQ', '036930.KQ', '178920.KS', '281820.KS', '357780.KQ', '403870.KQ', '240810.KQ', '272290.KQ', '357550.KQ', '058470.KQ', '104830.KQ', '140860.KQ', '108320.KS', '095340.KQ', '108860.KQ', '228760.KQ', '064760.KQ', '039030.KQ', '417840.KQ', '098460.KQ', '095610.KQ', '084370.KQ', '112290.KQ', '064290.KQ', '053610.KQ', '089890.KQ', '089970.KQ', '122640.KQ', '348210.KQ', '101490.KQ', '131970.KQ', '457370.KQ', '054620.KQ', '083450.KQ', '030530.KQ', '327260.KQ', '170920.KQ'],
                 'AI서버기판·패키징': ['008060.KS', '009150.KS', '011070.KS', '011790.KS', '353200.KS', '131290.KQ', '222800.KQ', '007810.KS', '252990.KQ', '420770.KQ', '007660.KS', '195870.KS', '178920.KS', '036540.KQ', '067310.KQ', '018260.KS', '033640.KQ', '272290.KQ', '317330.KQ', '213420.KQ', '356860.KQ', '171090.KQ', '092190.KQ'],
             },
             '🤖 AI 인프라': {

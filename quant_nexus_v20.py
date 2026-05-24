@@ -756,11 +756,22 @@ COLUMN_TOOLTIPS = {
 # 유틸리티 함수
 # ============================================================
 def safe_get(val, default=0):
-    """None 또는 NaN 을 default 로 대체합니다."""
+    """None / NaN / 비수치 문자열 을 default 로 대체합니다.
+
+    default 가 수치형이면 결과도 수치로 강제 변환 (yfinance/Naver 가
+    'N/A', '-' 같은 문자열을 끼워넣어도 '<'/'>' 비교가 깨지지 않게).
+    """
     if val is None:
         return default
     if isinstance(val, float) and np.isnan(val):
         return default
+    if isinstance(default, (int, float)) and not isinstance(val, bool):
+        if isinstance(val, (int, float)):
+            return val
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return default
     return val
 
 

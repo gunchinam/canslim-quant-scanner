@@ -625,6 +625,12 @@ function selectSector(btn, sector) {
   runScan();
 }
 
+// 처음 접속 시엔 서버가 아직 준비 안 됐을 수 있어 잠시 후 자동 재시도.
+// 콜드 스타트 직후 fetch 실패를 "서버 접속안됨" 처럼 보이지 않도록 부드럽게 처리.
+let _runScanAttempt = 0;
+const _RUN_SCAN_MAX_RETRY = 4;            // 총 시도 5회 (초기 + 재시도 4)
+const _RUN_SCAN_BACKOFF_MS = [2000, 4000, 8000, 12000];
+
 async function runScan() {
   const btn = document.getElementById('btn-scan');
   if (btn) { btn.disabled = true; }
@@ -654,16 +660,28 @@ async function runScan() {
     _scanStocks  = allStocks;
     const visibleTickers = new Set(allStocks.map(s => s.Ticker));
     _compareSet = new Set([..._compareSet].filter(ticker => visibleTickers.has(ticker)));
-    // 서버가 워밍 중이고 결과가 없으면 15초 후 자동 재시도
+    // 서버가 워밍 중이고 결과가 없으면 자동 재시도
     if (allStocks.length === 0 && res.headers.get('X-Warming-In-Progress') === 'true') {
       setStockListMsg('데이터 준비 중… 잠시 후 자동으로 불러옵니다 (약 15초)');
       setTimeout(() => { if (!document.hidden) runScan(); }, 15000);
       return;
     }
+    _runScanAttempt = 0;  // 성공 시 카운터 리셋
     _refreshFilteredView();
   } catch (e) {
     console.error('runScan 실패:', e);
-    setStockListMsg('스캔 실패. 서버 상태를 확인하세요.');
+    // 콜드 스타트 / 네트워크 흔들림 — 백오프하며 자동 재시도.
+    if (_runScanAttempt < _RUN_SCAN_MAX_RETRY) {
+      const delay = _RUN_SCAN_BACKOFF_MS[_runScanAttempt] || 12000;
+      _runScanAttempt += 1;
+      const secs = Math.round(delay / 1000);
+      setStockListMsg(`서버 준비 중… ${secs}초 후 자동으로 다시 시도합니다 (${_runScanAttempt}/${_RUN_SCAN_MAX_RETRY})`);
+      setTimeout(() => { if (!document.hidden) runScan(); }, delay);
+    } else {
+      // 재시도 다 소진 — 그제야 명시적 실패 안내.
+      setStockListMsg('서버에 연결하지 못했습니다. 새로고침하거나 서버 상태를 확인하세요.');
+      _runScanAttempt = 0;
+    }
   } finally {
     stopScanLoading();
     if (btn) btn.disabled = false;
@@ -4168,19 +4186,24 @@ async function captureDetail() {
     const W = 220, H = 56, PAD = 4;
     const minS = Math.min(...scores), maxS = Math.max(...scores);
     const range = maxS - minS || 1;
-    const toX = i => PAD + (i / (scores.length - 1)) * (W - PAD * 2);
-    const toY = s => H - PAD - ((s - minS) / range) * (H - PAD * 2);
-
-    // 날짜 연속성 검사 — 인접 포인트 사이가 1일 초과면 끊긴 구간(=점선 처리)
+    // 날짜 → epoch-days
     const dayOf = (d) => {
       const [y, m, dd] = d.split('-').map(Number);
       return Date.UTC(y, m - 1, dd) / 86400000;
     };
+    // X축: 인덱스 기반(균등 분포)이 아닌 "실제 날짜" 기반.
+    //  → 12일 풀 적재와 3일 희소 적재가 시각적으로 명확히 구분됨.
+    const days = valid.map(p => dayOf(p.date));
+    const tFirst = days[0];
+    const tLast  = days[days.length - 1];
+    const span   = Math.max(1, tLast - tFirst);
+    const toX = i => PAD + ((days[i] - tFirst) / span) * (W - PAD * 2);
+    const toY = s => H - PAD - ((s - minS) / range) * (H - PAD * 2);
     const segSolid = [];   // 연속 구간 polyline 들
     const segDash  = [];   // 결손 구간 polyline 들
     let cur = [[toX(0), toY(scores[0])]];
     for (let i = 1; i < valid.length; i++) {
-      const gap = dayOf(valid[i].date) - dayOf(valid[i - 1].date);
+      const gap = days[i] - days[i - 1];
       const px = [toX(i), toY(scores[i])];
       if (gap <= 1) {
         cur.push(px);

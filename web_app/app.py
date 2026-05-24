@@ -67,6 +67,29 @@ app = Flask(
     static_folder="static",
 )
 
+
+# ── 정적 자산 캐시 버스팅 ──
+# 브라우저가 'Cache-Control: no-cache'를 응답에는 적용해도
+# 디스크 캐시에서 미리 끌어다 쓰는 경우가 있어 mtime 기반 ?v= 쿼리를 강제.
+_ASSET_STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+
+def _asset_mtime(name: str) -> str:
+    try:
+        return str(int(os.path.getmtime(os.path.join(_ASSET_STATIC_DIR, name))))
+    except OSError:
+        return "0"
+
+
+@app.context_processor
+def _inject_asset_versions():
+    return {
+        "v_app_js": _asset_mtime("app.js"),
+        "v_interactive_js": _asset_mtime("interactive.js"),
+        "v_theme_css": _asset_mtime("theme.css"),
+    }
+
+
 # Gzip 압축 — JSON API 응답 크기 60~70% 절감
 # (스캔 응답이 10MB+ 가 될 수 있어 모바일/원거리 클라이언트에서 비압축 시 타임아웃 발생)
 _FLASK_COMPRESS_OK = False
@@ -236,6 +259,13 @@ def _render_static_template(name: str, replacements: dict[str, str] | None = Non
     path = os.path.join(os.path.dirname(__file__), "templates", name)
     with open(path, encoding="utf-8") as f:
         content = f.read()
+    # 정적 자산 캐시버스터 주입 — 파일 mtime 기반. 브라우저 디스크 캐시 우회.
+    content = (
+        content
+        .replace("{{ v_app_js }}", _asset_mtime("app.js"))
+        .replace("{{ v_interactive_js }}", _asset_mtime("interactive.js"))
+        .replace("{{ v_theme_css }}", _asset_mtime("theme.css"))
+    )
     for src, dst in (replacements or {}).items():
         content = content.replace(src, dst)
     return Response(content, mimetype="text/html; charset=utf-8")

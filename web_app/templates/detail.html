@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light">
 <title>{{ ticker }} — (.)(.)분석기</title>
-<link rel="stylesheet" href="/static/theme.css">
+<link rel="stylesheet" href="/static/theme.css?v={{ v_theme_css }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&family=Do+Hyeon&display=swap" rel="stylesheet">
@@ -1424,6 +1424,6 @@ html, body {
 </div><!-- end shell -->
 
 <script>const TICKER = "{{ ticker }}";</script>
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v={{ v_app_js }}"></script>
 </body>
 </html>

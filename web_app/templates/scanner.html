@@ -291,7 +291,7 @@ html, body {
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: all var(--duration-fast);
+  transition: border-color var(--duration-fast), color var(--duration-fast), background var(--duration-fast);
 }
 .chip:hover { border-color: var(--brand); color: var(--brand); }
 .chip.active {
@@ -559,7 +559,7 @@ td.score-col {
   margin-top: 5px;
   overflow: hidden;
 }
-.score-bar-fill { height: 100%; border-radius: 2px; background: var(--brand); transition: width 0.3s var(--ease-out); }
+.score-bar-fill { height: 100%; border-radius: 2px; background: var(--brand); }
 .score-bar-fill.score-high { background: var(--success); }
 .score-bar-fill.score-mid  { background: var(--warning); }
 .score-bar-fill.score-low  { background: var(--destructive); }

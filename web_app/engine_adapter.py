@@ -5,6 +5,7 @@ Flask 웹앱이 이 클래스를 통해 스캔 기능을 호출한다.
 import sys
 import os
 import time
+import random
 import threading
 import logging
 import concurrent.futures
@@ -95,7 +96,11 @@ class ScanAdapter:
                 return float(cached)
 
         import yfinance as _yf
-        for attempt in range(2):
+        for attempt in range(3):
+            if attempt == 1:
+                time.sleep(random.uniform(3.0, 5.0))
+            elif attempt == 2:
+                time.sleep(random.uniform(8.0, 12.0))
             try:
                 v = _yf.Ticker("^VIX").history(period="5d")
                 if not v.empty:
@@ -105,11 +110,14 @@ class ScanAdapter:
                         _VIX_CACHE["ts"] = time.time()
                     return val
             except Exception as e:
-                if attempt == 0:
-                    time.sleep(2.0)
-                    continue
-                logging.warning("[Adapter] vol index fetch failed (%s): %s", market, e)
-        # 실패 — 직전 캐시값이라도 살아있으면 그걸 반환
+                msg = str(e)
+                if "rate" in msg or "Too Many" in msg or "429" in msg:
+                    logging.warning("[Adapter] vol index rate-limited (%s, attempt %d): %s", market, attempt, e)
+                else:
+                    logging.warning("[Adapter] vol index fetch failed (%s): %s", market, e)
+        if cached is not None and (now - cached_ts) < 900.0:
+            logging.info("[VIX] stale cache used (%.1fmin old)", (now - cached_ts) / 60.0)
+            return float(cached)
         if cached is not None:
             return float(cached)
         return 20.0
@@ -176,7 +184,12 @@ class ScanAdapter:
     def analyze_ticker(self, ticker: str, *, prefer_cache: bool = False, cache_only: bool = False) -> dict | None:
         """단일 종목 분석 — 캐시 우선/캐시 전용 모드를 지원한다."""
         if prefer_cache:
-            cached = self.cache.get(f"{ticker}__{self._scan_strategy}", max_age_minutes=60 * 24 * 7)
+            # _analyze_ticker(quant_nexus_v20.py:4684)와 동일한 dated 키 포맷.
+            # 키 포맷 불일치 시 cache_only 분기에서 종목이 대량 누락되어
+            # /api/scan 이 일부 universe만 반환하던 버그를 잡는다.
+            _today = time.strftime("%Y%m%d")
+            strategy_key = f"{ticker}__{self._scan_strategy}__{_today}"
+            cached = self.cache.get(strategy_key, max_age_minutes=60 * 24)
             if cached:
                 return apply_to_row(cached)
             if cache_only:

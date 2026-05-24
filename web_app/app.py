@@ -100,6 +100,23 @@ def _configure_yf_cache() -> None:
         logging.warning("yfinance cache init failed: %s", e)
 
 
+def _resolve_kr_suffix(code6: str) -> str | None:
+    """KR_NAMES 사전을 이용해 6자리 코드 → 정확한 접미사(.KS/.KQ) 결정.
+    lookup miss 면 None — 폴백을 시도해야 할 종목."""
+    try:
+        from quant_nexus_v20 import QuantNexusApp
+        names = getattr(QuantNexusApp, "KR_NAMES", {}) or {}
+    except Exception:
+        return None
+    ks = f"{code6}.KS"
+    kq = f"{code6}.KQ"
+    if ks in names:
+        return ".KS"
+    if kq in names:
+        return ".KQ"
+    return None
+
+
 def _build_yf_candidates(ticker: str, market: str) -> list[str]:
     raw = (ticker or "").strip()
     market = (market or "US").upper()
@@ -120,7 +137,15 @@ def _build_yf_candidates(ticker: str, market: str) -> list[str]:
                 base = base[:-len(suf)]
                 break
         t6 = base.zfill(6) if base.isdigit() else base
-        if kept_suf in (".KS", ".KQ"):
+        # KR_NAMES lookup 으로 접미사를 결정 — 호출자가 .KS 를 줬어도
+        # 사전이 .KQ 라고 알면 .KQ 로 정정 (반대도 동일).
+        resolved = _resolve_kr_suffix(t6) if t6.isdigit() and len(t6) == 6 else None
+        if resolved:
+            other = ".KQ" if resolved == ".KS" else ".KS"
+            # 결정적 경로 — 폴백은 lookup miss 가 아닌 한 시도하지 않음.
+            # 그래도 fetch 자체가 실패할 수 있어 최소 1개 폴백 유지.
+            candidates = [f"{t6}{resolved}", f"{t6}{other}"]
+        elif kept_suf in (".KS", ".KQ"):
             other = ".KQ" if kept_suf == ".KS" else ".KS"
             candidates = [f"{t6}{kept_suf}", f"{t6}{other}"]
         else:
@@ -1252,10 +1277,16 @@ def api_four_axis(ticker: str):
 
         # 다중 기간 폴백 — 2y → 1y → 6mo → 3mo 순으로 시도
         # 일부 ETF/저유동 종목은 1y로는 비어있고 6mo 이하에서만 데이터가 나오기도 함
+        # 429 (rate-limited) 수신 시 한 번 backoff 후 재시도하고, 그래도 실패면
+        # 즉시 다음 후보로 이동(같은 후보로 4 period 모두 두드리는 N+1 회피).
         hist = None
         tried = []
         periods = ("2y", "1y", "6mo", "3mo")
+        rate_limited_break = False
         for yt in candidates:
+            if rate_limited_break:
+                # 직전 후보가 rate-limit 으로 끝났으면 다음 후보도 거의 확실히 막힘
+                break
             for period in periods:
                 tried.append(f"{yt}({period})")
                 try:
@@ -1272,7 +1303,28 @@ def api_four_axis(ticker: str):
                         hist = h
                         break
                 except Exception as exc:
+                    msg = str(exc).lower()
                     logging.warning("four_axis history fetch failed: %s", exc)
+                    if "too many requests" in msg or "rate" in msg and "limit" in msg:
+                        # 한 번만 짧게 backoff 하고 같은 period 재시도, 그래도 실패면 후보 자체를 포기
+                        try:
+                            time.sleep(2.0)
+                            h = _run_with_timeout(
+                                lambda yt=yt, period=period: yf.Ticker(yt).history(
+                                    period=period,
+                                    auto_adjust=True,
+                                    timeout=fetch_timeout_sec,
+                                ),
+                                fetch_timeout_sec,
+                                f"four_axis history {yt} {period} retry",
+                            )
+                            if h is not None and not h.empty and len(h) >= min_rows:
+                                hist = h
+                                break
+                        except Exception:
+                            pass
+                        rate_limited_break = True
+                        break
                     continue
             if hist is not None:
                 break

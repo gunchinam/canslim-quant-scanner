@@ -1030,8 +1030,15 @@ def api_search():
                     hits.append({"ticker": tk, "name": desc})
     except Exception as e:
         logging.warning("api_search failed: %s", e)
-    hits.sort(key=lambda h: (not h["ticker"].lower().startswith(q), not h["name"].lower().startswith(q), h["name"]))
-    return jsonify(hits[:15])
+    # 정렬: (1) 이름이 q로 시작 (2) 티커가 q로 시작 (3) 이름 길이 짧은 순 (4) 알파벳
+    # 짧은 이름 우선 — '한' 검색 시 '한켐'(2자)이 '한국가스공사'(6자)보다 위로.
+    hits.sort(key=lambda h: (
+        not h["name"].lower().startswith(q),
+        not h["ticker"].lower().startswith(q),
+        len(h["name"]),
+        h["name"],
+    ))
+    return jsonify(hits[:25])
 
 
 @app.route("/api/ticker/<ticker>")

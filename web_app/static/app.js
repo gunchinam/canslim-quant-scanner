@@ -1197,9 +1197,17 @@ async function _lookupTicker(ticker) {
 
 async function _fetchSuggestions(q, box) {
   try {
-    const p = new URLSearchParams({ q, market: currentMarket });
-    const res = await fetch(`/api/search?${p}`);
-    const hits = await res.json();
+    // 한글이 섞이면 KR 우선, 그 외에는 currentMarket 우선 — 매칭 0건이면 반대 시장도 조회한다.
+    const hasHangul = /[ㄱ-힝]/.test(q);
+    const primary = hasHangul ? 'KR' : currentMarket;
+    const secondary = primary === 'KR' ? 'US' : 'KR';
+    const fetchOne = async (mkt) => {
+      const p = new URLSearchParams({ q, market: mkt });
+      const r = await fetch(`/api/search?${p}`);
+      return await r.json();
+    };
+    let hits = await fetchOne(primary);
+    if (!hits || !hits.length) hits = await fetchOne(secondary);
     if (!hits || !hits.length) { box.style.display = 'none'; return; }
     box.innerHTML = hits.map((h, i) =>
       `<div class="search-suggest-item" data-ticker="${esc(h.ticker)}" data-idx="${i}"

@@ -4,10 +4,18 @@ Flask 웹앱이 이 클래스를 통해 스캔 기능을 호출한다.
 """
 import sys
 import os
+import time
 import threading
 import logging
 import concurrent.futures
 from collections import OrderedDict
+
+# ── 프로세스-전역 VIX 캐시 ────────────────────────────────────────────────
+# KR/US 어댑터가 거의 동시에 생성될 때 ^VIX 를 중복 호출해 429를 자초하던 문제 해결.
+# TTL 5분, 실패 시 한 번 지수 backoff 재시도.
+_VIX_CACHE: dict = {"value": None, "ts": 0.0}
+_VIX_CACHE_LOCK = threading.Lock()
+_VIX_TTL_SEC = 300.0
 
 # 프로젝트 경로 추가 (quant_nexus_v20.py가 있는 디렉토리)
 _BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -74,14 +82,36 @@ class ScanAdapter:
 
         KR/US 모두 ^VIX를 사용한다 — 점수계의 VIX smooth band(12~45)는
         양쪽 시장에 동일하게 적용되며, ^VKOSPI는 Yahoo Finance에서 제거됨.
+
+        프로세스-전역 캐시(TTL 5분) — KR/US 어댑터가 거의 동시에 생성될 때
+        ^VIX 중복 호출로 자초한 429를 막는다. 실패 시 1회 backoff 재시도 후
+        그래도 실패면 직전 캐시값(없으면 20.0)을 반환.
         """
-        try:
-            import yfinance as _yf
-            v = _yf.Ticker("^VIX").history(period="5d")
-            if not v.empty:
-                return float(v["Close"].iloc[-1])
-        except Exception as e:
-            logging.warning("[Adapter] vol index fetch failed (%s): %s", market, e)
+        now = time.time()
+        with _VIX_CACHE_LOCK:
+            cached = _VIX_CACHE["value"]
+            cached_ts = _VIX_CACHE["ts"]
+            if cached is not None and (now - cached_ts) < _VIX_TTL_SEC:
+                return float(cached)
+
+        import yfinance as _yf
+        for attempt in range(2):
+            try:
+                v = _yf.Ticker("^VIX").history(period="5d")
+                if not v.empty:
+                    val = float(v["Close"].iloc[-1])
+                    with _VIX_CACHE_LOCK:
+                        _VIX_CACHE["value"] = val
+                        _VIX_CACHE["ts"] = time.time()
+                    return val
+            except Exception as e:
+                if attempt == 0:
+                    time.sleep(2.0)
+                    continue
+                logging.warning("[Adapter] vol index fetch failed (%s): %s", market, e)
+        # 실패 — 직전 캐시값이라도 살아있으면 그걸 반환
+        if cached is not None:
+            return float(cached)
         return 20.0
 
     def _build_sectors(self) -> None:

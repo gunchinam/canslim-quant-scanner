@@ -424,7 +424,8 @@ def _kr_warmup_loop(interval_sec: int = 1800) -> None:
                 try:
                     adapter_cls = _get_scan_adapter_cls()
                     adapter = adapter_cls(market="KR", strategy="BALANCED")
-                    results = adapter.scan_all(max_workers=8)
+                    _wm_workers = _get_config_int("WARMUP_WORKERS", 4, minimum=1, maximum=16)
+                    results = adapter.scan_all(max_workers=_wm_workers)
                     logging.info("KR warm-up done: %d tickers", len(results) if results else 0)
                     if results:
                         try:
@@ -453,7 +454,12 @@ def _start_kr_warmup_once() -> None:
     if os.environ.get("DISABLE_KR_WARMUP", "").strip() in ("1", "true", "yes"):
         logging.info("KR warm-up disabled by env DISABLE_KR_WARMUP")
         return
-    threading.Thread(target=_kr_warmup_loop, daemon=True, name="kr-warmup").start()
+    # KR warmup 을 60초 지연 — US warmup 과 동시에 yfinance 를 두드려
+    # 자가 rate-limit(429) 을 유발하던 문제 회피.
+    def _delayed_kr():
+        time.sleep(60.0)
+        _kr_warmup_loop()
+    threading.Thread(target=_delayed_kr, daemon=True, name="kr-warmup").start()
 
 
 # ── US 캐시 워밍 (서버 기동 시 + 30분 주기) ───────────────────────────────
@@ -526,7 +532,8 @@ def _us_warmup_loop(interval_sec: int = 1800) -> None:
                     logging.info("US warm-up started (slow-refresh)")
                     adapter_cls = _get_scan_adapter_cls()
                     adapter = adapter_cls(market="US", strategy="BALANCED")
-                    results = adapter.scan_all(max_workers=8)
+                    _wm_workers = _get_config_int("WARMUP_WORKERS", 4, minimum=1, maximum=16)
+                    results = adapter.scan_all(max_workers=_wm_workers)
                     logging.info("US warm-up done: %d tickers", len(results) if results else 0)
                     if results:
                         try:

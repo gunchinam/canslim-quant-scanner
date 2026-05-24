@@ -66,6 +66,9 @@ if errorlevel 1 (
     echo [run_quant_nexus] 포트 %PORT_CHECK%이 이미 사용 중입니다 - 기존 인스턴스에 연결합니다.
     echo [run_quant_nexus] 다른 포트로 띄우려면 ^"set PORT=5001^" 후 재실행하세요.
     start http://localhost:%PORT_CHECK%
+    echo.
+    echo Press any key to close this window...
+    pause >nul
     popd
     endlocal
     exit /b 0
@@ -76,12 +79,14 @@ start /b cmd /c "timeout /t 2 >nul && start http://localhost:%PORT_CHECK%"
 %PYEXE% "%PROJ_DIR%web_app\app.py" %*
 set "RC=%ERRORLEVEL%"
 
+echo.
 if not "%RC%"=="0" (
-    echo.
     echo [run_quant_nexus] Exited with code %RC%.
-    echo Press any key to close...
-    pause >nul
+) else (
+    echo [run_quant_nexus] Server stopped normally.
 )
+echo Press any key to close...
+pause >nul
 
 popd
 endlocal

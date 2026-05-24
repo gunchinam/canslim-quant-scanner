@@ -4152,44 +4152,74 @@ async function captureDetail() {
   }
 
   function render(ticker, points) {
+    // 유효 포인트가 2개 미만이면 미리보기 자체를 띄우지 않음
+    const valid = (points || []).filter(p => p && p.score != null && p.date);
+    if (valid.length < 2) {
+      if (tip) tip.classList.remove('show');
+      return;
+    }
     const t = ensureTip();
     // .show 추가 전에 마지막 마우스 위치로 선배치 — 첫 hover 시 (0,0) 노출 방지
     if (lastEv) position(lastEv);
     // 회사정보 팝업과 동시에 뜨면 가려져 보임 → sparkline 표시 시 팝업 즉시 숨김
     try { hideStockPopup(); } catch (_) {}
-    const scores = (points || []).map(p => p.score).filter(s => s != null);
-    if (scores.length < 2) {
-      // 1포인트뿐이면 가짜 라인을 그리지 말고 안내만 표시 (오늘 점수만 큰 글씨로)
-      const todayScore = scores.length === 1 ? Math.round(scores[0]) : null;
-      t.querySelector('.hst-ticker').textContent = ticker;
-      t.querySelector('.hst-delta').textContent  = todayScore != null ? `${todayScore}점` : '';
-      t.querySelector('.hst-delta').style.color  = 'var(--text-secondary, #7B8AAB)';
-      t.querySelector('.hst-svg').innerHTML      = '';
-      t.querySelector('.hst-meta').textContent   = '추이 데이터 누적 중 (스냅샷 2일 이상 필요)';
-      t.classList.add('show');
-      return;
-    }
+
+    const scores = valid.map(p => p.score);
     const W = 220, H = 56, PAD = 4;
     const minS = Math.min(...scores), maxS = Math.max(...scores);
     const range = maxS - minS || 1;
     const toX = i => PAD + (i / (scores.length - 1)) * (W - PAD * 2);
     const toY = s => H - PAD - ((s - minS) / range) * (H - PAD * 2);
-    const pts = scores.map((s, i) => `${toX(i).toFixed(1)},${toY(s).toFixed(1)}`).join(' ');
-    const areaPts = `${PAD.toFixed(1)},${H} ${pts} ${(W-PAD).toFixed(1)},${H}`;
+
+    // 날짜 연속성 검사 — 인접 포인트 사이가 1일 초과면 끊긴 구간(=점선 처리)
+    const dayOf = (d) => {
+      const [y, m, dd] = d.split('-').map(Number);
+      return Date.UTC(y, m - 1, dd) / 86400000;
+    };
+    const segSolid = [];   // 연속 구간 polyline 들
+    const segDash  = [];   // 결손 구간 polyline 들
+    let cur = [[toX(0), toY(scores[0])]];
+    for (let i = 1; i < valid.length; i++) {
+      const gap = dayOf(valid[i].date) - dayOf(valid[i - 1].date);
+      const px = [toX(i), toY(scores[i])];
+      if (gap <= 1) {
+        cur.push(px);
+      } else {
+        // 끊김 — 직전 점과 현재 점을 점선으로 잇고, 새 연속 구간 시작
+        if (cur.length >= 2) segSolid.push(cur);
+        segDash.push([cur[cur.length - 1], px]);
+        cur = [px];
+      }
+    }
+    if (cur.length >= 2) segSolid.push(cur);
+
+    const fmtSeg = (seg) => seg.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+    const allPtsStr = valid.map((_, i) => `${toX(i).toFixed(1)},${toY(scores[i]).toFixed(1)}`).join(' ');
+    const areaPts = `${PAD.toFixed(1)},${H} ${allPtsStr} ${(W-PAD).toFixed(1)},${H}`;
+
     const first = scores[0], last = scores[scores.length - 1];
     const delta = last - first;
     const up = delta >= 0;
     const color = up ? 'var(--success, #00C073)' : 'var(--destructive, #F04452)';
     const fillId = `hst-grad-${up ? 'u' : 'd'}`;
 
-    const dateFirst = points.find(p => p.score != null)?.date || '';
-    const dateLast  = [...points].reverse().find(p => p.score != null)?.date || '';
+    const dateFirst = valid[0].date;
+    const dateLast  = valid[valid.length - 1].date;
     const sign = up ? '+' : '';
+    const gapCount = segDash.length;
 
     t.querySelector('.hst-ticker').textContent = ticker;
     const dEl = t.querySelector('.hst-delta');
     dEl.textContent = `${sign}${delta.toFixed(1)}pt`;
     dEl.style.color = color;
+
+    const solidSvg = segSolid.map(seg =>
+      `<polyline points="${fmtSeg(seg)}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`
+    ).join('');
+    const dashSvg = segDash.map(seg =>
+      `<polyline points="${fmtSeg(seg)}" fill="none" stroke="${color}" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="3 3" opacity="0.55"/>`
+    ).join('');
+
     t.querySelector('.hst-svg').innerHTML = `
       <defs>
         <linearGradient id="${fillId}" x1="0" y1="0" x2="0" y2="1">
@@ -4197,11 +4227,14 @@ async function captureDetail() {
           <stop offset="100%" stop-color="${up ? '#00C073' : '#F04452'}" stop-opacity="0"/>
         </linearGradient>
       </defs>
-      <polygon points="${areaPts}" fill="url(#${fillId})"/>
-      <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <polygon points="${areaPts}" fill="url(#${fillId})" opacity="0.7"/>
+      ${dashSvg}
+      ${solidSvg}
       <circle cx="${toX(scores.length-1).toFixed(1)}" cy="${toY(last).toFixed(1)}" r="2.8" fill="${color}"/>`;
     t.querySelector('.hst-meta').textContent =
-      `${dateFirst} ~ ${dateLast} · ${scores.length}일 · ${Math.round(last)}점`;
+      gapCount > 0
+        ? `${dateFirst} ~ ${dateLast} · ${scores.length}일 (${gapCount}곳 결손) · ${Math.round(last)}점`
+        : `${dateFirst} ~ ${dateLast} · ${scores.length}일 · ${Math.round(last)}점`;
     t.classList.add('show');
   }
 

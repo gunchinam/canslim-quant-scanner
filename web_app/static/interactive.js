@@ -53,15 +53,8 @@
    * CSS transition 을 활용하므로 0% 세팅 후 rAF 로 목표 설정.
    */
   function animateBar(barEl, targetPct) {
-    if (!barEl || prefersReducedMotion()) return;
-    barEl.style.transition = 'none';
-    barEl.style.width = '0%';
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        barEl.style.transition = 'width 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)';
-        barEl.style.width = targetPct + '%';
-      });
-    });
+    // 점수 차오르는 애니메이션 제거 — 최종 너비 그대로 표시
+    return;
   }
 
   /**

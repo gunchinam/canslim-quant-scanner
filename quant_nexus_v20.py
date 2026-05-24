@@ -3311,6 +3311,16 @@ class QuantNexusApp:
                 if ts and (datetime.now() - ts).total_seconds() < 43200:
                     self._naver_target_cache = data
                     self._naver_target_meta = data.get('_meta', {}) or {}
+            except (pickle.UnpicklingError, EOFError, AttributeError, ImportError, ValueError) as e:
+                # WS-004: 손상 캐시 자가복구 — .corrupt 백업 후 빈 dict로 재시작
+                try:
+                    bak = self._naver_cache_path + '.corrupt'
+                    os.replace(self._naver_cache_path, bak)
+                    logging.warning("[CacheRepair] naver target cache corrupt → quarantined to %s (%s)", bak, e)
+                except Exception:
+                    logging.warning("[CacheRepair] naver target cache corrupt, quarantine failed: %s", e)
+                self._naver_target_cache = {}
+                self._naver_target_meta = {}
             except Exception:
                 pass
 
@@ -3397,6 +3407,15 @@ class QuantNexusApp:
                 if (ts and (datetime.now() - ts).total_seconds() < 43200
                         and schema == self._NAVER_FUND_SCHEMA):
                     self._naver_fund_cache = data
+            except (pickle.UnpicklingError, EOFError, AttributeError, ImportError, ValueError) as e:
+                # WS-004: 손상 캐시 자가복구
+                try:
+                    bak = self._naver_fund_cache_path + '.corrupt'
+                    os.replace(self._naver_fund_cache_path, bak)
+                    logging.warning("[CacheRepair] naver fund cache corrupt → quarantined to %s (%s)", bak, e)
+                except Exception:
+                    logging.warning("[CacheRepair] naver fund cache corrupt, quarantine failed: %s", e)
+                self._naver_fund_cache = {}
             except Exception:
                 pass
 

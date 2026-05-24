@@ -27,6 +27,16 @@ if _BASE not in sys.path:
 # Windows에서 tkinter는 import만으로 GUI를 띄우지 않음 — 안전하게 import 가능
 import quant_nexus_v20 as _qn
 from speculative_themes import apply_speculative_correction, apply_to_row
+try:
+    # web_app 디렉토리 보장 (engine_adapter 가 외부에서 import 될 때 대비)
+    _WEB_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+    if _WEB_APP_DIR not in sys.path:
+        sys.path.insert(0, _WEB_APP_DIR)
+    from symbol_alias import filter_symbols as _filter_symbols  # type: ignore
+except Exception as _e:  # pragma: no cover
+    logging.warning("[Adapter] symbol_alias import failed → DELISTED filter disabled: %s", _e)
+    def _filter_symbols(xs):  # fallback no-op
+        return list(xs)
 
 
 class ScanAdapter:
@@ -127,7 +137,8 @@ class ScanAdapter:
         sub_kr = getattr(self, 'us_sector_labels_kr', {}) if self._market != "KR" else {}
         for cat_data in raw.values():
             for subcat, tickers in cat_data.items():
-                self._sectors[sub_kr.get(subcat, subcat)] = tickers
+                # normalize aliases (FB→META) + drop DELISTED (ATVI/TWTR/VMW/…)
+                self._sectors[sub_kr.get(subcat, subcat)] = _filter_symbols(list(tickers))
 
     # ── QuantNexusApp이 사용하는 메서드 (tkinter 콜백 대체) ──────────────
 

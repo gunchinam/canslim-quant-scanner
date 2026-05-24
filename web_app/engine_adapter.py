@@ -17,6 +17,7 @@ if _BASE not in sys.path:
 # quant_nexus_v20 import
 # Windows에서 tkinter는 import만으로 GUI를 띄우지 않음 — 안전하게 import 가능
 import quant_nexus_v20 as _qn
+from speculative_themes import apply_speculative_correction, apply_to_row
 
 
 class ScanAdapter:
@@ -147,10 +148,11 @@ class ScanAdapter:
         if prefer_cache:
             cached = self.cache.get(f"{ticker}__{self._scan_strategy}", max_age_minutes=60 * 24 * 7)
             if cached:
-                return cached
+                return apply_to_row(cached)
             if cache_only:
                 return None
-        return _qn.QuantNexusApp._analyze_ticker(self, ticker)
+        result = _qn.QuantNexusApp._analyze_ticker(self, ticker)
+        return apply_to_row(result) if result else result
 
     def scan_sector(self, sector: str, *, max_workers: int = int(os.environ.get("SCAN_WORKERS", "4")), prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
         """특정 섹터 종목을 병렬 분석 후 TotalScore 내림차순 반환."""
@@ -170,6 +172,7 @@ class ScanAdapter:
                 except Exception as e:
                     logging.error("scan_sector error: %s", e)
         self._attach_sector_residual(results)
+        apply_speculative_correction(results)
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         return results
 
@@ -200,6 +203,7 @@ class ScanAdapter:
                 except Exception as e:
                     logging.error("scan_all [%s] error: %s", ticker, e)
         self._attach_sector_residual(results)
+        apply_speculative_correction(results)
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         return results
 

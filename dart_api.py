@@ -28,8 +28,23 @@ except Exception:
 _BASE = "https://opendart.fss.or.kr/api"
 
 
+_CONFIG_JSON_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+
+
 def _key() -> str:
-    return os.environ.get("DART_API_KEY", "").strip()
+    k = os.environ.get("DART_API_KEY", "").strip()
+    if k:
+        return k
+    # config.json 폴백 (설정 UI 제거 후에도 키 자동 로드)
+    try:
+        with open(_CONFIG_JSON_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        k = (data.get("DART_API_KEY") or "").strip()
+        if k:
+            os.environ["DART_API_KEY"] = k
+        return k
+    except (OSError, json.JSONDecodeError):
+        return ""
 
 
 def is_available() -> bool:

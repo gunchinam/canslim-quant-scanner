@@ -19,6 +19,20 @@ _ENV_FALLBACKS = (
     os.path.join(os.path.dirname(__file__), ".env"),
     r"D:\Download\scalping_final\.env",
 )
+_CONFIG_JSON_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+
+
+def _load_from_config_json() -> tuple[str, str]:
+    """config.json에서 NAVER 키를 직접 로드 (apply_to_environ 미호출 환경 대비)."""
+    try:
+        with open(_CONFIG_JSON_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return (
+            (data.get("NAVER_CLIENT_ID") or "").strip(),
+            (data.get("NAVER_CLIENT_SECRET") or "").strip(),
+        )
+    except (OSError, json.JSONDecodeError):
+        return "", ""
 
 POSITIVE_KO = {
     "호재", "상승", "급등", "실적개선", "최고치", "성장", "이익", "매수",
@@ -71,6 +85,16 @@ def _load_env() -> tuple[str, str]:
     cid = os.environ.get("NAVER_CLIENT_ID", "").strip()
     sec = os.environ.get("NAVER_CLIENT_SECRET", "").strip()
     if cid and sec:
+        return cid, sec
+    # config.json 폴백 (web 설정 UI 제거 후에도 키 자동 로드)
+    c_cid, c_sec = _load_from_config_json()
+    if not cid:
+        cid = c_cid
+    if not sec:
+        sec = c_sec
+    if cid and sec:
+        os.environ["NAVER_CLIENT_ID"] = cid
+        os.environ["NAVER_CLIENT_SECRET"] = sec
         return cid, sec
     for path in _ENV_FALLBACKS:
         if not os.path.isfile(path):

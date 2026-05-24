@@ -4387,8 +4387,22 @@ def _bucket(d: dict) -> str:
     return raw
 
 
+_SPECULATIVE_PHRASES = (
+    "내러티브로 움직이는 테마주 — 점수보다 변동성이 먼저다.",
+    "상용 매출 미미. 차트 신호의 의미가 평소보다 약하다.",
+    "스토리 베팅 구간 — 분할 진입·손절선 사전 고지가 생명.",
+    "기술 점수 그대로 믿지 말 것. 호재 한 줄에 30% 가는 종목군.",
+    "수익 모델 미성숙 단계. 포지션은 평소의 절반 이하로.",
+)
+
+
 def get_one_liner(d: dict) -> str:
     """종목 dict에서 한줄평을 결정해 반환한다."""
+    if d.get("IsSpeculativeTheme"):
+        ticker = (d.get("Ticker") or "").upper()
+        rot = _rotation_salt()
+        seed = hashlib.md5(f"{ticker}|spec|{rot}".encode("utf-8")).hexdigest()
+        return _SPECULATIVE_PHRASES[int(seed, 16) % len(_SPECULATIVE_PHRASES)]
     bucket = _bucket(d)
     phrases = _PHRASES.get(bucket) or _PHRASES["NEUTRAL"]
     ticker = (d.get("Ticker") or "").upper()

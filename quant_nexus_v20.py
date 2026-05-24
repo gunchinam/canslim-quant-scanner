@@ -79,6 +79,7 @@ from datetime import datetime, timedelta
 import pickle
 import logging
 import time
+import random
 import traceback
 import hashlib
 import json
@@ -312,12 +313,77 @@ except ImportError:
     sys.exit(1)
 
 
+_FALLBACK_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+)
+
+
+def _fetch_yahoo_chart_history(ticker: str) -> pd.DataFrame | None:
+    """Direct Yahoo chart API — bypasses yfinance library's rate-limited path."""
+    sym = ticker.upper().replace(".", "-")
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}"
+        "?range=2y&interval=1d&includePrePost=false&events=div%2Csplits"
+    )
+    last_err = None
+    for attempt, timeout_sec in enumerate((10, 15)):
+        try:
+            req = urllib.request.Request(url, headers={
+                "User-Agent": _FALLBACK_UA,
+                "Accept": "application/json,*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+            })
+            with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+                payload = json.loads(resp.read().decode("utf-8", errors="ignore"))
+            result = (payload.get("chart") or {}).get("result") or []
+            if not result:
+                return None
+            r0 = result[0]
+            ts = r0.get("timestamp") or []
+            indicators = r0.get("indicators") or {}
+            quote_list = indicators.get("quote") or [{}]
+            quote = quote_list[0] if quote_list else {}
+            adj_list = indicators.get("adjclose") or [{}]
+            adj = adj_list[0].get("adjclose") if adj_list else None
+            if not ts or not quote.get("close"):
+                return None
+            idx = pd.to_datetime(ts, unit="s", utc=True).tz_convert(None).normalize()
+            df = pd.DataFrame({
+                "Open":   quote.get("open")   or [None] * len(ts),
+                "High":   quote.get("high")   or [None] * len(ts),
+                "Low":    quote.get("low")    or [None] * len(ts),
+                "Close":  quote.get("close")  or [None] * len(ts),
+                "Volume": quote.get("volume") or [None] * len(ts),
+            }, index=idx)
+            if adj and len(adj) == len(df):
+                df["Adj Close"] = adj
+            for col in ["Open", "High", "Low", "Close", "Volume"]:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+            df = df.dropna(subset=["Close"])
+            if df.empty or len(df) < 30:
+                return None
+            return df
+        except Exception as e:
+            last_err = e
+            if attempt == 0:
+                time.sleep(0.8 + random.random() * 0.7)
+                continue
+            break
+    logging.warning("[yahoo-chart] history failed %s: %s", ticker, last_err)
+    return None
+
+
 def _fetch_stooq_history(ticker: str) -> pd.DataFrame | None:
-    """Fetch daily US price history from Stooq as a Yahoo fallback."""
+    """Fetch daily US price history from Stooq (secondary fallback)."""
+    sym = ticker.upper().replace(".", "-")
+    url = f"https://stooq.com/q/d/l/?s={sym.lower()}.us&i=d"
     try:
-        sym = ticker.upper().replace(".", "-")
-        url = f"https://stooq.com/q/d/l/?s={sym.lower()}.us&i=d"
-        with urllib.request.urlopen(url, timeout=5) as resp:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": _FALLBACK_UA,
+            "Accept": "text/csv,text/plain,*/*",
+        })
+        with urllib.request.urlopen(req, timeout=8) as resp:
             raw = resp.read().decode("utf-8", errors="ignore")
         if not raw or "Date,Open,High,Low,Close,Volume" not in raw:
             return None
@@ -339,6 +405,14 @@ def _fetch_stooq_history(ticker: str) -> pd.DataFrame | None:
     except Exception as e:
         logging.warning("[stooq] history failed %s: %s", ticker, e)
         return None
+
+
+def _fetch_us_fallback_history(ticker: str) -> pd.DataFrame | None:
+    """US 폴백 체인: Yahoo chart API → stooq."""
+    df = _fetch_yahoo_chart_history(ticker)
+    if df is not None:
+        return df
+    return _fetch_stooq_history(ticker)
 
 # ============================================================
 # Toss Design System 컬러 팔레트
@@ -4667,11 +4741,16 @@ class QuantNexusApp:
             except Exception:
                 _YFRL = Exception
             is_us = self._scan_market == "US"
-            for _attempt in range(1):
+            _yf_rate_limited = False
+            for _attempt in range(2):
                 try:
                     hist = stock.history(period="2y")
                     break
                 except _YFRL:
+                    _yf_rate_limited = True
+                    if _attempt == 0:
+                        time.sleep(2.0 + random.random() * 2.0)
+                        continue
                     logging.warning("[yf] rate-limited %s (US fast path)", ticker)
                     break
                 except Exception as _e:
@@ -4686,7 +4765,7 @@ class QuantNexusApp:
                     return stale
                 if is_us:
                     try:
-                        hist = _fetch_stooq_history(ticker)
+                        hist = _fetch_us_fallback_history(ticker)
                     except Exception:
                         hist = None
                 else:

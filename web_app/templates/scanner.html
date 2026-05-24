@@ -594,6 +594,19 @@ td.score-col {
 .name-cell { max-width: 180px; }
 .stock-name { font-weight: 600; font-size: 14px; display: block; overflow: hidden; text-overflow: ellipsis; }
 .stock-code { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
+.theme-warn {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  margin-left: 4px;
+  border-radius: 4px;
+  background: #FFF3CD;
+  color: #856404;
+  border: 1px solid #FFE69C;
+  vertical-align: middle;
+  cursor: help;
+}
 .stock-desc { font-size: 11px; color: var(--text-secondary); margin-top: 2px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
 /* === Silkscreen Mini Poster Chip (한줄평) === */
 .stock-oneliner {
@@ -1690,6 +1703,9 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   }
   .search-icon { left: 12px; }
   #btn-export, #btn-share, .topbar-date, a[href="/settings"] { display: none; }
+  #btn-capture-list { padding: 0; width: 44px; min-width: 44px; }
+  #btn-capture-list svg { width: 16px; height: 16px; }
+  #btn-capture-list .capture-label { display: none; }
   .btn-scan {
     min-width: 44px;
     height: 44px;
@@ -1707,10 +1723,10 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   .macro-meta { display: none; }
 
   .stats-bar {
-    padding: 8px 12px;
+    padding: 6px 8px;
     height: auto;
     flex-wrap: wrap;
-    gap: 10px 0;
+    gap: 6px 0;
   }
   .stat-item { padding: 0 10px 0 0; margin-right: 10px; }
   .stat-label { font-size: 12px; }
@@ -1759,7 +1775,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   }
   .sidebar-settings-link:hover { background: var(--surface-subtle); }
 
-  .main { padding: 12px; overflow-y: auto; }
+  .main { padding: 6px 4px; overflow-y: auto; }
 
   .stock-table-wrap { display: none; }
   .stock-table { min-width: 640px; }
@@ -1776,8 +1792,8 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   .stock-card {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 16px;
+    gap: 6px;
+    padding: 10px 12px;
     border-bottom: 1px solid var(--border);
     cursor: pointer;
     transition: background var(--duration-fast), transform var(--duration-fast);
@@ -2222,6 +2238,12 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         </svg>
         내보내기
       </button>
+      <button id="btn-capture-list" class="btn-scan" style="background:#7C3AED;" onclick="captureStockList()" title="현재 종목 목록을 이미지로 캡쳐">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <span class="capture-label">목록 캡쳐</span>
+      </button>
       <button id="btn-share" class="btn-scan" style="background:#00C073;" onclick="generateShareCard()" title="선택 종목 공유 카드 생성">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
@@ -2262,7 +2284,6 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
     <div class="stat-item" style="border-right:none;flex:1;justify-content:flex-end;">
       <div id="filter-chips" class="filter-chips">
         <button class="chip active" data-filter="all">전체</button>
-        <button class="chip" data-filter="watchlist">⭐ 워치리스트 <span class="chip-count" id="chip-watch-count">0</span></button>
         <button class="chip" data-filter="entry_green" title="진입점수 70점 이상 — 6가지 기술 신호(RSI·볼린저밴드·VWAP·52주 위치·MACD·시장 국면)가 모두 양호한 종목">🟢 진입좋음</button>
         <button class="chip" data-filter="strong" title="종합점수 60점 이상 — S등급(75+)·A등급(60+) 해당 종목만 표시">🔥 S·A등급</button>
         <button class="chip" data-filter="near_high" title="52주 신고가에 근접한 종목 — 추세 돌파 후보">📈 신고가</button>
@@ -2288,17 +2309,11 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
     <!-- Main: Stock Table -->
     <main class="main">
-      <div class="view-toggle-bar" role="tablist" aria-label="결과 보기 방식">
-        <button type="button" id="view-mode-table"   class="vmt-btn active" role="tab" aria-selected="true"  onclick="setViewMode('table')">📋 테이블</button>
-        <button type="button" id="view-mode-heatmap" class="vmt-btn"        role="tab" aria-selected="false" onclick="setViewMode('heatmap')">🔥 히트맵</button>
-      </div>
-      <div id="heatmap-view" class="heatmap-view" hidden></div>
       <div class="stock-table-wrap">
         <table class="stock-table">
           <thead>
             <tr>
               <th style="width:32px;" class="center"><input type="checkbox" id="select-all-cb" onclick="toggleSelectAll()" title="전체 선택/해제" style="cursor:pointer;width:16px;height:16px;accent-color:#3182F6;"></th>
-              <th style="width:32px;" class="center" title="클릭으로 워치리스트 추가/제거"></th>
               <th style="width:44px;" class="center">#</th>
               <th>종목</th>
               <th class="desc-col">설명</th>
@@ -2315,7 +2330,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
             </tr>
           </thead>
           <tbody id="stock-list">
-            <tr><td colspan="15" class="state-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</td></tr>
+            <tr><td colspan="14" class="state-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</td></tr>
           </tbody>
         </table>
       </div>
@@ -2939,174 +2954,6 @@ document.addEventListener('click', function(e) {
 .site-footer a { color: var(--brand); text-decoration: none; }
 .site-footer a:hover { text-decoration: underline; }
 @media (max-width: 768px) { .site-footer { padding: 12px 16px 24px; font-size: 10.5px; } }
-
-/* ── View Mode Toggle (테이블 / 히트맵) ───────────────────────── */
-.view-toggle-bar {
-  display: inline-flex;
-  gap: 4px;
-  margin: 12px 16px 0;
-  padding: 3px;
-  background: var(--surface-subtle);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  width: fit-content;
-}
-.vmt-btn {
-  appearance: none;
-  border: none;
-  background: transparent;
-  padding: 6px 14px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  border-radius: 7px;
-  cursor: pointer;
-  transition: background 140ms var(--ease-default), color 140ms var(--ease-default);
-}
-.vmt-btn:hover { color: var(--text-primary); }
-.vmt-btn.active {
-  background: var(--card);
-  color: var(--brand);
-  box-shadow: var(--shadow-button);
-}
-@media (max-width: 768px) {
-  .view-toggle-bar {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    width: auto;
-    margin: 10px 12px 0;
-    padding: 4px;
-    gap: 4px;
-  }
-  .vmt-btn {
-    padding: 9px 0;
-    font-size: 13px;
-    text-align: center;
-  }
-}
-
-/* ── Heatmap View ──────────────────────────────────────────────
- * 스캔 결과를 격자 타일로 시각화. 배경 = 등락(±), 채도 = 점수.
- * data-ticker 보존 → 호버 스파크라인 그대로 작동.
- */
-.heatmap-view {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 6px;
-  padding: 12px 16px 16px;
-  background: linear-gradient(180deg, #0A0E1A 0%, #0E1322 100%);
-  border-radius: 12px;
-  margin: 8px 16px 0;
-  min-height: 320px;
-}
-.heatmap-view[hidden] { display: none; }
-.hm-empty {
-  grid-column: 1 / -1;
-  text-align: center;
-  color: #7B8AAB;
-  font-size: 13px;
-  padding: 40px 0;
-}
-.hm-tile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  aspect-ratio: 1 / 0.78;
-  padding: 8px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  color: #FFFFFF;
-  font-family: -apple-system, 'Pretendard', system-ui, sans-serif;
-  overflow: hidden;
-  transition: transform 160ms var(--ease-default), box-shadow 160ms var(--ease-default), filter 160ms var(--ease-default);
-  border: 1px solid rgba(255,255,255,0.06);
-  isolation: isolate;
-}
-.hm-tile::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: var(--tile-bg, #2B3243);
-  z-index: -1;
-}
-.hm-tile:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.10), 0 0 18px var(--tile-glow, rgba(120,180,255,0.15));
-  filter: brightness(1.08);
-}
-.hm-tile.up   { --tile-bg: linear-gradient(135deg, #C92133 0%, #7A1422 100%); --tile-glow: rgba(255,99,99,0.35); }
-.hm-tile.up2  { --tile-bg: linear-gradient(135deg, #FF3A57 0%, #B11F33 100%); --tile-glow: rgba(255,99,99,0.55); }
-.hm-tile.up3  { --tile-bg: linear-gradient(135deg, #FF5571 0%, #D02544 100%); --tile-glow: rgba(255,140,140,0.65); }
-.hm-tile.down  { --tile-bg: linear-gradient(135deg, #1E4FA8 0%, #0E2A60 100%); --tile-glow: rgba(99,160,255,0.35); }
-.hm-tile.down2 { --tile-bg: linear-gradient(135deg, #2D6EE0 0%, #154090 100%); --tile-glow: rgba(99,160,255,0.55); }
-.hm-tile.down3 { --tile-bg: linear-gradient(135deg, #3D86F0 0%, #1F58B5 100%); --tile-glow: rgba(160,200,255,0.65); }
-.hm-tile.flat  { --tile-bg: linear-gradient(135deg, #3A4256 0%, #232A3B 100%); --tile-glow: rgba(120,180,255,0.20); }
-.hm-tile-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.hm-tile-rank {
-  font-size: 10px; font-weight: 800;
-  background: rgba(0,0,0,0.32);
-  padding: 2px 6px; border-radius: 4px;
-  letter-spacing: 0.3px;
-  color: rgba(255,255,255,0.92);
-}
-.hm-tile-score {
-  font-size: 11px; font-weight: 800;
-  color: rgba(255,255,255,0.95);
-  font-variant-numeric: tabular-nums;
-}
-.hm-tile-name {
-  font-size: 12.5px; font-weight: 700;
-  line-height: 1.25;
-  margin-top: 6px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
-}
-.hm-tile-ticker { font-size: 10px; color: rgba(255,255,255,0.65); font-weight: 600; margin-top: 2px; }
-.hm-tile-chg {
-  font-size: 14px; font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
-}
-@media (max-width: 768px) {
-  .heatmap-view {
-    /* 모바일은 명시적 2열 고정 — auto-fill 시 타일이 너무 작아짐 */
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    padding: 12px 12px 20px;
-    margin: 6px 12px 0;
-    min-height: auto;
-  }
-  .hm-tile {
-    padding: 10px 12px;
-    aspect-ratio: 1 / 0.85;
-    border-radius: 10px;
-  }
-  .hm-tile-top { margin-bottom: 4px; }
-  .hm-tile-rank  { font-size: 11px; padding: 3px 8px; }
-  .hm-tile-score { font-size: 13px; }
-  .hm-tile-name {
-    font-size: 14px;
-    line-height: 1.3;
-    margin-top: 4px;
-    -webkit-line-clamp: 2;
-  }
-  .hm-tile-ticker { font-size: 11px; margin-top: 3px; }
-  .hm-tile-chg   { font-size: 17px; margin-top: 4px; }
-  .hm-tile:active {
-    transform: scale(0.97);
-    filter: brightness(1.12);
-  }
-}
-@media (max-width: 360px) {
-  /* 초소형 화면에서도 2열 유지하되 패딩 축소 */
-  .heatmap-view { padding: 10px 10px 16px; margin: 6px 10px 0; gap: 6px; }
-  .hm-tile { padding: 8px 10px; }
-  .hm-tile-name { font-size: 13px; }
-  .hm-tile-chg  { font-size: 15px; }
-}
 
 /* ── Hover Sparkline Tooltip ───────────────────────────────────
  * 종목 행/카드에 마우스 오버 시 표시되는 30일 점수 추이 미니차트.

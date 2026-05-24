@@ -853,15 +853,13 @@ function renderStockRow(stock, rank) {
   // TopReason 태그 HTML
   const reasonHtml = _renderReasonTags(stock.TopReason);
 
-  const starred = _watchlist.has(stock.Ticker);
   const checked = _selectedStocks.has(stock.Ticker);
   return `
 <tr onclick="openDetail('${esc(stock.Ticker)}')" data-ticker="${esc(stock.Ticker)}" style="cursor:pointer;">
   <td class="center"><input type="checkbox" ${checked ? 'checked' : ''} onclick="toggleSelectStock('${esc(stock.Ticker)}', event)" style="cursor:pointer;width:16px;height:16px;accent-color:#3182F6;"></td>
-  <td class="center"><button class="star-btn${starred ? ' starred' : ''}" onclick="toggleWatchlist('${esc(stock.Ticker)}', event)" title="${starred ? '워치리스트에서 제거' : '워치리스트에 추가'}">${starred ? '★' : '☆'}</button></td>
   <td class="center"><span class="rank-cell ${rankClass}">${rank}</span></td>
   <td class="name-cell" onmouseenter="showStockPopup('${esc(stock.Ticker)}', event)" onmouseleave="hideStockPopup()">
-    <span class="stock-name">${esc(stock.Name || stock.Ticker)}</span>
+    <span class="stock-name">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}</span>
     <span class="stock-code">${esc(stock.Ticker)}</span>
   </td>
   <td class="desc-cell">${esc(stock.Desc || '')}</td>
@@ -902,25 +900,13 @@ function renderMobileCard(stock, rank) {
   const chgPct   = (dayChg * 100).toFixed(2);
   const chgClass = dayChg > 0 ? 'chg-up' : dayChg < 0 ? 'chg-down' : 'chg-flat';
   const chgSign  = dayChg > 0 ? '+' : '';
-  const starred  = _watchlist.has(stock.Ticker);
-  const olTag    = stock.OneLinerTag || '';
-  const olText   = stock.OneLiner || '';
-
-  const olHtml = olText
-    ? `<div class="stock-oneliner stock-card-oneliner" data-tag="${esc(olTag)}">${esc(olText)}</div>`
-    : '';
-
   return `
 <div class="stock-card" data-ticker="${esc(stock.Ticker)}" onclick="openDetail('${esc(stock.Ticker)}')">
   <div class="stock-card-row1">
     <div class="stock-card-main">
       <span class="stock-card-rank">${rank}</span>
-      <button class="star-btn${starred ? ' starred' : ''}"
-              onclick="toggleWatchlist('${esc(stock.Ticker)}', event)"
-              aria-label="${starred ? '워치리스트에서 제거' : '워치리스트에 추가'}"
-              title="${starred ? '워치리스트에서 제거' : '워치리스트에 추가'}">${starred ? '★' : '☆'}</button>
       <div class="stock-card-name">
-        <span class="stock-card-name-main">${esc(stock.Name || stock.Ticker)}</span>
+        <span class="stock-card-name-main">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠</span>` : ''}</span>
         <span class="stock-card-ticker">${esc(stock.Ticker)}${stock.Sector ? ` · ${esc(stock.Sector)}` : ''}</span>
       </div>
     </div>
@@ -929,7 +915,6 @@ function renderMobileCard(stock, rank) {
       <span class="stock-card-chg ${chgClass}">${chgSign}${chgPct}%</span>
     </div>
   </div>
-  ${olHtml}
   <div class="stock-card-row2">
     ${_renderSignalHtml(stock.Signal, stock)}
   </div>
@@ -3862,6 +3847,105 @@ function downloadShareCard() {
   a.click();
 }
 
+// ── 종목 목록 캡쳐 ─────────────────────────────────────────────
+async function captureStockList() {
+  if (typeof html2canvas !== 'function') {
+    alert('html2canvas 라이브러리 로드 실패');
+    return;
+  }
+  // 모바일이면 카드 리스트, 데스크탑이면 테이블 캡쳐
+  const isMobile = window.matchMedia('(max-width: 768px)').matches;
+  const target = isMobile
+    ? document.getElementById('mobile-stock-list')
+    : document.querySelector('.stock-table-wrap');
+  if (!target || target.children.length === 0) {
+    alert('캡쳐할 종목 목록이 없습니다. 먼저 스캔을 실행하세요.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-capture-list');
+  const origText = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '캡쳐 중...'; }
+
+  try {
+    // 클론 후 오프스크린에 렌더 — 라이브 DOM/스크롤 영향 X
+    const stage = document.getElementById('share-card-render') || (() => {
+      const s = document.createElement('div');
+      s.id = 'share-card-render';
+      s.style.cssText = 'position:fixed;left:-99999px;top:0;';
+      document.body.appendChild(s);
+      return s;
+    })();
+    stage.innerHTML = '';
+
+    const clone = target.cloneNode(true);
+    clone.style.maxHeight = 'none';
+    clone.style.overflow = 'visible';
+    clone.style.width = isMobile ? '420px' : Math.max(target.scrollWidth, 1100) + 'px';
+
+    // 헤더 박스(브랜드 + 메타데이터) 추가
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const mkt = currentMarket === 'KR' ? '🇰🇷 한국' : '🇺🇸 미국';
+    const total = (_currentResults || []).length;
+    const sectorLbl = (typeof _currentSector !== 'undefined' && _currentSector) ? _currentSector : '전체';
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'background:#ffffff;padding:0;font-family:-apple-system,Pretendard,Noto Sans KR,system-ui,sans-serif;';
+    wrap.innerHTML = `
+      <div style="background:linear-gradient(135deg,#7C3AED,#3182F6);padding:16px 20px;color:#fff;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div>
+            <div style="font-size:16px;font-weight:800;letter-spacing:-0.4px;">(.)(.) 분석기 — 종목 목록</div>
+            <div style="font-size:11px;opacity:0.85;margin-top:3px;">${mkt} · ${esc(sectorLbl)} · ${dateStr}</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.2);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;">${total}종목</div>
+        </div>
+      </div>
+    `;
+    wrap.appendChild(clone);
+
+    const footer = document.createElement('div');
+    footer.style.cssText = 'padding:10px 16px;background:#F5F6F8;border-top:1px solid #EAEBEE;font-size:10px;color:#8B95A1;text-align:center;';
+    footer.textContent = '본 자료는 투자 참고용이며 투자 판단의 책임은 본인에게 있습니다.';
+    wrap.appendChild(footer);
+
+    stage.appendChild(wrap);
+
+    const canvas = await html2canvas(wrap, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      logging: false,
+      windowWidth: wrap.scrollWidth,
+    });
+    stage.innerHTML = '';
+
+    const dataUrl = canvas.toDataURL('image/png');
+    const fileName = `종목목록_${currentMarket}_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.png`;
+
+    // 공유 모달 재사용
+    const preview = document.getElementById('share-card-preview');
+    const modal = document.getElementById('share-modal');
+    if (preview && modal) {
+      preview.innerHTML = `<img src="${dataUrl}" style="max-width:100%;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.1);">`;
+      preview.dataset.dataUrl = dataUrl;
+      preview.dataset.fileName = fileName;
+      modal.style.display = 'flex';
+    } else {
+      // 모달 없으면 바로 다운로드
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = fileName;
+      a.click();
+    }
+  } catch (err) {
+    alert('캡쳐 실패: ' + (err && err.message ? err.message : err));
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+  }
+}
+
 async function copyShareCard() {
   const dataUrl = document.getElementById('share-card-preview')?.dataset?.dataUrl;
   if (!dataUrl) return;
@@ -4037,6 +4121,7 @@ async function captureDetail() {
   let tip = null;
   let hoverTimer = null;
   let currentTicker = null;
+  let lastEv = null;              // 가장 최근 마우스 이벤트 — 첫 hover 위치 잡기용
 
   function ensureTip() {
     if (tip) return tip;
@@ -4068,12 +4153,19 @@ async function captureDetail() {
 
   function render(ticker, points) {
     const t = ensureTip();
+    // .show 추가 전에 마지막 마우스 위치로 선배치 — 첫 hover 시 (0,0) 노출 방지
+    if (lastEv) position(lastEv);
+    // 회사정보 팝업과 동시에 뜨면 가려져 보임 → sparkline 표시 시 팝업 즉시 숨김
+    try { hideStockPopup(); } catch (_) {}
     const scores = (points || []).map(p => p.score).filter(s => s != null);
     if (scores.length < 2) {
+      // 1포인트뿐이면 가짜 라인을 그리지 말고 안내만 표시 (오늘 점수만 큰 글씨로)
+      const todayScore = scores.length === 1 ? Math.round(scores[0]) : null;
       t.querySelector('.hst-ticker').textContent = ticker;
-      t.querySelector('.hst-delta').textContent  = '';
+      t.querySelector('.hst-delta').textContent  = todayScore != null ? `${todayScore}점` : '';
+      t.querySelector('.hst-delta').style.color  = 'var(--text-secondary, #7B8AAB)';
       t.querySelector('.hst-svg').innerHTML      = '';
-      t.querySelector('.hst-meta').textContent   = '히스토리 부족';
+      t.querySelector('.hst-meta').textContent   = '추이 데이터 누적 중 (스냅샷 2일 이상 필요)';
       t.classList.add('show');
       return;
     }

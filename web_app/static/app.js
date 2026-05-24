@@ -4216,12 +4216,19 @@ async function captureDetail() {
     cache.set(key, 'loading');
     try {
       const res = await fetch(`/api/score-history/${encodeURIComponent(ticker)}?market=${encodeURIComponent(market)}&days=30`);
-      if (!res.ok) { cache.set(key, []); return; }
+      if (!res.ok) {
+        // 실패는 영구캐시하지 않음 — 30초 뒤 재시도 허용
+        cache.delete(key);
+        setTimeout(() => cache.delete(key), 30000);
+        return;
+      }
       const { points } = await res.json();
-      cache.set(key, points || []);
-      if (currentTicker === ticker) render(ticker, points || []);
+      const pts = points || [];
+      cache.set(key, pts);
+      if (currentTicker === ticker) render(ticker, pts);
     } catch (e) {
-      cache.set(key, []);
+      // 네트워크 에러도 재시도 가능하도록 캐시 해제
+      cache.delete(key);
     }
   }
 
@@ -4238,6 +4245,7 @@ async function captureDetail() {
     const ticker = el.getAttribute('data-ticker');
     if (!ticker || ticker === currentTicker) return;
     currentTicker = ticker;
+    lastEv = ev;  // 첫 hover 위치 기록 (mousemove 없이도 위치 잡기)
     clearTimeout(hoverTimer);
     hoverTimer = setTimeout(() => {
       if (currentTicker !== ticker) return;
@@ -4255,6 +4263,7 @@ async function captureDetail() {
   }
 
   function onMove(ev) {
+    lastEv = ev;
     if (!tip || !tip.classList.contains('show')) {
       if (currentTicker) position(ev);
       return;

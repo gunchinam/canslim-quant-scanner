@@ -4806,19 +4806,25 @@ class QuantNexusApp:
                 day_chg = safe_div(cur - prev, prev)
 
             # ── 유동성 체크 (Low Liquidity Gate) ───────────────────
-            # 임계치 상향(2026-05): "관심 없는 종목" 제외 — US $1M→$20M, KR 5억→100억.
-            # EXCLUDE 기준은 그 1/2 (US $10M, KR 50억) 이하 — 스캔에서 아예 제외.
+            # 단위: US 는 USD 거래대금($), KR 은 KRW 거래대금(원) — cur 가 시장별
+            # 호가통화 가격이므로 결과 단위도 그대로 따라간다.
+            # 임계치(2026-05):
+            #   CAP    (저유동 페널티 시작) — US $20M       / KR 200억 원
+            #   EXCLUDE(스캔에서 제외)      — US $10M(CAP½) / KR 100억 원(CAP½)
+            # 단위 혼동을 막기 위해 변수명에 통화 표기.
             avg_vol_20 = float(hist["Volume"].tail(20).mean()) if len(hist) >= 20 else float(hist["Volume"].mean())
-            avg_dollar_vol = avg_vol_20 * cur
             _is_kr = self._scan_market == "KR"
-            _liq_cap_thr = 20_000_000_000 if _is_kr else 20_000_000
-            _liq_exclude_thr = 10_000_000_000 if _is_kr else 10_000_000
-            low_liquidity = avg_dollar_vol < _liq_cap_thr
-            if avg_dollar_vol < _liq_exclude_thr:
+            avg_turnover = avg_vol_20 * cur  # KR: 원, US: 달러
+            avg_dollar_vol = avg_turnover    # (호환용 alias — 기존 변수명 유지)
+            _liq_cap_thr     = 20_000_000_000 if _is_kr else 20_000_000  # KR 200억 / US $20M
+            _liq_exclude_thr = 10_000_000_000 if _is_kr else 10_000_000  # KR 100억 / US $10M
+            low_liquidity = avg_turnover < _liq_cap_thr
+            if avg_turnover < _liq_exclude_thr:
                 # 관심 없는 종목(거래대금 매우 낮음) — 스캔 결과에서 제외
+                _unit = "KRW" if _is_kr else "USD"
                 logging.info(
-                    f"[LiqGate] {ticker} excluded: avg_dollar_vol={avg_dollar_vol:,.0f} "
-                    f"< thr={_liq_exclude_thr:,.0f}"
+                    f"[LiqGate] {ticker} excluded: avg_turnover={avg_turnover:,.0f} {_unit} "
+                    f"< thr={_liq_exclude_thr:,.0f} {_unit}"
                 )
                 return None
 

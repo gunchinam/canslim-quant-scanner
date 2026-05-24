@@ -4153,7 +4153,10 @@ def _raw_bucket(d: dict) -> str:
         # 우량/가치/실적주가 전부 모멘텀으로 뭉개진다(버킷 오분류의 주범).
         if near_h and mom12 >= 30:
             return "BREAKOUT"
-        if eps_acc:
+        # 실적주 라벨은 가속+성장률+단기 가격 컨펌이 모두 있을 때만.
+        # EPS 가속 단독으론 LG전자 같은 테마 상승(기저효과로 EPS 가속 표시)
+        # 종목까지 '성적 잘 받은 놈' 톤으로 잡혀 인과를 잘못 단정한다.
+        if eps_acc and eps_g >= 10 and (mom3 >= 3 or near_h):
             return "EARNINGS_BEAT"
         if 0 < per <= 15 and roe >= 15 and eps_g >= 0:
             return "TRUE_VALUE"
@@ -4213,7 +4216,10 @@ def _raw_bucket(d: dict) -> str:
         return "STRONG_BUY"
 
     # 펀더+가격 결합 — 더 구체적 버킷부터
-    if eps_acc and mom3 >= 3:
+    # EARNINGS_BEAT 게이트: 가속 + 의미 있는 EPS 성장률 + 단기 가격 컨펌.
+    # eps_g 동반 요구로 기저효과만 있는 테마주(LG전자 로봇 모멘텀형)가
+    # 실적주 풀로 빠져 인과를 단정당하는 문제를 차단.
+    if eps_acc and mom3 >= 3 and eps_g >= 10:
         return "EARNINGS_BEAT"
     if leader and score >= 60:
         return "SECTOR_LEADER"
@@ -4242,11 +4248,10 @@ def _raw_bucket(d: dict) -> str:
         return "VALUE_TRAP"
     if op_pct >= 25 and roe >= 18 and eps_g < 15:
         return "CASH_COW"
-    # 실적 급성장(EPS +25%↑)인데 역행 모멘텀이 아니면 → 실적주.
-    # 안 그러면 싼 고성장 회복주가 점수 폴백에서 모멘텀리더로 뭉개져
-    # '왜 좋은지'(실적)가 사라진다. EXPENSIVE_JUSTIFIED/BUBBLE 판정
-    # 뒤라 프리미엄 성장주와 충돌하지 않는다.
-    if eps_g >= 25 and mom12 >= 0:
+    # 실적 급성장(EPS +30%↑) + 분기 가속 동반 + 단기 컨펌이면 → 실적주.
+    # eps_g 단독(기저효과·회계 일회성)만으론 부족. EPSAcceleration 동반을
+    # 필수로 둬서 '진짜 분기 어닝 모멘텀'만 EARNINGS_BEAT 풀에 넣는다.
+    if eps_g >= 30 and eps_acc and mom3 >= 0:
         return "EARNINGS_BEAT"
     # 극단 모멘텀 (12M 100%+) — 위 펀더 버킷에 안 걸린 경우
     if mom12 >= 100:
@@ -4271,8 +4276,11 @@ def _raw_bucket(d: dict) -> str:
     # 폴백을 다양화: 점수·RSI·모멘텀 조합으로 분기
     if score >= 60 and mom12 >= 10:
         return "MOMENTUM_LEADER"
+    # IsLeader(RS Rating ≥ 80) 없이 점수만으로 SECTOR_LEADER 단정 금지.
+    # 풀 멘트가 '섹터 1등' 단정 톤이라 라벨이 사실과 어긋난다.
+    # 모멘텀 미달 + 비-리더 고득점은 STRONG_BUY/DEFENSIVE로 라우팅.
     if score >= 60:
-        return "SECTOR_LEADER"
+        return "STRONG_BUY" if rsi >= 55 else "DEFENSIVE"
     if rsi >= 60 and mom3 >= 3:
         return "MOMENTUM_LEADER"
     if 0 < per <= 20 and roe >= 8:
@@ -4321,7 +4329,8 @@ def _positive_for(d: dict, score: float) -> str:
         return "SECTOR_LEADER"
     if near_h and mom12 >= 30:
         return "BREAKOUT"
-    if eps_acc:
+    # 가속만 보면 테마 상승 종목까지 실적주 풀로 빠진다 → EPS 성장률 동반 필수.
+    if eps_acc and eps_g >= 10:
         return "EARNINGS_BEAT"
     if mom12 >= 20:
         return "MOMENTUM_LEADER"

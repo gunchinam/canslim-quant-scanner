@@ -1794,4 +1794,16 @@ if __name__ == "__main__":
     # allow_unsafe_werkzeug: dev runner(werkzeug)에서 SocketIO 스레드 호환 필요.
     # PRODUCTION=1 환경에서는 gunicorn이 기동하므로 이 분기 자체가 실행되지 않음.
     is_production = os.environ.get("PRODUCTION", "").strip() in ("1", "true", "yes")
-    socketio.run(app, debug=debug, port=port, host=host, allow_unsafe_werkzeug=not is_production)
+    try:
+        socketio.run(app, debug=debug, port=port, host=host, allow_unsafe_werkzeug=not is_production)
+    except OSError as e:
+        # 포트 충돌(WinError 10048 / EADDRINUSE)을 트레이스백 대신 친절 메시지로 처리.
+        # launcher가 사전 체크하지만 race condition / 직접 실행 경로에서 발생할 수 있다.
+        win_err = getattr(e, "winerror", None)
+        if win_err == 10048 or e.errno in (98, 48, 10048):
+            print(f"[app] 포트 {port}이 이미 사용 중입니다. 기존 인스턴스가 실행 중이거나",
+                  "다른 프로그램이 점유 중입니다.", file=sys.stderr)
+            print(f"[app] 다른 포트로 띄우려면: set PORT=5001 && python web_app/app.py",
+                  file=sys.stderr)
+            sys.exit(2)
+        raise

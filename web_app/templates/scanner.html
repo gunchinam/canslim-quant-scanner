@@ -128,6 +128,21 @@ html, body {
 }
 .topbar-logo span { color: var(--brand); }
 
+.topbar-nav-link {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  background: var(--surface-2, rgba(0,0,0,0.04));
+  border: 1px solid var(--border, rgba(0,0,0,0.08));
+  margin-right: 8px;
+  transition: background 0.15s;
+}
+.topbar-nav-link:hover { background: var(--brand-soft, rgba(99,102,241,0.12)); color: var(--brand); }
+
 .topbar-controls {
   display: flex;
   align-items: center;
@@ -928,6 +943,131 @@ td.score-col {
   line-height: 1.5;
 }
 .dp-segments-empty {
+  text-align: center;
+  padding: 20px 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* === 오너십 지도 카드 (보라 톤) === */
+.dp-ownership-card {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+.dp-ownership-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.10), rgba(124, 58, 237, 0.05));
+  border-bottom: 1px solid var(--border);
+}
+.dp-ownership-icon { font-size: 22px; line-height: 1; }
+.dp-ownership-titles { flex: 1; min-width: 0; }
+.dp-ownership-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.dp-ownership-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+.dp-ownership-asof {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(139, 92, 246, 0.14);
+  color: rgb(139, 92, 246);
+}
+.dp-ownership-body { padding: 14px 16px 12px; }
+.dp-own-bar {
+  display: flex;
+  width: 100%;
+  height: 18px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.18);
+  margin-bottom: 10px;
+}
+.dp-own-seg {
+  height: 100%;
+  position: relative;
+  transition: opacity 0.15s ease;
+}
+.dp-own-seg:hover { opacity: 0.78; }
+.dp-own-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-bottom: 12px;
+}
+.dp-own-leg-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+.dp-own-leg-swatch {
+  width: 10px; height: 10px; border-radius: 2px;
+}
+.dp-own-leg-pct {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.dp-own-top-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 8px 0 4px;
+}
+.dp-own-top-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dp-own-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  padding: 3px 0;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.15);
+}
+.dp-own-top-row:last-child { border-bottom: none; }
+.dp-own-top-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dp-own-top-pct {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.dp-ownership-footnote {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+.dp-ownership-empty {
   text-align: center;
   padding: 20px 0;
   font-size: 12px;
@@ -2546,6 +2686,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   <header class="topbar">
     <button class="mobile-menu-btn" id="mobile-menu-btn" onclick="toggleMobileSidebar()" aria-label="메뉴">☰</button>
     <div class="topbar-logo">(.)(.) <span>분석기</span></div>
+    <a href="/multibagger" class="topbar-nav-link" title="잠재적 10배 종목 후보 (PASS/WATCH/DIFF)">🎯 멀티배거</a>
     <div class="topbar-controls">
       <div class="btn-seg-group" id="market-btn-group">
         <button class="btn-seg active" data-val="US" onclick="onMarketChange('US')">🇺🇸 미국</button>
@@ -2812,6 +2953,28 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           </div>
           <div class="dp-segments-footnote">
             최신 사업보고서/10-K 기준 근사치 · 회계연도·환율·재분류로 차이 가능
+          </div>
+        </div>
+      </div>
+
+      <div id="dp-ownership-card" class="dp-ownership-card" style="display:none;">
+        <div class="dp-ownership-head">
+          <span class="dp-ownership-icon">👥</span>
+          <div class="dp-ownership-titles">
+            <div class="dp-ownership-title">오너십 지도</div>
+            <div id="dp-ownership-meta" class="dp-ownership-meta">—</div>
+          </div>
+          <span id="dp-ownership-asof" class="dp-ownership-asof">—</span>
+        </div>
+        <div class="dp-ownership-body">
+          <div id="dp-ownership-bar" class="dp-own-bar"></div>
+          <div id="dp-ownership-legend" class="dp-own-legend"></div>
+          <div id="dp-ownership-top-wrap" style="display:none;">
+            <div class="dp-own-top-title">주요 보유자</div>
+            <div id="dp-ownership-top" class="dp-own-top-list"></div>
+          </div>
+          <div class="dp-ownership-footnote">
+            DEF 14A·13F·사업보고서 기준 근사치 · 분기마다 변동 가능
           </div>
         </div>
       </div>

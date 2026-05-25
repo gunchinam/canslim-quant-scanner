@@ -1274,12 +1274,20 @@ def api_peers(ticker: str):
             return False
         rs = (r.get("Sector") or "").strip()
         ri = (r.get("Industry") or "").strip()
-        if industry and ri and ri == industry:
-            return True
-        return bool(sector and rs == sector)
+        # Sector가 있으면 반드시 일치해야 함 — Industry 라벨이 섹터를
+        # 가로질러 겹치는 경우(예: yfinance 분류 흔들림) 다른 섹터 종목이
+        # peers에 끼는 것을 막는다.
+        if sector:
+            return rs == sector
+        # me 자체에 Sector가 없을 때만 Industry 폴백.
+        return bool(industry and ri and ri == industry)
 
     candidates = [r for r in rows if _same_bucket(r)]
-    candidates.sort(key=lambda r: float(r.get("_MarketCap") or 0), reverse=True)
+    # 같은 Industry를 우선, 그 다음 시총 큰 순.
+    candidates.sort(key=lambda r: (
+        0 if (industry and (r.get("Industry") or "").strip() == industry) else 1,
+        -float(r.get("_MarketCap") or 0),
+    ))
     peers = candidates[:limit]
 
     def _row(r: dict) -> dict:
@@ -1355,13 +1363,302 @@ def api_segments(ticker: str):
     # 음수(상계) 분리: 파이엔 표시 안 함, 표에는 노출
     pie = [s for s in segs if isinstance(s.get("pct"), (int, float)) and s["pct"] > 0]
     return jsonify({
-        "ok":       True,
-        "ticker":   ticker,
-        "fy":       rec.get("fy") or "",
-        "source":   rec.get("source") or "",
-        "segments": segs,
-        "pie":      pie,
-        "count":    len(segs),
+        "ok":         True,
+        "ticker":     ticker,
+        "fy":         rec.get("fy") or "",
+        "source":     rec.get("source") or "",
+        "confidence": rec.get("confidence") or "estimated",
+        "segments":   segs,
+        "pie":        pie,
+        "count":      len(segs),
+    })
+
+
+# ── 이벤트 캘린더 ──────────────────────────────────────────────────────────
+_macro_events_cache: list = []
+_macro_events_mtime: float = 0.0
+_macro_events_lock = threading.Lock()
+_ticker_events_cache: dict = {}   # ticker -> (ts, payload)
+_ticker_events_lock = threading.Lock()
+_TICKER_EVENTS_TTL = 4 * 3600     # 4시간
+
+
+def _load_macro_events() -> list:
+    global _macro_events_cache, _macro_events_mtime
+    path = os.path.join(os.path.dirname(__file__), "macro_events.json")
+    try:
+        mt = os.path.getmtime(path)
+    except OSError:
+        return []
+    with _macro_events_lock:
+        if mt != _macro_events_mtime or not _macro_events_cache:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    j = json.load(f)
+                _macro_events_cache = j.get("events", []) if isinstance(j, dict) else []
+                _macro_events_mtime = mt
+            except Exception as e:
+                logging.warning("macro_events load failed: %s", e)
+                return _macro_events_cache or []
+        return _macro_events_cache
+
+
+def _fetch_ticker_events(ticker: str) -> list:
+    """yfinance에서 다음 실적일·배당락일 추출."""
+    import datetime as _dt
+    events: list = []
+    try:
+        import yfinance as yf
+        t = yf.Ticker(ticker)
+        # 다음 실적일
+        try:
+            cal = t.calendar
+            if isinstance(cal, dict):
+                ed = cal.get("Earnings Date")
+                if ed:
+                    if isinstance(ed, list) and ed:
+                        ed_val = ed[0]
+                    else:
+                        ed_val = ed
+                    ds = str(ed_val)[:10]
+                    events.append({"date": ds, "name": "실적 발표", "kind": "earnings"})
+                xd = cal.get("Ex-Dividend Date")
+                if xd:
+                    events.append({"date": str(xd)[:10], "name": "배당락일", "kind": "dividend"})
+        except Exception:
+            pass
+        # info에서 보조 필드
+        try:
+            info = t.info or {}
+            ts_earn = info.get("earningsTimestamp") or info.get("earningsTimestampStart")
+            if ts_earn and not any(e["kind"] == "earnings" for e in events):
+                d = _dt.datetime.utcfromtimestamp(int(ts_earn)).date().isoformat()
+                events.append({"date": d, "name": "실적 발표", "kind": "earnings"})
+            ts_div = info.get("exDividendDate")
+            if ts_div and not any(e["kind"] == "dividend" for e in events):
+                d = _dt.datetime.utcfromtimestamp(int(ts_div)).date().isoformat()
+                events.append({"date": d, "name": "배당락일", "kind": "dividend"})
+        except Exception:
+            pass
+    except Exception as e:
+        logging.debug("ticker events fetch failed %s: %s", ticker, e)
+    return events
+
+
+@app.route("/api/macro-events")
+def api_macro_events():
+    """GET /api/macro-events?region=US|KR → 다가올 매크로 이벤트(60일)."""
+    import datetime as _dt
+    region = (request.args.get("region") or "US").upper()
+    today = _dt.date.today()
+    horizon = today + _dt.timedelta(days=60)
+    macro_all = _load_macro_events()
+    out = []
+    for e in macro_all:
+        if e.get("region") not in (region, "GLOBAL"):
+            continue
+        ds = e.get("date")
+        if not ds:
+            continue
+        try:
+            d = _dt.date.fromisoformat(ds[:10])
+        except Exception:
+            continue
+        if d < today or d > horizon:
+            continue
+        out.append({
+            "date": d.isoformat(),
+            "dday": (d - today).days,
+            "name": e.get("name") or "—",
+            "kind": e.get("kind") or "other",
+        })
+    out.sort(key=lambda x: x["dday"])
+    return jsonify({"ok": True, "region": region, "events": out, "count": len(out)})
+
+
+@app.route("/api/events/<ticker>")
+def api_events(ticker: str):
+    """GET /api/events/AAPL → 다가올 이벤트 (실적·배당락·매크로) D-day 리스트."""
+    import datetime as _dt
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
+
+    today = _dt.date.today()
+    horizon = today + _dt.timedelta(days=120)
+
+    # 종목 이벤트 (캐시)
+    now = int(time.time())
+    with _ticker_events_lock:
+        cached = _ticker_events_cache.get(ticker)
+    if cached and (now - cached[0]) < _TICKER_EVENTS_TTL:
+        ticker_evs = cached[1]
+    else:
+        ticker_evs = _fetch_ticker_events(ticker)
+        with _ticker_events_lock:
+            _ticker_events_cache[ticker] = (now, ticker_evs)
+
+    # 종목 이벤트만 (매크로는 별도 엔드포인트에서)
+    is_kr = ticker.replace(".KS", "").replace(".KQ", "").isdigit()
+    region = "KR" if is_kr else "US"
+
+    merged = []
+    for e in ticker_evs:
+        ds = e.get("date")
+        if not ds:
+            continue
+        try:
+            d = _dt.date.fromisoformat(ds[:10])
+        except Exception:
+            continue
+        if d < today or d > horizon:
+            continue
+        dday = (d - today).days
+        merged.append({
+            "date":  d.isoformat(),
+            "dday":  dday,
+            "name":  e.get("name") or "—",
+            "kind":  e.get("kind") or "other",
+        })
+    merged.sort(key=lambda x: x["dday"])
+
+    return jsonify({
+        "ok":     bool(merged),
+        "ticker": ticker,
+        "region": region,
+        "events": merged,
+        "count":  len(merged),
+    })
+
+
+# ── 인사이더 거래 타임라인 ────────────────────────────────────────────────
+_insider_cache: dict = {}   # ticker -> (ts, payload)
+_insider_lock = threading.Lock()
+_INSIDER_TTL = 12 * 3600    # 12시간
+
+
+def _fetch_insider_transactions(ticker: str) -> dict:
+    """yfinance insider_transactions → 6개월 이내 거래 추출."""
+    import datetime as _dt
+    out = {"transactions": [], "summary": {"buy": 0.0, "sell": 0.0, "net": 0.0}}
+    try:
+        import yfinance as yf
+        t = yf.Ticker(ticker)
+        df = None
+        try:
+            df = t.insider_transactions
+        except Exception:
+            df = None
+        if df is None or df.empty:
+            return out
+        cutoff = _dt.date.today() - _dt.timedelta(days=180)
+        # 컬럼은 yfinance 버전에 따라 다양: Insider, Position, Shares, Value, Transaction, Start Date, Text
+        cols = {c.lower().strip(): c for c in df.columns}
+        def col(*aliases):
+            for a in aliases:
+                if a in cols:
+                    return cols[a]
+            return None
+        c_name  = col("insider")
+        c_role  = col("position")
+        c_date  = col("start date", "date")
+        c_shr   = col("shares")
+        c_val   = col("value")
+        c_txn   = col("text", "transaction", "action")  # Text가 실제 매매 설명을 담는다 (yfinance)
+
+        rows = []
+        for _, r in df.iterrows():
+            try:
+                ds = r[c_date] if c_date else None
+                if ds is None:
+                    continue
+                d = ds.date() if hasattr(ds, 'date') else _dt.date.fromisoformat(str(ds)[:10])
+                if d < cutoff:
+                    continue
+                txn_raw = ''
+                # Text 우선, 비면 Transaction 시도
+                for cand in (c_txn, cols.get("transaction")):
+                    if cand and r[cand] is not None and not _is_nan(r[cand]):
+                        s = str(r[cand]).strip()
+                        if s:
+                            txn_raw = s
+                            break
+                txn_low = txn_raw.lower()
+                if 'gift' in txn_low or 'grant' in txn_low or 'award' in txn_low:
+                    side = 'grant'
+                elif 'option' in txn_low or 'exercise' in txn_low:
+                    side = 'option'
+                elif any(k in txn_low for k in ('sale', 'sell', '매도', 'dispos')):
+                    side = 'sell'
+                elif any(k in txn_low for k in ('buy', 'purchase', '매수', 'acquir', 'bought')):
+                    side = 'buy'
+                else:
+                    side = 'other'
+                shares = float(r[c_shr]) if c_shr and r[c_shr] is not None and not _is_nan(r[c_shr]) else None
+                value  = float(r[c_val]) if c_val and r[c_val] is not None and not _is_nan(r[c_val]) else None
+                rows.append({
+                    "date":   d.isoformat(),
+                    "name":   str(r[c_name]) if c_name else '—',
+                    "role":   str(r[c_role]) if c_role else '',
+                    "side":   side,
+                    "txn":    txn_raw,
+                    "shares": shares,
+                    "value":  value,
+                })
+            except Exception:
+                continue
+        rows.sort(key=lambda x: x["date"], reverse=True)
+
+        buy = sum((r["value"] or 0) for r in rows if r["side"] == "buy")
+        sell = sum((r["value"] or 0) for r in rows if r["side"] == "sell")
+        out["transactions"] = rows[:30]
+        out["summary"] = {"buy": buy, "sell": sell, "net": buy - sell, "count": len(rows)}
+    except Exception as e:
+        logging.debug("insider fetch failed %s: %s", ticker, e)
+    return out
+
+
+def _is_nan(v):
+    try:
+        import math
+        if isinstance(v, float):
+            return math.isnan(v)
+        return v != v
+    except Exception:
+        return False
+
+
+@app.route("/api/insider/<ticker>")
+def api_insider(ticker: str):
+    """GET /api/insider/AAPL → 최근 6개월 임원/내부자 거래."""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
+
+    is_kr = ticker.replace(".KS", "").replace(".KQ", "").isdigit()
+    if is_kr:
+        return jsonify({"ok": False, "reason": "kr_unsupported",
+                        "message": "한국 종목은 임원공시 데이터를 아직 지원하지 않습니다."})
+
+    now = int(time.time())
+    with _insider_lock:
+        cached = _insider_cache.get(ticker)
+    if cached and (now - cached[0]) < _INSIDER_TTL:
+        payload = cached[1]
+    else:
+        payload = _fetch_insider_transactions(ticker)
+        with _insider_lock:
+            _insider_cache[ticker] = (now, payload)
+
+    if not payload.get("transactions"):
+        return jsonify({"ok": False, "reason": "no_data",
+                        "message": "최근 6개월 내 인사이더 거래가 없습니다."})
+
+    return jsonify({
+        "ok":           True,
+        "ticker":       ticker,
+        "transactions": payload["transactions"],
+        "summary":      payload["summary"],
     })
 
 
@@ -1410,12 +1707,13 @@ def api_ownership(ticker: str):
         return jsonify({"ok": False, "reason": "empty"})
     top = rec.get("top") or []
     return jsonify({
-        "ok":        True,
-        "ticker":    ticker,
-        "asof":      rec.get("asof") or "",
-        "source":    rec.get("source") or "",
-        "breakdown": breakdown,
-        "top":       top if isinstance(top, list) else [],
+        "ok":         True,
+        "ticker":     ticker,
+        "asof":       rec.get("asof") or "",
+        "source":     rec.get("source") or "",
+        "confidence": rec.get("confidence") or "estimated",
+        "breakdown":  breakdown,
+        "top":        top if isinstance(top, list) else [],
     })
 
 

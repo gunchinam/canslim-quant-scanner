@@ -25,7 +25,9 @@ html, body {
 /* ── App Shell ─────────────────────────────────────────────── */
 .app-shell {
   display: grid;
-  grid-template-rows: 60px auto auto auto 1fr;
+  /* topbar / macro-events-strip / disclaimer / macro-strip / stats-bar / ix-discovery-card / content
+     1fr 는 마지막(content) 만 — stats-bar 가 1fr 를 먹어 그 아래 빈 공간이 생기는 버그 방지. */
+  grid-template-rows: 60px auto auto auto auto auto 1fr;
   height: 100vh;
   overflow: hidden;
   max-width: 100vw;
@@ -1155,7 +1157,7 @@ td.score-col {
 }
 
 /* === 상단 매크로 스트립 (공통 매크로 일정) === */
-.macro-strip {
+.macro-events-strip {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 16px;
   background: linear-gradient(90deg, rgba(99, 102, 241, 0.06), rgba(139, 92, 246, 0.04));
@@ -1164,7 +1166,8 @@ td.score-col {
   scrollbar-width: thin;
   white-space: nowrap;
 }
-.macro-strip-label {
+.macro-events-strip::-webkit-scrollbar { display: none; }
+.macro-events-strip-label {
   flex: 0 0 auto;
   font-size: 10px; font-weight: 700;
   color: var(--text-tertiary);
@@ -1199,7 +1202,7 @@ td.score-col {
 .macro-chip-kind.nfp  { background:#06b6d4; }
 .macro-chip-kind.bok  { background:#6366f1; }
 .macro-chip-kind.other{ background:#64748b; }
-.macro-strip.empty { display: none; }
+.macro-events-strip.empty { display: none; }
 
 /* === 이벤트 캘린더 카드 (앰버 톤) === */
 .dp-events-card {
@@ -2930,9 +2933,9 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   </header>
 
   <!-- 매크로 이벤트 스트립 (모든 종목 공통) -->
-  <div id="macro-strip" class="macro-strip empty">
-    <span class="macro-strip-label">📅 매크로</span>
-    <span id="macro-strip-list" style="display:flex;gap:6px;"></span>
+  <div id="macro-events-strip" class="macro-events-strip empty">
+    <span class="macro-events-strip-label">📅 매크로</span>
+    <span id="macro-events-strip-list" style="display:flex;gap:6px;"></span>
   </div>
 
   <!-- Disclaimer Band -->

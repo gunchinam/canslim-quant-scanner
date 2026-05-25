@@ -524,6 +524,7 @@ function onMarketChange(val) {
   loadWatchlist();
   _setSegActive('market-btn-group', val);
   loadSectors();
+  if (typeof _loadMacroStrip === 'function') _loadMacroStrip(val);
   runScan();
   return;
   setStockListMsg('섹터를 선택하거나 스캔 버튼을 눌러주세요.');
@@ -633,6 +634,8 @@ const _RUN_SCAN_BACKOFF_MS = [2000, 4000, 8000, 12000];
 // 워밍업 응답(X-Warming-In-Progress)을 받을 때마다 재시도 — 무한 폴링을 막기 위해 캡.
 let _warmingRetries = 0;
 const _WARMING_MAX_RETRY = 6;             // 6회 × 15초 = 약 90초
+// 섹터 변경 race condition 가드: 늦게 도착한 stale 요청이 최신 요청 덮어쓰지 않게.
+let _scanToken = 0;
 
 async function runScan() {
   const btn = document.getElementById('btn-scan');
@@ -642,11 +645,17 @@ async function runScan() {
   setStatHTML('stat-strong', '…<span class="unit">개</span>');
   showScanLoading();
 
+  const myToken = ++_scanToken;
+  const reqSector = currentSector;
+  const reqMarket = currentMarket;
+
   try {
-    const p = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
-    if (currentSector) p.set('sector', currentSector);
+    const p = new URLSearchParams({ market: reqMarket, strategy: currentStrategy });
+    if (reqSector) p.set('sector', reqSector);
 
     const res    = await fetch(`/api/scan?${p}`);
+    // 이미 더 새로운 요청이 떴으면 이 결과는 폐기
+    if (myToken !== _scanToken) return;
     let payload;
     try {
       payload = await res.json();
@@ -694,8 +703,11 @@ async function runScan() {
       _runScanAttempt = 0;
     }
   } finally {
-    stopScanLoading();
-    if (btn) btn.disabled = false;
+    // stale 요청이 최신 요청의 로딩 UI를 끄지 못하게 가드
+    if (myToken === _scanToken) {
+      stopScanLoading();
+      if (btn) btn.disabled = false;
+    }
   }
 }
 
@@ -791,6 +803,21 @@ const _MOAT_CAT_META = {
   NONE:            { name: '뚜렷한 해자 없음', icon: '⚠',  desc: '구조적 진입장벽이 약합니다. 가격·실행력·자본력 같은 비해자 요소로 경쟁해야 합니다.' },
 };
 
+// 데이터 신뢰도 신호등 헬퍼 — verified/estimated/unverified
+const _CONF_META = {
+  verified:   { cls: 'verified',   title: '검증완료 — 공시 1차 출처(10-K·DEF 14A·13F·사업보고서) 직접 인용' },
+  estimated:  { cls: 'estimated',  title: '추정치 — IR 자료·분기지연·재분류 등으로 차이 가능' },
+  unverified: { cls: 'unverified', title: '미확인 — 출처 부족, 참고용' }
+};
+function _applyConfDot(elId, confidence) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const key = String(confidence || 'estimated').toLowerCase();
+  const meta = _CONF_META[key] || _CONF_META.estimated;
+  el.className = `dp-conf-dot ${meta.cls}`;
+  el.title = meta.title;
+}
+
 // 디테일 페이지 — 핵심 해자 섹션 렌더
 function _renderMoatDetail(d) {
   const card = document.getElementById('dp-moat-card');
@@ -813,6 +840,7 @@ function _renderMoatDetail(d) {
   document.getElementById('dp-moat-label').textContent = label;
   document.getElementById('dp-moat-detail').textContent = detail || meta.desc;
   document.getElementById('dp-moat-source').textContent = sourceTxt;
+  _applyConfDot('dp-moat-conf', data.confidence);
   card.style.display = '';
 }
 
@@ -938,6 +966,7 @@ function _renderSegmentsCard(payload) {
   const src   = payload.source || '';
   metaEl.textContent  = `${fy}${src ? ' · ' + src : ''}`;
   countEl.textContent = `${all.length}개 부문`;
+  _applyConfDot('dp-segments-conf', payload.confidence);
 
   if (!pie.length) {
     svg.innerHTML = '';
@@ -991,6 +1020,270 @@ async function _loadSegmentsCard(ticker) {
     _renderSegmentsCard(await res.json());
   } catch (e) {
     console.error('segments card load failed:', e);
+  }
+}
+
+// ───────── 매크로 이벤트 스트립 (상단 공통) ─────────
+const _MACRO_KIND_LABEL = { fomc:'FOMC', cpi:'CPI', nfp:'고용', bok:'한은', other:'기타' };
+function _macroDdayCls(d) {
+  if (d <= 0) return 'today';
+  if (d <= 3) return 'urgent';
+  if (d <= 14) return 'soon';
+  return '';
+}
+function _macroDdayText(d) {
+  if (d === 0) return 'D-day';
+  if (d > 0)  return `D-${d}`;
+  return `D+${-d}`;
+}
+async function _loadMacroStrip(region) {
+  const strip = document.getElementById('macro-events-strip');
+  const list  = document.getElementById('macro-events-strip-list');
+  if (!strip || !list) return;
+  const reg = String(region || 'US').toUpperCase();
+  try {
+    const res = await fetch(`/api/macro-events?region=${encodeURIComponent(reg)}`, { cache: 'no-store' });
+    if (!res.ok) { strip.classList.add('empty'); return; }
+    const j = await res.json();
+    const evs = (j && Array.isArray(j.events)) ? j.events.slice(0, 10) : [];
+    if (!evs.length) { list.innerHTML = ''; strip.classList.add('empty'); return; }
+    list.innerHTML = evs.map(e => {
+      const kind = String(e.kind || 'other').toLowerCase();
+      const label = _MACRO_KIND_LABEL[kind] || _MACRO_KIND_LABEL.other;
+      return `<span class="macro-chip" title="${esc(e.name)} · ${esc(e.date)}">
+        <span class="macro-chip-dday ${_macroDdayCls(e.dday)}">${_macroDdayText(e.dday)}</span>
+        <span class="macro-chip-kind ${kind}">${esc(label)}</span>
+        <span>${esc(e.name)}</span>
+      </span>`;
+    }).join('');
+    strip.classList.remove('empty');
+  } catch (e) {
+    console.error('macro strip load failed:', e);
+    strip.classList.add('empty');
+  }
+}
+
+// ───────── 인사이더 거래 ─────────
+const _INS_SIDE_LABEL = {
+  buy: '매수', sell: '매도', option: '옵션행사', grant: '부여', other: '기타'
+};
+function _insFmtVal(v) {
+  if (v == null || isNaN(v)) return '—';
+  const n = Math.abs(Number(v));
+  const sign = Number(v) < 0 ? '-' : '';
+  if (n >= 1e9) return `${sign}$${(n/1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `${sign}$${(n/1e6).toFixed(2)}M`;
+  if (n >= 1e3) return `${sign}$${(n/1e3).toFixed(1)}K`;
+  return `${sign}$${n.toFixed(0)}`;
+}
+function _renderInsiderCard(payload) {
+  const card = document.getElementById('dp-insider-card');
+  if (!card) return;
+  if (!payload || !payload.ok) { card.style.display = 'none'; return; }
+  const body = document.getElementById('dp-insider-body');
+  const buyEl = document.getElementById('dp-insider-buy');
+  const sellEl = document.getElementById('dp-insider-sell');
+  const cntEl = document.getElementById('dp-insider-count');
+  const netEl = document.getElementById('dp-insider-net');
+  if (!body) return;
+
+  const sm  = payload.summary || {};
+  const txs = Array.isArray(payload.transactions) ? payload.transactions : [];
+  if (buyEl)  buyEl.textContent  = _insFmtVal(sm.buy);
+  if (sellEl) sellEl.textContent = _insFmtVal(sm.sell);
+  if (cntEl)  cntEl.textContent  = String(sm.count || txs.length);
+  if (netEl) {
+    const net = Number(sm.net || 0);
+    netEl.textContent = net > 0 ? `순매수 ${_insFmtVal(net)}` : net < 0 ? `순매도 ${_insFmtVal(-net)}` : '균형';
+    netEl.className = 'dp-insider-net ' + (net > 0 ? 'pos' : net < 0 ? 'neg' : 'zero');
+  }
+
+  if (!txs.length) {
+    body.innerHTML = '<div class="dp-insider-empty">최근 거래 데이터가 없습니다.</div>';
+    card.style.display = '';
+    return;
+  }
+
+  body.innerHTML = txs.map(t => {
+    const side = String(t.side || 'other').toLowerCase();
+    const label = _INS_SIDE_LABEL[side] || _INS_SIDE_LABEL.other;
+    const name = esc(t.name || '—');
+    const role = t.role ? `<div class="dp-ins-name-role">${esc(t.role)}</div>` : '';
+    return `<div class="dp-ins-row">
+      <span class="dp-ins-date">${esc(t.date)}</span>
+      <span class="dp-ins-side ${side}">${esc(label)}</span>
+      <div class="dp-ins-name"><div class="dp-ins-name-main">${name}</div>${role}</div>
+      <span class="dp-ins-val">${_insFmtVal(t.value)}</span>
+    </div>`;
+  }).join('');
+  card.style.display = '';
+}
+async function _loadInsiderCard(ticker) {
+  if (!ticker) return;
+  const card = document.getElementById('dp-insider-card');
+  if (card) card.style.display = 'none';
+  try {
+    const res = await fetch(`/api/insider/${encodeURIComponent(ticker)}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    _renderInsiderCard(await res.json());
+  } catch (e) {
+    console.error('insider card load failed:', e);
+  }
+}
+
+// ───────── 이벤트 캘린더 ─────────
+const _EVT_KIND_LABEL = {
+  earnings: '실적', dividend: '배당', fomc: 'FOMC',
+  cpi: 'CPI', nfp: '고용', bok: '한은', other: '기타'
+};
+function _evtDdayCls(dday) {
+  if (dday <= 0) return 'today';
+  if (dday <= 3) return 'urgent';
+  if (dday <= 14) return 'soon';
+  return '';
+}
+function _evtDdayText(dday) {
+  if (dday === 0) return 'D-day';
+  if (dday > 0)  return `D-${dday}`;
+  return `D+${-dday}`;
+}
+function _renderEventsCard(payload) {
+  const card = document.getElementById('dp-events-card');
+  if (!card) return;
+  const body = document.getElementById('dp-events-body');
+  const cnt  = document.getElementById('dp-events-count');
+  if (!body || !cnt) return;
+
+  const evs = (payload && Array.isArray(payload.events)) ? payload.events : [];
+  if (!payload || !payload.ok || !evs.length) {
+    body.innerHTML = '<div class="dp-events-empty">예정된 이벤트가 없습니다.</div>';
+    cnt.textContent = '0';
+    // 매크로 단독으로도 카드를 보여줄 가치는 있지만, 텅 비면 숨김
+    card.style.display = 'none';
+    return;
+  }
+  cnt.textContent = `${evs.length}건`;
+
+  body.innerHTML = evs.map(e => {
+    const kind = String(e.kind || 'other').toLowerCase();
+    const label = _EVT_KIND_LABEL[kind] || _EVT_KIND_LABEL.other;
+    return `<div class="dp-evt-row">
+      <span class="dp-evt-dday ${_evtDdayCls(e.dday)}">${_evtDdayText(e.dday)}</span>
+      <span class="dp-evt-kind ${kind}">${esc(label)}</span>
+      <span class="dp-evt-name">${esc(e.name)}</span>
+      <span class="dp-evt-date">${esc(e.date)}</span>
+    </div>`;
+  }).join('');
+  card.style.display = '';
+}
+async function _loadEventsCard(ticker) {
+  if (!ticker) return;
+  const card = document.getElementById('dp-events-card');
+  if (card) card.style.display = 'none';
+  try {
+    const res = await fetch(`/api/events/${encodeURIComponent(ticker)}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    _renderEventsCard(await res.json());
+  } catch (e) {
+    console.error('events card load failed:', e);
+  }
+}
+
+// ───────── 오너십 지도 ─────────
+const _OWN_KIND_COLORS = {
+  insider: '#8b5cf6',   // 보라 — 내부자/최대주주
+  foreign: '#06b6d4',   // 시안 — 외국인
+  inst:    '#3b82f6',   // 파랑 — 기관
+  retail:  '#94a3b8',   // 슬레이트 — 개인
+  other:   '#64748b'
+};
+const _OWN_KIND_LABEL = {
+  insider: '내부자',
+  foreign: '외국인',
+  inst:    '기관',
+  retail:  '개인',
+  other:   '기타'
+};
+function _renderOwnershipCard(payload) {
+  const card = document.getElementById('dp-ownership-card');
+  if (!card) return;
+  if (!payload || !payload.ok) { card.style.display = 'none'; return; }
+
+  const metaEl   = document.getElementById('dp-ownership-meta');
+  const asofEl   = document.getElementById('dp-ownership-asof');
+  const barEl    = document.getElementById('dp-ownership-bar');
+  const legEl    = document.getElementById('dp-ownership-legend');
+  const topWrap  = document.getElementById('dp-ownership-top-wrap');
+  const topEl    = document.getElementById('dp-ownership-top');
+  if (!barEl || !legEl) return;
+
+  const bd = Array.isArray(payload.breakdown) ? payload.breakdown : [];
+  const top = Array.isArray(payload.top) ? payload.top : [];
+  const asof = payload.asof || '';
+  const src  = payload.source || '';
+  if (metaEl) metaEl.textContent = src || '—';
+  if (asofEl) asofEl.textContent = asof || '—';
+  _applyConfDot('dp-ownership-conf', payload.confidence);
+
+  if (!bd.length) {
+    barEl.innerHTML = '';
+    legEl.innerHTML = '<div class="dp-ownership-empty">지분 데이터를 표시할 수 없습니다.</div>';
+    if (topWrap) topWrap.style.display = 'none';
+    card.style.display = '';
+    return;
+  }
+
+  // 정규화 (합계 100 기준)
+  const total = bd.reduce((s, b) => s + Math.max(0, Number(b.pct || 0)), 0);
+  const norm = total > 0 ? (100 / total) : 1;
+
+  const segs = bd.map(b => {
+    const kind = String(b.kind || 'other').toLowerCase();
+    const color = _OWN_KIND_COLORS[kind] || _OWN_KIND_COLORS.other;
+    const pct  = Math.max(0, Number(b.pct || 0)) * norm;
+    return { name: b.name || _OWN_KIND_LABEL[kind] || '—', kind, color, pct, raw: Number(b.pct || 0) };
+  });
+
+  barEl.innerHTML = segs.map(s =>
+    `<div class="dp-own-seg" style="width:${s.pct.toFixed(2)}%;background:${s.color};" title="${esc(s.name)} ${s.raw.toFixed(1)}%"></div>`
+  ).join('');
+
+  legEl.innerHTML = segs.map(s =>
+    `<span class="dp-own-leg-item">
+       <span class="dp-own-leg-swatch" style="background:${s.color};"></span>
+       <span>${esc(s.name)}</span>
+       <span class="dp-own-leg-pct">${s.raw.toFixed(1)}%</span>
+     </span>`
+  ).join('');
+
+  if (topWrap && topEl) {
+    if (top.length) {
+      topEl.innerHTML = top.map(t => {
+        const v = Number(t.pct || 0);
+        return `<div class="dp-own-top-row">
+          <span class="dp-own-top-name">${esc(t.name || '—')}</span>
+          <span class="dp-own-top-pct">${v.toFixed(2)}%</span>
+        </div>`;
+      }).join('');
+      topWrap.style.display = '';
+    } else {
+      topEl.innerHTML = '';
+      topWrap.style.display = 'none';
+    }
+  }
+
+  card.style.display = '';
+}
+async function _loadOwnershipCard(ticker) {
+  if (!ticker) return;
+  const card = document.getElementById('dp-ownership-card');
+  if (card) card.style.display = 'none';
+  try {
+    const res = await fetch(`/api/ownership/${encodeURIComponent(ticker)}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    _renderOwnershipCard(await res.json());
+  } catch (e) {
+    console.error('ownership card load failed:', e);
   }
 }
 
@@ -2105,6 +2398,12 @@ function _clearPanelDetail() {
   if (_pc) _pc.style.display = 'none';
   const _sc = document.getElementById('dp-segments-card');
   if (_sc) _sc.style.display = 'none';
+  const _oc = document.getElementById('dp-ownership-card');
+  if (_oc) _oc.style.display = 'none';
+  const _ec2 = document.getElementById('dp-events-card');
+  if (_ec2) _ec2.style.display = 'none';
+  const _ic = document.getElementById('dp-insider-card');
+  if (_ic) _ic.style.display = 'none';
   const _lb = document.getElementById('dp-leader-badge');
   if (_lb) _lb.style.display = 'none';
   const _nb = document.getElementById('dp-news-bar');
@@ -2138,6 +2437,9 @@ function _populatePanelDetail(d, skipFourAxis) {
   try { _renderMoatDetail(d); } catch (e) { console.error('moat render failed:', e); }
   try { _loadPeersCard(d.Ticker, (typeof currentMarket !== 'undefined' && currentMarket) || 'US'); } catch (e) { console.error('peers load failed:', e); }
   try { _loadSegmentsCard(d.Ticker); } catch (e) { console.error('segments load failed:', e); }
+  try { _loadOwnershipCard(d.Ticker); } catch (e) { console.error('ownership load failed:', e); }
+  try { _loadEventsCard(d.Ticker); } catch (e) { console.error('events load failed:', e); }
+  try { _loadInsiderCard(d.Ticker); } catch (e) { console.error('insider load failed:', e); }
   setText('dp-price',   d.Price  != null ? fmtPrice(d.Price) : '—');
   setText('dp-target',  d.TargetPrice ? fmtPrice(d.TargetPrice) : '—');
   setText('dp-broker-target', d.BrokerTarget ? fmtPrice(d.BrokerTarget) : '—');
@@ -3738,6 +4040,7 @@ document.addEventListener('DOMContentLoaded', () => {
     runScan();
     loadMacro();
     setInterval(loadMacro, 15 * 60 * 1000);
+    if (typeof _loadMacroStrip === 'function') _loadMacroStrip(currentMarket);
   }
 });
 

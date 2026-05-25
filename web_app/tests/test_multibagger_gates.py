@@ -46,3 +46,35 @@ def test_f8_entry():
     assert mb.eval_f8(too_deep, mb.DEFAULTS) is False
     overheated = mb.Fundamentals(from_52w_high=-0.20, return_1m=0.40)
     assert mb.eval_f8(overheated, mb.DEFAULTS) is False
+
+
+def test_f3_roic_absolute():
+    assert mb.eval_f3(mb.Fundamentals(roic=0.15), mb.DEFAULTS) is True
+    assert mb.eval_f3(mb.Fundamentals(roic=0.05), mb.DEFAULTS) is False
+
+def test_f3_roic_improving():
+    f = mb.Fundamentals(roic=0.08, roic_prev=0.05)
+    assert mb.eval_f3(f, mb.DEFAULTS) is True  # 절대 미달이지만 개선
+
+def test_f3_missing():
+    assert mb.eval_f3(mb.Fundamentals(), mb.DEFAULTS) is None
+
+def test_f4_valuation_either():
+    assert mb.eval_f4(mb.Fundamentals(fcf_yield=0.08, pb=5.0), mb.DEFAULTS) is True  # FCF만
+    assert mb.eval_f4(mb.Fundamentals(fcf_yield=0.02, pb=2.0), mb.DEFAULTS) is True  # PB만
+    assert mb.eval_f4(mb.Fundamentals(fcf_yield=0.02, pb=5.0), mb.DEFAULTS) is False
+    assert mb.eval_f4(mb.Fundamentals(fcf_yield=None, pb=None), mb.DEFAULTS) is None
+
+def test_f5_growth_quality():
+    ok = mb.Fundamentals(revenue_yoy=0.10, ebitda_yoy=0.15)
+    assert mb.eval_f5(ok, mb.DEFAULTS) is True
+    slow = mb.Fundamentals(revenue_yoy=0.03, ebitda_yoy=0.10)
+    assert mb.eval_f5(slow, mb.DEFAULTS) is False  # rev<5%
+    margin_drop = mb.Fundamentals(revenue_yoy=0.10, ebitda_yoy=0.05)
+    assert mb.eval_f5(margin_drop, mb.DEFAULTS) is False
+
+def test_f6_capital_allocation():
+    ok = mb.Fundamentals(ebitda_yoy=0.20, assets_yoy=0.10)
+    assert mb.eval_f6(ok, mb.DEFAULTS) is True
+    waste = mb.Fundamentals(ebitda_yoy=0.05, assets_yoy=0.20)
+    assert mb.eval_f6(waste, mb.DEFAULTS) is False

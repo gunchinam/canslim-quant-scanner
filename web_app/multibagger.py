@@ -75,3 +75,33 @@ def eval_f8(f: Fundamentals, t: dict) -> Optional[bool]:
     band_ok = t["F8_FROM_52W_HIGH_MIN"] <= f.from_52w_high <= t["F8_FROM_52W_HIGH_MAX"]
     momentum_ok = f.return_1m <= t["F8_1M_RETURN_MAX"]
     return band_ok and momentum_ok
+
+
+def eval_f3(f: Fundamentals, t: dict) -> Optional[bool]:
+    if _missing(f.roic):
+        return None
+    if f.roic >= t["F3_ROIC_MIN"]:
+        return True
+    if f.roic_prev is not None and f.roic > f.roic_prev:
+        return True
+    return False
+
+
+def eval_f4(f: Fundamentals, t: dict) -> Optional[bool]:
+    if _missing(f.fcf_yield) and _missing(f.pb):
+        return None
+    fcf_ok = f.fcf_yield is not None and f.fcf_yield >= t["F4_FCF_YIELD_MIN"]
+    pb_ok = f.pb is not None and f.pb <= t["F4_PB_MAX"]
+    return fcf_ok or pb_ok
+
+
+def eval_f5(f: Fundamentals, t: dict) -> Optional[bool]:
+    if _missing(f.revenue_yoy, f.ebitda_yoy):
+        return None
+    return f.revenue_yoy >= t["F5_REVENUE_YOY_MIN"] and f.ebitda_yoy >= f.revenue_yoy
+
+
+def eval_f6(f: Fundamentals, t: dict) -> Optional[bool]:
+    if _missing(f.ebitda_yoy, f.assets_yoy):
+        return None
+    return f.ebitda_yoy >= f.assets_yoy

@@ -51,3 +51,27 @@ class Fundamentals:
     buyback_yield_ttm: Optional[float] = None
     capex_yoy: Optional[float] = None  # F6 N/A 판정용
     dgs10_pct: Optional[float] = None
+
+
+def _missing(*vals) -> bool:
+    return any(v is None for v in vals)
+
+
+def eval_f1(f: Fundamentals, t: dict) -> Optional[bool]:
+    if _missing(f.market_cap):
+        return None
+    return t["F1_MCAP_MIN"] <= f.market_cap <= t["F1_MCAP_MAX"]
+
+
+def eval_f2(f: Fundamentals, t: dict) -> Optional[bool]:
+    if _missing(f.ebitda, f.fcf):
+        return None
+    return f.ebitda > 0 and f.fcf > 0
+
+
+def eval_f8(f: Fundamentals, t: dict) -> Optional[bool]:
+    if _missing(f.from_52w_high, f.return_1m):
+        return None
+    band_ok = t["F8_FROM_52W_HIGH_MIN"] <= f.from_52w_high <= t["F8_FROM_52W_HIGH_MAX"]
+    momentum_ok = f.return_1m <= t["F8_1M_RETURN_MAX"]
+    return band_ok and momentum_ok

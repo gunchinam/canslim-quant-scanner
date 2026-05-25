@@ -214,10 +214,34 @@ def _annotate_one_liners(results: list, force: bool = False):
     if not results:
         return results
     if force:
-        return annotate(results)
-    pending = [r for r in results if isinstance(r, dict) and not r.get("OneLiner")]
-    if pending:
-        annotate(pending)
+        annotate(results)
+    else:
+        pending = [r for r in results if isinstance(r, dict) and not r.get("OneLiner")]
+        if pending:
+            annotate(pending)
+    # 경제적 해자(Moat) 표기도 동일 라이프사이클에서 주입.
+    # LLM 키가 없으면 섹터 기반 규칙으로 폴백 — 비용 0.
+    try:
+        _annotate_moats(results, force=force)
+    except Exception as e:
+        logging.warning("moat annotate failed: %s", e)
+    return results
+
+
+def _annotate_moats(results: list, force: bool = False):
+    """results에 Moat/MoatCategory/MoatData를 채운다.
+    캐시(cache_v19/moat/{ticker}.json, TTL 30일)로 중복 호출 차단."""
+    from moat import annotate as _moat_annotate
+    if not results:
+        return results
+    if force:
+        # 강제 갱신: 기존 Moat 필드 제거 후 재생성
+        for r in results:
+            if isinstance(r, dict):
+                r.pop("Moat", None)
+                r.pop("MoatCategory", None)
+                r.pop("MoatData", None)
+    _moat_annotate(results)
     return results
 
 
@@ -1209,6 +1233,137 @@ def api_aq_signal(ticker: str):
 
 
 
+@app.route("/api/peers/<ticker>")
+def api_peers(ticker: str):
+    """GET /api/peers/AAPL?market=US&limit=5 → 같은 섹터 동종업체 비교 카드 데이터."""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
+    market = (request.args.get("market") or "US").upper()
+    try:
+        limit = max(2, min(8, int(request.args.get("limit", "5"))))
+    except (TypeError, ValueError):
+        limit = 5
+
+    # 스캔 캐시에서 전체 종목 목록 조회 (sector="" 인 BALANCED 캐시)
+    rows = []
+    with _scan_results_cache_lock:
+        for strat in ("BALANCED", "AGGRESSIVE", "CONSERVATIVE"):
+            cached = _scan_results_cache.get((market, strat, ""))
+            if cached and cached.get("data"):
+                rows = cached["data"]
+                break
+    if not rows:
+        return jsonify({"ok": False, "reason": "no_scan_cache",
+                        "message": "스캔 캐시가 비어 있습니다. 스캔을 먼저 실행해 주세요."})
+
+    # 본인 종목 찾기
+    me = next((r for r in rows if (r.get("Ticker") or "") == ticker), None)
+    if not me:
+        return jsonify({"ok": False, "reason": "ticker_not_in_cache",
+                        "message": "이 종목이 스캔 캐시에 없습니다."})
+    sector = (me.get("Sector") or "").strip()
+    industry = (me.get("Industry") or "").strip()
+    if not sector and not industry:
+        return jsonify({"ok": False, "reason": "no_sector",
+                        "message": "섹터 정보가 없어 비교할 수 없습니다."})
+
+    def _same_bucket(r: dict) -> bool:
+        if r.get("Ticker") == ticker:
+            return False
+        rs = (r.get("Sector") or "").strip()
+        ri = (r.get("Industry") or "").strip()
+        if industry and ri and ri == industry:
+            return True
+        return bool(sector and rs == sector)
+
+    candidates = [r for r in rows if _same_bucket(r)]
+    candidates.sort(key=lambda r: float(r.get("_MarketCap") or 0), reverse=True)
+    peers = candidates[:limit]
+
+    def _row(r: dict) -> dict:
+        return {
+            "Ticker":          r.get("Ticker") or "",
+            "Name":            r.get("Name") or "",
+            "Sector":          r.get("Sector") or "",
+            "Industry":        r.get("Industry") or "",
+            "Price":           r.get("Price"),
+            "TotalScore":      r.get("TotalScore"),
+            "MarketCap":       r.get("_MarketCap"),
+            "PER":             r.get("_PER"),
+            "PBR":             r.get("_PBR"),
+            "ROE":             r.get("_ROE"),
+            "OperatingMargin": r.get("_OperatingMargin"),
+            "Mom12M":          r.get("Mom12M"),
+            "DivYield":        r.get("_DivYield"),
+        }
+
+    return jsonify({
+        "ok": True,
+        "self":  _row(me),
+        "peers": [_row(p) for p in peers],
+        "sector":   sector,
+        "industry": industry,
+        "count":    len(peers),
+    })
+
+
+# ── 매출 세그먼트 파이 ─────────────────────────────────────────────────────
+_segment_data_cache: dict = {}
+_segment_data_mtime: float = 0.0
+_segment_data_lock = threading.Lock()
+
+
+def _load_segment_data() -> dict:
+    """segment_data.json 을 mtime 기반으로 캐시 로드."""
+    global _segment_data_cache, _segment_data_mtime
+    path = os.path.join(os.path.dirname(__file__), "segment_data.json")
+    try:
+        mt = os.path.getmtime(path)
+    except OSError:
+        return {}
+    with _segment_data_lock:
+        if mt != _segment_data_mtime or not _segment_data_cache:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    _segment_data_cache = json.load(f)
+                _segment_data_mtime = mt
+            except Exception as e:
+                logging.warning("segment_data load failed: %s", e)
+                return _segment_data_cache or {}
+        return _segment_data_cache
+
+
+@app.route("/api/segments/<ticker>")
+def api_segments(ticker: str):
+    """GET /api/segments/AAPL → 사업부문 매출 비중(큐레이션 사전)."""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
+    data = _load_segment_data()
+    if not data:
+        return jsonify({"ok": False, "reason": "no_dict",
+                        "message": "세그먼트 사전이 없습니다."})
+    rec = data.get(ticker)
+    if not rec:
+        return jsonify({"ok": False, "reason": "not_found",
+                        "message": "이 종목은 아직 세그먼트 사전에 없습니다."})
+    segs = rec.get("segments") or []
+    if not isinstance(segs, list) or not segs:
+        return jsonify({"ok": False, "reason": "empty"})
+    # 음수(상계) 분리: 파이엔 표시 안 함, 표에는 노출
+    pie = [s for s in segs if isinstance(s.get("pct"), (int, float)) and s["pct"] > 0]
+    return jsonify({
+        "ok":       True,
+        "ticker":   ticker,
+        "fy":       rec.get("fy") or "",
+        "source":   rec.get("source") or "",
+        "segments": segs,
+        "pie":      pie,
+        "count":    len(segs),
+    })
+
+
 @app.route("/api/consensus/<ticker>")
 def api_consensus(ticker: str):
     """??? ???? ??: ??? ??, ??/??, ?? ???."""
@@ -1325,6 +1480,20 @@ def api_four_axis(ticker: str):
     if not ticker:
         return jsonify({"error": "invalid ticker"}), 400
     market = (request.args.get("market") or "US").upper()
+    # 상폐 블록리스트 — US 한정. yfinance 호출 자체 차단으로 로그 노이즈 제거.
+    if market == "US":
+        try:
+            from symbol_alias import is_delisted as _is_delisted
+            if _is_delisted(ticker):
+                return jsonify({"error": f"상폐/리네임 티커: {ticker}"}), 404
+        except Exception:
+            pass
+        try:
+            import quant_nexus_v20 as _qn_mod
+            if getattr(_qn_mod, "_is_delisted_us", lambda _t: False)(ticker):
+                return jsonify({"error": f"상폐/리네임 티커: {ticker}"}), 404
+        except Exception:
+            pass
     cache_key = f"{ticker}:{market}"
     now = int(time.time())
     with _four_axis_cache_lock:
@@ -1834,6 +2003,98 @@ def api_deep_analysis(ticker: str):
     except Exception as e:
         logging.exception("deep-analysis failed: %s", ticker)
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ── 멀티배거 파인더 ─────────────────────────────────────────
+_multibagger_results_cache = {}  # {"_ts": ..., "data": {"pass":[], "watch":[], "meta":{}}}
+_multibagger_build_lock = threading.Lock()
+_MULTIBAGGER_TTL_SEC = 12 * 3600
+
+
+@app.route("/multibagger")
+def multibagger_page():
+    static_dir = os.path.join(app.root_path, "static")
+    def _v(name):
+        p = os.path.join(static_dir, name)
+        try:
+            return int(os.path.getmtime(p))
+        except OSError:
+            return 0
+    return render_template(
+        "multibagger.html",
+        v_theme_css=_v("theme.css"),
+        v_multibagger_css=_v("multibagger.css"),
+        v_multibagger_js=_v("multibagger.js"),
+    )
+
+
+@app.route("/api/multibagger")
+def api_multibagger():
+    import multibagger as mb
+    cached = _multibagger_results_cache
+    if cached and (time.time() - cached.get("_ts", 0)) < _MULTIBAGGER_TTL_SEC:
+        resp = jsonify(cached["data"])
+        resp.headers["X-Warming-In-Progress"] = "false"
+        return resp
+    _maybe_trigger_multibagger_build()
+    body = cached.get("data") if cached else {
+        "pass": [], "watch": [], "meta": {"warming": True}
+    }
+    resp = jsonify(body)
+    resp.headers["X-Warming-In-Progress"] = "true"
+    return resp
+
+
+@app.route("/api/multibagger/thresholds")
+def api_multibagger_thresholds():
+    import multibagger as mb
+    return jsonify(mb.DEFAULTS)
+
+
+@app.route("/api/multibagger/ticker/<sym>")
+def api_multibagger_ticker(sym):
+    cached = _multibagger_results_cache
+    if not cached:
+        return jsonify({"error": "cache empty"}), 404
+    sym_up = sym.upper()
+    for row in cached.get("data", {}).get("pass", []) + cached.get("data", {}).get("watch", []):
+        if row["ticker"].upper() == sym_up:
+            return jsonify(row)
+    return jsonify({"error": "not found"}), 404
+
+
+def _maybe_trigger_multibagger_build():
+    if not _multibagger_build_lock.acquire(blocking=False):
+        return
+    def _worker():
+        try:
+            _rebuild_multibagger_us()
+        finally:
+            _multibagger_build_lock.release()
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def _rebuild_multibagger_us():
+    import multibagger as mb
+    import multibagger_enrich as me
+    import multibagger_rates as mr
+
+    base = None
+    with _scan_results_cache_lock:
+        cached_base = _scan_results_cache.get(("US", "BALANCED", ""))
+        if cached_base:
+            base = cached_base.get("data")
+    if not base:
+        logging.info("multibagger: base US scan cache empty, aborting build")
+        return
+
+    dgs10 = mr.get_dgs10()
+    result = mb.build_results(base, dgs10_pct=dgs10, enrich_fn=me.enrich_one, max_workers=8)
+    _multibagger_results_cache.clear()
+    _multibagger_results_cache.update({"_ts": time.time(), "data": result})
+    logging.info("multibagger: built %d PASS / %d WATCH (universe %d, candidates %d)",
+                 result["meta"]["pass_n"], result["meta"]["watch_n"],
+                 result["meta"]["universe_n"], result["meta"]["candidates_n"])
 
 
 # SocketIO 초기화 (gunicorn / 직접 실행 모두 대응)

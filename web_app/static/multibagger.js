@@ -1,5 +1,5 @@
 (function () {
-  const state = { layer: "pass", data: null, polling: false };
+  const state = { layer: "pass", data: null, polling: false, diffData: null };
 
   function fmtPct(v) { return v == null ? "—" : (v * 100).toFixed(1) + "%"; }
   function fmtMcap(v) {
@@ -13,7 +13,25 @@
     const tbl = document.getElementById("mb-table");
     if (!state.data) { tbl.innerHTML = "<tr><td>로딩 중…</td></tr>"; return; }
     const rows = state.data[state.layer] || [];
-    if (state.layer === "diff") { tbl.innerHTML = "<tr><td>DIFF 데이터 준비 안 됨(관리자 빌드 필요)</td></tr>"; return; }
+    if (state.layer === "diff") {
+      if (!state.diffData) {
+        fetch("/api/multibagger/diff").then(r => r.json()).then(d => { state.diffData = d; renderTable(); });
+        tbl.innerHTML = "<tr><td>DIFF 데이터 로딩 중…</td></tr>";
+        return;
+      }
+      if (!state.diffData.stats.available) {
+        tbl.innerHTML = '<tr><td>DIFF 데이터 준비 안 됨. <code>python -m web_app.multibagger_backtest</code> 실행 필요.</td></tr>';
+        return;
+      }
+      const items = state.diffData.baggers;
+      let html = "<thead><tr><th>#</th><th>Ticker</th><th>5y Multiple</th><th>분류</th><th>탈락 게이트</th></tr></thead><tbody>";
+      items.forEach((r, i) => {
+        const failBadges = (r.fail_gates || []).map(g => `<span class="mb-badge fail">${g}</span>`).join("");
+        html += `<tr><td>${i+1}</td><td><b>${r.ticker}</b></td><td>${r.multiple}×</td><td>${r.classify}</td><td>${failBadges}</td></tr>`;
+      });
+      tbl.innerHTML = html + "</tbody>";
+      return;
+    }
     if (!rows.length) { tbl.innerHTML = "<tr><td>해당 레이어에 종목 없음</td></tr>"; return; }
     const isWatch = state.layer === "watch";
     let html = "<thead><tr><th>#</th><th>Ticker</th><th>Score</th><th>시총</th><th>ROIC</th><th>FCF Yld / P/B</th><th>EBITDA YoY−Rev YoY</th><th>52w↓</th><th>섹터</th>" + (isWatch ? "<th>부족</th>" : "") + "</tr></thead><tbody>";

@@ -18,7 +18,6 @@ import queue
 import time
 import urllib.request
 import urllib.parse
-import pickle
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -745,7 +744,7 @@ import re as _ticker_re_mod
 
 # 화이트리스트: 1~12자 [A-Z0-9.-]. US(AAPL/BRK.B) + KR(005930/005930.KS) 모두 통과.
 # path traversal / SSRF / prompt injection 1차 방어.
-_TICKER_RE = _ticker_re_mod.compile(r"^[A-Za-z0-9.\-]{1,12}$")
+_TICKER_RE = _ticker_re_mod.compile(r"^[A-Za-z0-9\.\-]{1,12}$")
 
 
 def _validate_ticker(ticker) -> str | None:
@@ -1381,6 +1380,7 @@ _macro_events_lock = threading.Lock()
 _ticker_events_cache: dict = {}   # ticker -> (ts, payload)
 _ticker_events_lock = threading.Lock()
 _TICKER_EVENTS_TTL = 4 * 3600     # 4시간
+_TICKER_EVENTS_MAX = 500          # 무제한 증가 차단(FIFO eviction)
 
 
 def _load_macro_events() -> list:
@@ -1432,11 +1432,11 @@ def _fetch_ticker_events(ticker: str) -> list:
             info = t.info or {}
             ts_earn = info.get("earningsTimestamp") or info.get("earningsTimestampStart")
             if ts_earn and not any(e["kind"] == "earnings" for e in events):
-                d = _dt.datetime.utcfromtimestamp(int(ts_earn)).date().isoformat()
+                d = _dt.datetime.fromtimestamp(int(ts_earn), tz=_dt.timezone.utc).date().isoformat()
                 events.append({"date": d, "name": "실적 발표", "kind": "earnings"})
             ts_div = info.get("exDividendDate")
             if ts_div and not any(e["kind"] == "dividend" for e in events):
-                d = _dt.datetime.utcfromtimestamp(int(ts_div)).date().isoformat()
+                d = _dt.datetime.fromtimestamp(int(ts_div), tz=_dt.timezone.utc).date().isoformat()
                 events.append({"date": d, "name": "배당락일", "kind": "dividend"})
         except Exception:
             pass
@@ -1496,6 +1496,8 @@ def api_events(ticker: str):
     else:
         ticker_evs = _fetch_ticker_events(ticker)
         with _ticker_events_lock:
+            if len(_ticker_events_cache) >= _TICKER_EVENTS_MAX:
+                _ticker_events_cache.pop(next(iter(_ticker_events_cache)), None)
             _ticker_events_cache[ticker] = (now, ticker_evs)
 
     # 종목 이벤트만 (매크로는 별도 엔드포인트에서)
@@ -1535,6 +1537,7 @@ def api_events(ticker: str):
 _insider_cache: dict = {}   # ticker -> (ts, payload)
 _insider_lock = threading.Lock()
 _INSIDER_TTL = 12 * 3600    # 12시간
+_INSIDER_MAX = 500          # 무제한 증가 차단
 
 
 def _fetch_insider_transactions(ticker: str) -> dict:
@@ -1648,6 +1651,8 @@ def api_insider(ticker: str):
     else:
         payload = _fetch_insider_transactions(ticker)
         with _insider_lock:
+            if len(_insider_cache) >= _INSIDER_MAX:
+                _insider_cache.pop(next(iter(_insider_cache)), None)
             _insider_cache[ticker] = (now, payload)
 
     if not payload.get("transactions"):
@@ -2362,7 +2367,7 @@ def api_deep_analysis(ticker: str):
 _multibagger_results_cache = {}  # {"_ts": ..., "data": {"pass":[], "watch":[], "meta":{}}}
 _multibagger_build_lock = threading.Lock()
 _MULTIBAGGER_TTL_SEC = 12 * 3600
-_MULTIBAGGER_BAGGERS_PATH = os.path.join(app.root_path, "cache_v19", "baggers_us.pkl")
+_MULTIBAGGER_BAGGERS_PATH = os.path.join(app.root_path, "cache_v19", "baggers_us.json")
 
 
 @app.route("/multibagger")
@@ -2424,9 +2429,11 @@ def api_multibagger_diff():
     if not os.path.exists(path):
         return jsonify({"baggers": [], "stats": {"available": False}})
     try:
-        with open(path, "rb") as f:
-            blob = pickle.load(f)
-    except Exception:
+        # pickle.load 는 RCE 위험 — JSON 으로 강제(읽기 전용 화이트리스트).
+        with open(path, "r", encoding="utf-8") as f:
+            blob = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        logging.warning("baggers cache load failed: %s", e)
         return jsonify({"baggers": [], "stats": {"available": False}})
 
     items = blob.get("baggers", [])

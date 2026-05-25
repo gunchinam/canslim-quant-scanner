@@ -73,14 +73,20 @@ def _roic(info: dict, income: pd.DataFrame, balance: pd.DataFrame) -> Optional[f
 
 
 def _insider_net_3m(t) -> Optional[float]:
+    """3개월 내부자 net 매수 — Sale 는 음수, Buy/Acquisition 은 양수로 부호화."""
     try:
         df = t.get_insider_transactions()
         if df is None or df.empty:
             return 0.0
-        if "Value" in df.columns and "Transaction" in df.columns:
-            return float(df["Value"].fillna(0).sum())
-        return 0.0
-    except Exception:
+        if "Value" not in df.columns or "Transaction" not in df.columns:
+            return 0.0
+        # Transaction 문자열에 'Sale' 포함 시 매도(음수). yfinance 의 Value 는
+        # 항상 절대값으로 들어와 단순 sum 시 매수/매도 상쇄가 안 됨 → 가드.
+        tx = df["Transaction"].fillna("").astype(str).str.lower()
+        sign = tx.apply(lambda s: -1.0 if "sale" in s else 1.0)
+        return float((df["Value"].fillna(0) * sign).sum())
+    except Exception as e:
+        logging.debug("insider_net_3m failed: %s", e)
         return None
 
 

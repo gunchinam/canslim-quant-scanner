@@ -1,4 +1,4 @@
-import os, sys, json, pickle, time
+import os, sys, json, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import app as flask_app
@@ -36,7 +36,7 @@ def test_api_ticker_returns_404_when_unknown(monkeypatch):
 
 
 def test_api_diff_missing_pkl_returns_empty(monkeypatch, tmp_path):
-    fake_path = str(tmp_path / "no_such.pkl")
+    fake_path = str(tmp_path / "no_such.json")
     monkeypatch.setattr(flask_app, "_MULTIBAGGER_BAGGERS_PATH", fake_path)
     client = flask_app.app.test_client()
     resp = client.get("/api/multibagger/diff")
@@ -47,21 +47,21 @@ def test_api_diff_missing_pkl_returns_empty(monkeypatch, tmp_path):
 
 
 def test_api_diff_loads_and_classifies(monkeypatch, tmp_path):
-    fake_path = str(tmp_path / "baggers_us.pkl")
-    import pickle, time
-    pickle.dump({
-        "_ts": time.time(),
-        "baggers": [
-            {"ticker": "TENX", "start_close": 10, "end_close": 100, "multiple": 10.0,
-             "snapshot_at_start": {
-                 "market_cap": 1e9, "ebitda": 1e8, "fcf": 5e7,
-                 "roic": 0.15, "fcf_yield": 0.08, "pb": 2.0,
-                 "revenue_yoy": 0.10, "ebitda_yoy": 0.15, "assets_yoy": 0.08,
-                 "icr": 5.0, "debt_ebitda": 2.0,
-                 "from_52w_high": -0.20, "return_1m": 0.10,
-             }},
-        ],
-    }, open(fake_path, "wb"))
+    fake_path = str(tmp_path / "baggers_us.json")
+    with open(fake_path, "w", encoding="utf-8") as fh:
+        json.dump({
+            "_ts": time.time(),
+            "baggers": [
+                {"ticker": "TENX", "start_close": 10, "end_close": 100, "multiple": 10.0,
+                 "snapshot_at_start": {
+                     "market_cap": 1e9, "ebitda": 1e8, "fcf": 5e7,
+                     "roic": 0.15, "fcf_yield": 0.08, "pb": 2.0,
+                     "revenue_yoy": 0.10, "ebitda_yoy": 0.15, "assets_yoy": 0.08,
+                     "icr": 5.0, "debt_ebitda": 2.0,
+                     "from_52w_high": -0.20, "return_1m": 0.10,
+                 }},
+            ],
+        }, fh)
     monkeypatch.setattr(flask_app, "_MULTIBAGGER_BAGGERS_PATH", fake_path)
     client = flask_app.app.test_client()
     resp = client.get("/api/multibagger/diff")

@@ -1,4 +1,8 @@
-import os, sys, time, pickle
+import json
+import os
+import sys
+import time
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import multibagger_rates as mr
@@ -14,15 +18,15 @@ def test_parse_csv_handles_all_missing():
 
 
 def test_cache_hit(tmp_path, monkeypatch):
-    cache_file = tmp_path / "rates_us.pkl"
-    cache_file.write_bytes(pickle.dumps({"_ts": time.time(), "dgs10_pct": 4.2}))
+    cache_file = tmp_path / "rates_us.json"
+    cache_file.write_text(json.dumps({"_ts": time.time(), "dgs10_pct": 4.2}), encoding="utf-8")
     monkeypatch.setattr(mr, "CACHE_PATH", str(cache_file))
     assert mr.get_dgs10() == 4.2
 
 
 def test_cache_expired_triggers_fetch(tmp_path, monkeypatch):
-    cache_file = tmp_path / "rates_us.pkl"
-    cache_file.write_bytes(pickle.dumps({"_ts": time.time() - 48*3600, "dgs10_pct": 3.0}))
+    cache_file = tmp_path / "rates_us.json"
+    cache_file.write_text(json.dumps({"_ts": time.time() - 48*3600, "dgs10_pct": 3.0}), encoding="utf-8")
     monkeypatch.setattr(mr, "CACHE_PATH", str(cache_file))
     called = {"n": 0}
     def fake_fetch():

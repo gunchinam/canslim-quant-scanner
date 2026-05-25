@@ -166,3 +166,113 @@ def classify(f: Fundamentals, t: dict) -> GateResult:
     else:
         res.layer = "MISS"
     return res
+
+
+# ---------------------------------------------------------------------------
+# Q1~Q6 점수화 + Bonus + tie-break
+# ---------------------------------------------------------------------------
+
+def _clamp01(x: float, lo: float, hi: float) -> float:
+    if x <= lo:
+        return 0.0
+    if x >= hi:
+        return 100.0
+    return round((x - lo) / (hi - lo) * 100.0, 10)
+
+
+def score_q1(f: Fundamentals) -> Optional[float]:
+    if f.roic is None:
+        return None
+    return _clamp01(f.roic, 0.10, 0.30)
+
+
+def score_q2(f: Fundamentals) -> Optional[float]:
+    parts = []
+    if f.fcf_yield is not None:
+        parts.append(_clamp01(f.fcf_yield, 0.05, 0.15))
+    if f.pb is not None and f.pb > 0:
+        bm = 1.0 / f.pb
+        parts.append(_clamp01(bm, 0.33, 1.0))
+    if not parts:
+        return None
+    return max(parts)
+
+
+def score_q3(f: Fundamentals) -> Optional[float]:
+    if f.ebitda_yoy is None or f.revenue_yoy is None:
+        return None
+    diff = f.ebitda_yoy - f.revenue_yoy
+    if diff >= 0.10:
+        return 100.0
+    if diff <= -0.05:
+        return 0.0
+    if diff >= 0:
+        return 50 + (diff / 0.10) * 50
+    return 50 + (diff / 0.05) * 50  # diff 음수 → 0~50
+
+
+def score_q4(f: Fundamentals) -> Optional[float]:
+    if f.ebitda_yoy is None or f.assets_yoy is None:
+        return None
+    diff = f.ebitda_yoy - f.assets_yoy
+    if diff < 0:
+        return _clamp01(diff, -0.10, 0.0) * 0.5
+    return 50 + _clamp01(diff, 0.0, 0.15) * 0.5
+
+
+def score_q5(f: Fundamentals) -> Optional[float]:
+    parts = []
+    if f.icr is not None:
+        parts.append(_clamp01(f.icr, 3.0, 10.0))
+    if f.debt_ebitda is not None:
+        parts.append(_clamp01(-f.debt_ebitda, -3.0, 0.0))
+    if not parts:
+        return None
+    return min(parts)
+
+
+def score_q6(f: Fundamentals) -> Optional[float]:
+    if f.revenue_yoy is None:
+        return None
+    return _clamp01(f.revenue_yoy, 0.05, 0.30)
+
+
+BAGGER_SECTORS = {"Healthcare", "Technology", "Consumer Discretionary"}
+
+
+def score_bonus(f: Fundamentals) -> float:
+    b = 0.0
+    if f.sector and f.sector in BAGGER_SECTORS:
+        b += 10
+    if f.insider_net_buy_3m is not None and f.insider_net_buy_3m > 0:
+        b += 10
+    if f.buyback_yield_ttm is not None and f.buyback_yield_ttm > 0:
+        b += 5
+    if (f.revenue_yoy is not None and f.revenue_yoy_prev is not None
+            and f.revenue_yoy > f.revenue_yoy_prev):
+        b += 10
+    return b
+
+
+_Q_FUNCS = (score_q1, score_q2, score_q3, score_q4, score_q5, score_q6)
+
+
+def compose_score(f: Fundamentals) -> float:
+    vals = [fn(f) for fn in _Q_FUNCS]
+    vals = [v for v in vals if v is not None]
+    if not vals:
+        core = 0.0
+    else:
+        core = sum(vals) / len(vals)
+    bonus = score_bonus(f)
+    return min(100.0, core * 0.7 + bonus * 0.3 / 35 * 100)
+
+
+def tie_break_key(f: Fundamentals) -> tuple:
+    """동점 시 비교용. 내림차순 정렬 가정 (큰 게 우선)."""
+    return (
+        score_q4(f) or 0,
+        f.roic or 0,
+        score_q2(f) or 0,
+        -(f.market_cap or 1e18),
+    )

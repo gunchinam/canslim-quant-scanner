@@ -608,6 +608,332 @@ td.score-col {
   cursor: help;
 }
 .stock-desc { font-size: 11px; color: var(--text-secondary); margin-top: 2px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+
+/* === 경제적 해자(Moat) 배지 — Morningstar 5종 색상 === */
+.moat-badge {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: help;
+  vertical-align: middle;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.moat-INTANGIBLE      { background: #E8F0FE; color: #1E40AF; border-color: #BFD3FB; }
+.moat-SWITCHING       { background: #FEF3E8; color: #92400E; border-color: #FDD9A8; }
+.moat-NETWORK         { background: #E8F8EE; color: #166534; border-color: #B7E4C7; }
+.moat-COST            { background: #F3E8FE; color: #6B21A8; border-color: #DDC6F7; }
+.moat-EFFICIENT_SCALE { background: #FEE8EF; color: #9F1239; border-color: #FBC7D4; }
+.moat-NONE            { background: #F1F3F5; color: #6B7280; border-color: #E5E7EB; }
+
+/* === 디테일 페이지 — 핵심 해자 카드 === */
+.dp-moat-card {
+  margin: 0 20px 16px;
+  padding: 0;
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.dp-moat-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+  border-bottom: 1px solid var(--border);
+}
+.dp-moat-icon {
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.dp-moat-titles { flex: 1; min-width: 0; }
+.dp-moat-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+.dp-moat-cat {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+.dp-moat-source {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  padding: 2px 8px;
+  background: var(--bg-tertiary, var(--surface-muted));
+  border-radius: 100px;
+  flex-shrink: 0;
+}
+.dp-moat-body { padding: 14px 16px; }
+.dp-moat-label-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px dashed var(--border);
+}
+.dp-moat-label-key {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.dp-moat-label-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+.dp-moat-section { margin-bottom: 10px; }
+.dp-moat-section:last-of-type { margin-bottom: 0; }
+.dp-moat-key {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+}
+.dp-moat-val {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+.dp-moat-catdesc {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+.dp-moat-footnote {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+/* === 경쟁사 비교 카드 === */
+.dp-peers-card {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+.dp-peers-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.04));
+  border-bottom: 1px solid var(--border);
+}
+.dp-peers-icon { font-size: 22px; line-height: 1; }
+.dp-peers-titles { flex: 1; min-width: 0; }
+.dp-peers-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.dp-peers-sector {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 2px;
+}
+.dp-peers-count {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.dp-peers-body { padding: 10px 16px 14px; }
+.dp-peers-tablewrap { overflow-x: auto; }
+.dp-peers-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.dp-peers-table th,
+.dp-peers-table td {
+  padding: 6px 8px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+.dp-peers-table th {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.dp-peers-table th.dp-peers-th-name,
+.dp-peers-table td.dp-peers-td-name { text-align: left; }
+.dp-peers-table tr.dp-peers-self {
+  background: rgba(34, 197, 94, 0.06);
+  font-weight: 600;
+}
+.dp-peers-table tr.dp-peers-self td.dp-peers-td-name::before {
+  content: '🟢 ';
+  margin-right: 2px;
+}
+.dp-peers-table .dp-peers-num-pos { color: var(--success); }
+.dp-peers-table .dp-peers-num-neg { color: var(--destructive); }
+.dp-peers-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.dp-peers-tk {
+  display: block;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+.dp-peers-empty {
+  padding: 18px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.dp-peers-footnote {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+/* === 매출 세그먼트 파이 === */
+.dp-segments-card {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+.dp-segments-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(37, 99, 235, 0.04));
+  border-bottom: 1px solid var(--border);
+}
+.dp-segments-icon { font-size: 22px; line-height: 1; }
+.dp-segments-titles { flex: 1; min-width: 0; }
+.dp-segments-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.dp-segments-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+.dp-segments-count {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.12);
+  color: rgb(59, 130, 246);
+}
+.dp-segments-body { padding: 14px 16px 12px; }
+.dp-segments-grid {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.dp-segments-pie {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dp-segments-pie svg { display: block; }
+.dp-segments-pie .dp-seg-slice {
+  transition: opacity 0.15s ease;
+  cursor: default;
+}
+.dp-segments-pie .dp-seg-slice:hover { opacity: 0.75; }
+.dp-segments-legend {
+  flex: 1 1 220px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dp-seg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  padding: 4px 0;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.18);
+}
+.dp-seg-row:last-child { border-bottom: none; }
+.dp-seg-swatch {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.dp-seg-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dp-seg-pct {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.dp-seg-pct.neg { color: var(--destructive); }
+.dp-segments-footnote {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+.dp-segments-empty {
+  text-align: center;
+  padding: 20px 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
 /* === Silkscreen Mini Poster Chip (한줄평) === */
 .stock-oneliner {
   position: relative;
@@ -2408,6 +2734,86 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
       <div id="dp-fouraxis-obs" style="display:none;padding:14px 16px;margin:0 20px 16px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border);">
         <div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:6px;">핵심 관찰</div>
         <div id="dp-fa-observation" style="font-size:13px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap;"></div>
+      </div>
+
+      <!-- 핵심 경제적 해자 (Economic Moat) -->
+      <div id="dp-moat-card" class="dp-moat-card" style="display:none;">
+        <div class="dp-moat-head">
+          <span id="dp-moat-icon" class="dp-moat-icon">🛡</span>
+          <div class="dp-moat-titles">
+            <div class="dp-moat-title">이 회사의 핵심 해자</div>
+            <div id="dp-moat-cat" class="dp-moat-cat">—</div>
+          </div>
+          <span id="dp-moat-source" class="dp-moat-source" title="해자 정보의 출처">—</span>
+        </div>
+        <div class="dp-moat-body">
+          <div class="dp-moat-label-row">
+            <span class="dp-moat-label-key">한 줄로</span>
+            <span id="dp-moat-label" class="dp-moat-label-val">—</span>
+          </div>
+          <div class="dp-moat-section">
+            <div class="dp-moat-key">왜 경쟁사가 따라잡기 어려운가</div>
+            <div id="dp-moat-detail" class="dp-moat-val">—</div>
+          </div>
+          <div class="dp-moat-footnote">
+            모닝스타 5종 분류 기준 · 사전 큐레이션 (러셀 1000 + KOSPI/KOSDAQ 주요)
+          </div>
+        </div>
+      </div>
+
+      <div id="dp-peers-card" class="dp-peers-card" style="display:none;">
+        <div class="dp-peers-head">
+          <span class="dp-peers-icon">⚔️</span>
+          <div class="dp-peers-titles">
+            <div class="dp-peers-title">같은 섹터 경쟁사 비교</div>
+            <div id="dp-peers-sector" class="dp-peers-sector">—</div>
+          </div>
+          <span id="dp-peers-count" class="dp-peers-count">—</span>
+        </div>
+        <div class="dp-peers-body">
+          <div class="dp-peers-tablewrap">
+            <table class="dp-peers-table">
+              <thead>
+                <tr>
+                  <th class="dp-peers-th-name">종목</th>
+                  <th>점수</th>
+                  <th>시총</th>
+                  <th>PER</th>
+                  <th>PBR</th>
+                  <th>ROE</th>
+                  <th>영업이익률</th>
+                  <th>12M</th>
+                </tr>
+              </thead>
+              <tbody id="dp-peers-tbody"></tbody>
+            </table>
+          </div>
+          <div class="dp-peers-footnote">
+            스캔 캐시 기준 · 동일 섹터/업종 시총 상위 종목 · 본인은 🟢 표시
+          </div>
+        </div>
+      </div>
+
+      <div id="dp-segments-card" class="dp-segments-card" style="display:none;">
+        <div class="dp-segments-head">
+          <span class="dp-segments-icon">📊</span>
+          <div class="dp-segments-titles">
+            <div class="dp-segments-title">매출 세그먼트</div>
+            <div id="dp-segments-meta" class="dp-segments-meta">—</div>
+          </div>
+          <span id="dp-segments-count" class="dp-segments-count">—</span>
+        </div>
+        <div class="dp-segments-body">
+          <div class="dp-segments-grid">
+            <div class="dp-segments-pie">
+              <svg id="dp-segments-svg" viewBox="0 0 100 100" width="160" height="160" aria-hidden="true"></svg>
+            </div>
+            <div id="dp-segments-legend" class="dp-segments-legend"></div>
+          </div>
+          <div class="dp-segments-footnote">
+            최신 사업보고서/10-K 기준 근사치 · 회계연도·환율·재분류로 차이 가능
+          </div>
+        </div>
       </div>
     </section>
 

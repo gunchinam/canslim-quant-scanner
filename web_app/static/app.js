@@ -781,6 +781,229 @@ function clearOneLinerFilter() {
   _refreshFilteredView();
 }
 
+// Moat 카테고리 → 한국어 메타 (디테일 페이지용)
+const _MOAT_CAT_META = {
+  INTANGIBLE:      { name: '브랜드·무형자산',  icon: '💎', desc: '브랜드·특허·면허·규제 라이선스 같은 무형자산이 가격결정력을 지킵니다. 신규 진입자가 흉내내려면 수십 년의 신뢰 자본이나 임상·인허가가 필요합니다.' },
+  SWITCHING:       { name: '전환비용 락인',    icon: '🔒', desc: '고객이 경쟁사 제품으로 옮기는 데 드는 비용·시간·위험이 커서, 한 번 도입되면 매출이 장기간 유지됩니다. ERP/보안/결제 같은 인프라성 SaaS에서 강력합니다.' },
+  NETWORK:         { name: '네트워크 효과',    icon: '🌐', desc: '사용자가 늘수록 서비스 가치가 비선형으로 증가해, 한쪽으로 쏠리는 양면시장 효과(2-sided)가 자연 독점을 만듭니다.' },
+  COST:            { name: '구조적 원가우위',  icon: '⚙️', desc: '규모·입지·통합·기술·계약 구조 등으로 단위원가 자체가 낮아, 경쟁사가 같은 가격을 부르면 적자가 납니다.' },
+  EFFICIENT_SCALE: { name: '효율적 규모',      icon: '📐', desc: '시장 자체가 제한돼 한두 사업자만 흑자를 낼 수 있는 구조입니다. 신규 진입은 모두의 마진을 떨어뜨려 비합리적입니다.' },
+  NONE:            { name: '뚜렷한 해자 없음', icon: '⚠',  desc: '구조적 진입장벽이 약합니다. 가격·실행력·자본력 같은 비해자 요소로 경쟁해야 합니다.' },
+};
+
+// 디테일 페이지 — 핵심 해자 섹션 렌더
+function _renderMoatDetail(d) {
+  const card = document.getElementById('dp-moat-card');
+  if (!card) return;
+  if (!d || !d.Moat) {
+    card.style.display = 'none';
+    return;
+  }
+  const cat = String(d.MoatCategory || 'NONE').toUpperCase();
+  const data = d.MoatData || {};
+  const meta = _MOAT_CAT_META[cat] || _MOAT_CAT_META.NONE;
+  const label = data.label || d.Moat || '';
+  const detail = data.detail || '';
+  const source = data.source || '';
+  const sourceTxt = source === 'curated' ? '큐레이션 사전' : source === 'sector_rule' ? '섹터 룰 기반 추정' : source === 'llm' ? 'LLM 분석' : '추정';
+
+  document.getElementById('dp-moat-icon').textContent = meta.icon;
+  document.getElementById('dp-moat-cat').textContent = meta.name;
+  document.getElementById('dp-moat-cat').className = `dp-moat-cat moat-${cat}`;
+  document.getElementById('dp-moat-label').textContent = label;
+  document.getElementById('dp-moat-detail').textContent = detail || meta.desc;
+  document.getElementById('dp-moat-source').textContent = sourceTxt;
+  card.style.display = '';
+}
+
+// === 경쟁사 비교 카드 ===
+function _peersMcap(v) {
+  if (v == null || isNaN(v) || v <= 0) return '—';
+  const n = Number(v);
+  if (n >= 1e12) return (n / 1e12).toFixed(1) + '조';
+  if (n >= 1e8)  return (n / 1e8).toFixed(0) + '억';
+  if (n >= 1e4)  return (n / 1e4).toFixed(0) + '만';
+  return String(Math.round(n));
+}
+function _peersNum(v, digits) {
+  if (v == null || isNaN(v)) return '—';
+  return Number(v).toFixed(digits != null ? digits : 1);
+}
+function _peersPct(v, digits) {
+  if (v == null || isNaN(v)) return '—';
+  return (Number(v) * 100).toFixed(digits != null ? digits : 1) + '%';
+}
+
+function _renderPeersCard(payload) {
+  const card = document.getElementById('dp-peers-card');
+  if (!card) return;
+  if (!payload || !payload.ok) {
+    card.style.display = 'none';
+    return;
+  }
+  const tbody = document.getElementById('dp-peers-tbody');
+  const sectorEl = document.getElementById('dp-peers-sector');
+  const countEl = document.getElementById('dp-peers-count');
+  if (!tbody || !sectorEl || !countEl) return;
+
+  const sector = payload.industry || payload.sector || '';
+  sectorEl.textContent = sector || '—';
+  const peers = Array.isArray(payload.peers) ? payload.peers : [];
+  countEl.textContent = peers.length + '개 비교';
+
+  const all = [];
+  if (payload.self) all.push(Object.assign({}, payload.self, { _isSelf: true }));
+  for (const p of peers) all.push(Object.assign({}, p, { _isSelf: false }));
+  all.sort((a, b) => (Number(b.MarketCap) || 0) - (Number(a.MarketCap) || 0));
+
+  if (!all.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="dp-peers-empty">비교 가능한 동종업체가 없습니다.</td></tr>';
+    card.style.display = '';
+    return;
+  }
+
+  const rows = all.map(r => {
+    const cls = r._isSelf ? 'dp-peers-self' : '';
+    const mom = r.Mom12M;
+    const momCls = mom != null ? (mom >= 0 ? 'dp-peers-num-pos' : 'dp-peers-num-neg') : '';
+    const momTxt = mom != null ? ((mom >= 0 ? '+' : '') + (mom * 100).toFixed(1) + '%') : '—';
+    const score = r.TotalScore != null ? Math.round(r.TotalScore) : '—';
+    const nameTxt = r.Name && r.Name !== r.Ticker ? r.Name : (r.Ticker || '');
+    return `<tr class="${cls}">
+      <td class="dp-peers-td-name">
+        <span class="dp-peers-name">${esc(nameTxt)}</span>
+        <span class="dp-peers-tk">${esc(r.Ticker || '')}</span>
+      </td>
+      <td>${score}</td>
+      <td>${esc(_peersMcap(r.MarketCap))}</td>
+      <td>${esc(_peersNum(r.PER, 1))}</td>
+      <td>${esc(_peersNum(r.PBR, 2))}</td>
+      <td>${esc(_peersPct(r.ROE, 1))}</td>
+      <td>${esc(_peersPct(r.OperatingMargin, 1))}</td>
+      <td class="${momCls}">${esc(momTxt)}</td>
+    </tr>`;
+  }).join('');
+  tbody.innerHTML = rows;
+  card.style.display = '';
+}
+
+async function _loadPeersCard(ticker, market) {
+  if (!ticker) return;
+  const card = document.getElementById('dp-peers-card');
+  if (card) card.style.display = 'none';
+  try {
+    const url = `/api/peers/${encodeURIComponent(ticker)}?market=${encodeURIComponent(market || 'US')}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return;
+    const payload = await res.json();
+    _renderPeersCard(payload);
+  } catch (e) {
+    console.error('peers card load failed:', e);
+  }
+}
+
+// ───────── 매출 세그먼트 파이 ─────────
+const _SEG_COLORS = [
+  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#64748b'
+];
+function _segPolar(cx, cy, r, deg) {
+  const rad = (deg - 90) * Math.PI / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+function _segArcPath(cx, cy, r, startDeg, endDeg) {
+  // 풀 원(360°) 처리
+  if (Math.abs(endDeg - startDeg) >= 359.999) {
+    return `M ${cx - r} ${cy} A ${r} ${r} 0 1 1 ${cx + r} ${cy} A ${r} ${r} 0 1 1 ${cx - r} ${cy} Z`;
+  }
+  const a = _segPolar(cx, cy, r, startDeg);
+  const b = _segPolar(cx, cy, r, endDeg);
+  const large = (endDeg - startDeg) > 180 ? 1 : 0;
+  return `M ${cx} ${cy} L ${a.x} ${a.y} A ${r} ${r} 0 ${large} 1 ${b.x} ${b.y} Z`;
+}
+function _renderSegmentsCard(payload) {
+  const card = document.getElementById('dp-segments-card');
+  if (!card) return;
+  if (!payload || !payload.ok) { card.style.display = 'none'; return; }
+
+  const metaEl   = document.getElementById('dp-segments-meta');
+  const countEl  = document.getElementById('dp-segments-count');
+  const svg      = document.getElementById('dp-segments-svg');
+  const legend   = document.getElementById('dp-segments-legend');
+  if (!metaEl || !countEl || !svg || !legend) return;
+
+  const pie   = Array.isArray(payload.pie) ? payload.pie.slice() : [];
+  const all   = Array.isArray(payload.segments) ? payload.segments : [];
+  const fy    = payload.fy || '—';
+  const src   = payload.source || '';
+  metaEl.textContent  = `${fy}${src ? ' · ' + src : ''}`;
+  countEl.textContent = `${all.length}개 부문`;
+
+  if (!pie.length) {
+    svg.innerHTML = '';
+    legend.innerHTML = '<div class="dp-segments-empty">세그먼트 비중을 표시할 데이터가 없습니다.</div>';
+    card.style.display = '';
+    return;
+  }
+
+  // 합계 100으로 정규화 (의도적 미달/초과 보정)
+  const total = pie.reduce((s, p) => s + Number(p.pct || 0), 0);
+  const norm = total > 0 ? (100 / total) : 1;
+
+  let acc = 0;
+  const slices = pie.map((p, i) => {
+    const pct = Number(p.pct || 0) * norm;
+    const start = acc;
+    const end = acc + (pct * 3.6); // 360 / 100
+    acc = end;
+    const color = _SEG_COLORS[i % _SEG_COLORS.length];
+    const d = _segArcPath(50, 50, 48, start, end);
+    return `<path class="dp-seg-slice" d="${d}" fill="${color}" stroke="var(--bg-card)" stroke-width="0.6"><title>${esc(p.name)} ${pct.toFixed(1)}%</title></path>`;
+  }).join('');
+  svg.innerHTML = slices;
+
+  // 범례 — 원본 세그먼트 모두 표시(음수 포함). 색은 pie 순서 우선, 음수는 회색 처리.
+  const pieIdx = new Map();
+  pie.forEach((p, i) => pieIdx.set(p.name, i));
+  const rows = all.map(s => {
+    const v = Number(s.pct || 0);
+    const idx = pieIdx.get(s.name);
+    const color = (idx != null) ? _SEG_COLORS[idx % _SEG_COLORS.length] : '#94a3b8';
+    const negCls = v < 0 ? ' neg' : '';
+    const sign = v >= 0 ? '' : '−';
+    return `<div class="dp-seg-row">
+      <span class="dp-seg-swatch" style="background:${color};"></span>
+      <span class="dp-seg-name">${esc(s.name || '—')}</span>
+      <span class="dp-seg-pct${negCls}">${sign}${Math.abs(v).toFixed(1)}%</span>
+    </div>`;
+  }).join('');
+  legend.innerHTML = rows;
+
+  card.style.display = '';
+}
+async function _loadSegmentsCard(ticker) {
+  if (!ticker) return;
+  const card = document.getElementById('dp-segments-card');
+  if (card) card.style.display = 'none';
+  try {
+    const res = await fetch(`/api/segments/${encodeURIComponent(ticker)}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    _renderSegmentsCard(await res.json());
+  } catch (e) {
+    console.error('segments card load failed:', e);
+  }
+}
+
+// (호환용) 과거 호출부가 남아있을 경우를 대비한 no-op
+function _renderMoatBadge(stock) {
+  if (!stock || !stock.Moat) return '';
+  const cat = String(stock.MoatCategory || 'NONE').toUpperCase();
+  const data = stock.MoatData || {};
+  const detail = data.detail || '';
+  const titleTxt = detail ? `해자: ${stock.Moat} — ${detail}` : `해자: ${stock.Moat}`;
+  return `<span class="moat-badge moat-${esc(cat)}" title="${esc(titleTxt)}">🛡 ${esc(stock.Moat)}</span>`;
+}
+
 function renderStockTable(stocks) {
   const tbody = document.getElementById('stock-list');
   if (!tbody) return;
@@ -1876,6 +2099,12 @@ function closeDetailBtn() {
 function _clearPanelDetail() {
   const _ab = document.getElementById('dp-about-box');
   if (_ab) _ab.style.display = 'none';
+  const _mc = document.getElementById('dp-moat-card');
+  if (_mc) _mc.style.display = 'none';
+  const _pc = document.getElementById('dp-peers-card');
+  if (_pc) _pc.style.display = 'none';
+  const _sc = document.getElementById('dp-segments-card');
+  if (_sc) _sc.style.display = 'none';
   const _lb = document.getElementById('dp-leader-badge');
   if (_lb) _lb.style.display = 'none';
   const _nb = document.getElementById('dp-news-bar');
@@ -1906,6 +2135,9 @@ function _populatePanelDetail(d, skipFourAxis) {
   const aboutBox  = document.getElementById('dp-about-box');
   if (aboutEl)  aboutEl.textContent = aboutText;
   if (aboutBox) aboutBox.style.display = aboutText ? '' : 'none';
+  try { _renderMoatDetail(d); } catch (e) { console.error('moat render failed:', e); }
+  try { _loadPeersCard(d.Ticker, (typeof currentMarket !== 'undefined' && currentMarket) || 'US'); } catch (e) { console.error('peers load failed:', e); }
+  try { _loadSegmentsCard(d.Ticker); } catch (e) { console.error('segments load failed:', e); }
   setText('dp-price',   d.Price  != null ? fmtPrice(d.Price) : '—');
   setText('dp-target',  d.TargetPrice ? fmtPrice(d.TargetPrice) : '—');
   setText('dp-broker-target', d.BrokerTarget ? fmtPrice(d.BrokerTarget) : '—');
@@ -4150,6 +4382,8 @@ async function captureDetail() {
  */
 (function initHoverSparkline() {
   if (typeof window === 'undefined') return;
+  // [DISABLED] 사용자 요청으로 호버 스파크라인 비활성화 (2026-05-25)
+  return;
   // 터치 디바이스에서는 비활성 (mobile에서는 onclick이 우선)
   const isTouch = window.matchMedia && window.matchMedia('(hover: none)').matches;
   if (isTouch) return;

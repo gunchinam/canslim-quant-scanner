@@ -2063,6 +2063,33 @@ def api_multibagger_ticker(sym):
     return jsonify({"error": "not found"}), 404
 
 
+def _multibagger_warmup_loop(interval_sec: int = 3600):
+    while True:
+        try:
+            cached = _multibagger_results_cache
+            stale = (not cached) or (time.time() - cached.get("_ts", 0)) >= _MULTIBAGGER_TTL_SEC
+            if stale and _multibagger_build_lock.acquire(blocking=False):
+                try:
+                    _rebuild_multibagger_us()
+                finally:
+                    _multibagger_build_lock.release()
+        except Exception as e:
+            logging.warning("multibagger warmup loop error: %s", e)
+        time.sleep(interval_sec)
+
+
+_multibagger_warmup_started = False
+
+
+def _start_multibagger_warmup_once():
+    global _multibagger_warmup_started
+    if _multibagger_warmup_started:
+        return
+    _multibagger_warmup_started = True
+    threading.Thread(target=_multibagger_warmup_loop, daemon=True).start()
+    logging.info("multibagger warmup loop started")
+
+
 def _maybe_trigger_multibagger_build():
     if not _multibagger_build_lock.acquire(blocking=False):
         return
@@ -2109,6 +2136,10 @@ try:
     _start_us_warmup_once()
 except Exception as _e:
     logging.warning("US warm-up bootstrap failed: %s", _e)
+try:
+    _start_multibagger_warmup_once()
+except Exception as _e:
+    logging.warning("multibagger warm-up bootstrap failed: %s", _e)
 
 if __name__ == "__main__":
     debug = (os.environ.get("FLASK_DEBUG") or "0").strip().lower() in ("1", "true", "yes")

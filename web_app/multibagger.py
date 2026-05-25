@@ -114,3 +114,55 @@ def eval_f7(f: Fundamentals, t: dict) -> Optional[bool]:
     icr_min = t["F7_ICR_MIN_HIRATE"] if hirate else t["F7_ICR_MIN"]
     de_max = t["F7_DEBT_EBITDA_MAX_HIRATE"] if hirate else t["F7_DEBT_EBITDA_MAX"]
     return f.icr >= icr_min and f.debt_ebitda <= de_max
+
+
+GATE_EVALUATORS = {
+    "F1": eval_f1, "F2": eval_f2, "F3": eval_f3, "F4": eval_f4,
+    "F5": eval_f5, "F6": eval_f6, "F7": eval_f7, "F8": eval_f8,
+}
+
+
+@dataclass
+class GateResult:
+    layer: str  # "PASS" | "WATCH" | "MISS" | "EXCLUDED"
+    gates_passed: set = field(default_factory=set)
+    gates_failed: set = field(default_factory=set)
+    gates_missing: set = field(default_factory=set)
+
+
+def evaluate_all_gates(f: Fundamentals, t: dict) -> dict:
+    return {g: GATE_EVALUATORS[g](f, t) for g in ALL_GATES}
+
+
+def classify(f: Fundamentals, t: dict) -> GateResult:
+    res = GateResult(layer="MISS")
+    by_gate = evaluate_all_gates(f, t)
+    for g, v in by_gate.items():
+        if v is True:
+            res.gates_passed.add(g)
+        elif v is False:
+            res.gates_failed.add(g)
+        else:
+            res.gates_missing.add(g)
+
+    # 결측 3개+ → 제외
+    missing_optional = res.gates_missing & set(CORE_GATES_OPTIONAL)
+    if len(missing_optional) >= 3:
+        res.layer = "EXCLUDED"
+        return res
+
+    # 필수 게이트 미통과 (실패 또는 결측) → MISS
+    for g in CORE_GATES_REQUIRED:
+        if g not in res.gates_passed:
+            res.layer = "MISS"
+            return res
+
+    # 옵셔널 부족(실패+결측) 개수
+    optional_short = (res.gates_failed | res.gates_missing) & set(CORE_GATES_OPTIONAL)
+    if len(optional_short) == 0:
+        res.layer = "PASS"
+    elif len(optional_short) <= 2:
+        res.layer = "WATCH"
+    else:
+        res.layer = "MISS"
+    return res

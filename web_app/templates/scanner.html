@@ -1074,6 +1074,230 @@ td.score-col {
   color: var(--text-tertiary);
 }
 
+/* === 인사이더 거래 타임라인 (핑크 톤) === */
+.dp-insider-card {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+.dp-insider-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.10), rgba(219, 39, 119, 0.05));
+  border-bottom: 1px solid var(--border);
+}
+.dp-insider-icon { font-size: 22px; line-height: 1; }
+.dp-insider-titles { flex: 1; min-width: 0; }
+.dp-insider-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.dp-insider-sub { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+.dp-insider-net {
+  font-size: 11px; font-weight: 700;
+  padding: 3px 8px; border-radius: 8px;
+}
+.dp-insider-net.pos  { background: rgba(34,197,94,0.16);  color: #22c55e; }
+.dp-insider-net.neg  { background: rgba(239,68,68,0.16);  color: #ef4444; }
+.dp-insider-net.zero { background: rgba(148,163,184,0.16); color: var(--text-secondary); }
+.dp-insider-summary {
+  display: flex; gap: 8px; padding: 10px 16px;
+  border-bottom: 1px dashed var(--border);
+}
+.dp-insider-sum-cell {
+  flex: 1; text-align: center; padding: 6px;
+  background: var(--bg-tertiary); border-radius: 8px;
+}
+.dp-insider-sum-key { font-size: 10px; color: var(--text-tertiary); font-weight: 600; }
+.dp-insider-sum-val {
+  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px;
+}
+.dp-insider-sum-val.buy  { color: #22c55e; }
+.dp-insider-sum-val.sell { color: #ef4444; }
+.dp-insider-body { padding: 4px 0; max-height: 320px; overflow-y: auto; }
+.dp-ins-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px;
+  border-top: 1px solid rgba(148,163,184,0.10);
+  font-size: 12px;
+}
+.dp-ins-row:first-child { border-top: none; }
+.dp-ins-date {
+  flex: 0 0 64px; font-size: 11px; color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.dp-ins-side {
+  flex: 0 0 auto; font-size: 10px; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px; color: white;
+}
+.dp-ins-side.buy    { background: #22c55e; }
+.dp-ins-side.sell   { background: #ef4444; }
+.dp-ins-side.option { background: #8b5cf6; }
+.dp-ins-side.grant  { background: #06b6d4; }
+.dp-ins-side.other  { background: #64748b; }
+.dp-ins-name {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dp-ins-name-main { color: var(--text-primary); font-weight: 600; }
+.dp-ins-name-role { font-size: 10px; color: var(--text-tertiary); }
+.dp-ins-val {
+  flex: 0 0 auto; font-variant-numeric: tabular-nums;
+  font-weight: 600; color: var(--text-secondary);
+}
+.dp-insider-empty {
+  text-align: center; padding: 16px 0;
+  font-size: 12px; color: var(--text-tertiary);
+}
+.dp-insider-footnote {
+  padding: 8px 16px;
+  border-top: 1px dashed var(--border);
+  font-size: 10px; color: var(--text-tertiary); line-height: 1.5;
+}
+
+/* === 상단 매크로 스트립 (공통 매크로 일정) === */
+.macro-strip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 16px;
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.06), rgba(139, 92, 246, 0.04));
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  white-space: nowrap;
+}
+.macro-strip-label {
+  flex: 0 0 auto;
+  font-size: 10px; font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  padding-right: 4px;
+}
+.macro-chip {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px; border-radius: 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  font-size: 11px; color: var(--text-primary);
+  font-weight: 500;
+}
+.macro-chip-dday {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  padding: 1px 6px; border-radius: 6px;
+  background: rgba(148, 163, 184, 0.18);
+  font-size: 10px;
+}
+.macro-chip-dday.urgent { background: rgba(239,68,68,0.18); color:#ef4444; }
+.macro-chip-dday.soon   { background: rgba(245,158,11,0.18); color:#f59e0b; }
+.macro-chip-dday.today  { background:#ef4444; color:white; }
+.macro-chip-kind {
+  font-size: 9px; font-weight: 700;
+  padding: 1px 5px; border-radius: 4px; color: white;
+}
+.macro-chip-kind.fomc { background:#ef4444; }
+.macro-chip-kind.cpi  { background:#f59e0b; }
+.macro-chip-kind.nfp  { background:#06b6d4; }
+.macro-chip-kind.bok  { background:#6366f1; }
+.macro-chip-kind.other{ background:#64748b; }
+.macro-strip.empty { display: none; }
+
+/* === 이벤트 캘린더 카드 (앰버 톤) === */
+.dp-events-card {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+.dp-events-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.10), rgba(217, 119, 6, 0.05));
+  border-bottom: 1px solid var(--border);
+}
+.dp-events-icon { font-size: 22px; line-height: 1; }
+.dp-events-titles { flex: 1; min-width: 0; }
+.dp-events-title {
+  font-size: 13px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em;
+}
+.dp-events-sub {
+  font-size: 11px; color: var(--text-tertiary); margin-top: 2px;
+}
+.dp-events-count {
+  font-size: 11px; font-weight: 600;
+  padding: 3px 8px; border-radius: 8px;
+  background: rgba(245, 158, 11, 0.14); color: rgb(245, 158, 11);
+}
+.dp-events-body { padding: 6px 0; }
+.dp-evt-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.10);
+  font-size: 12px;
+}
+.dp-evt-row:first-child { border-top: none; }
+.dp-evt-dday {
+  flex: 0 0 56px; text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700; font-size: 13px;
+  padding: 4px 0; border-radius: 6px;
+  color: var(--text-primary);
+  background: rgba(148, 163, 184, 0.12);
+}
+.dp-evt-dday.urgent  { background: rgba(239, 68, 68, 0.16); color: #ef4444; }
+.dp-evt-dday.soon    { background: rgba(245, 158, 11, 0.16); color: #f59e0b; }
+.dp-evt-dday.today   { background: #ef4444; color: white; }
+.dp-evt-name {
+  flex: 1 1 auto; min-width: 0;
+  color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dp-evt-kind {
+  flex: 0 0 auto;
+  font-size: 10px; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px;
+  color: white;
+}
+.dp-evt-kind.earnings { background: #8b5cf6; }
+.dp-evt-kind.dividend { background: #22c55e; }
+.dp-evt-kind.fomc     { background: #ef4444; }
+.dp-evt-kind.cpi      { background: #f59e0b; }
+.dp-evt-kind.nfp      { background: #06b6d4; }
+.dp-evt-kind.bok      { background: #6366f1; }
+.dp-evt-kind.other    { background: #64748b; }
+.dp-evt-date {
+  flex: 0 0 auto;
+  font-size: 11px; color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.dp-events-empty {
+  text-align: center; padding: 16px 0;
+  font-size: 12px; color: var(--text-tertiary);
+}
+.dp-events-footnote {
+  padding: 8px 16px;
+  border-top: 1px dashed var(--border);
+  font-size: 10px; color: var(--text-tertiary); line-height: 1.5;
+}
+
+/* === 데이터 신뢰도 신호등 (공통) === */
+.dp-conf-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.08) inset;
+  cursor: help;
+}
+.dp-conf-dot.verified   { background: #22c55e; box-shadow: 0 0 0 1px rgba(34,197,94,0.4) inset, 0 0 4px rgba(34,197,94,0.5); }
+.dp-conf-dot.estimated  { background: #f59e0b; box-shadow: 0 0 0 1px rgba(245,158,11,0.4) inset; }
+.dp-conf-dot.unverified { background: #ef4444; box-shadow: 0 0 0 1px rgba(239,68,68,0.4) inset; }
+
 /* === Silkscreen Mini Poster Chip (한줄평) === */
 .stock-oneliner {
   position: relative;
@@ -2425,28 +2649,6 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
   /* Chat panel already handled */
 
-  /* Scroll-to-top FAB */
-  .scroll-top-fab {
-    display: none;
-    position: fixed;
-    bottom: 20px;
-    right: 16px;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: var(--brand);
-    color: #fff;
-    border: none;
-    font-size: 20px;
-    line-height: 44px;
-    text-align: center;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,.25);
-    z-index: 200;
-    transition: opacity .2s;
-    opacity: 0;
-  }
-  .scroll-top-fab.visible { display: block; opacity: 1; }
 }
 
 /* ── Responsive: Small Mobile (≤480px) ─────────────────────── */
@@ -2727,6 +2929,12 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
     <span class="topbar-date" id="topbar-date"></span>
   </header>
 
+  <!-- 매크로 이벤트 스트립 (모든 종목 공통) -->
+  <div id="macro-strip" class="macro-strip empty">
+    <span class="macro-strip-label">📅 매크로</span>
+    <span id="macro-strip-list" style="display:flex;gap:6px;"></span>
+  </div>
+
   <!-- Disclaimer Band -->
   <div class="disclaimer-band" role="note">
     <span aria-hidden="true">⚠️</span>
@@ -2811,7 +3019,6 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         <div class="mobile-stock-list-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</div>
       </div>
     </main>
-    <button id="scroll-top-fab" class="scroll-top-fab" onclick="document.getElementById('mobile-stock-list').scrollTo({top:0,behavior:'smooth'})" aria-label="맨 위로">↑</button>
   </div>
 
 </div>
@@ -2882,7 +3089,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         <div class="dp-moat-head">
           <span id="dp-moat-icon" class="dp-moat-icon">🛡</span>
           <div class="dp-moat-titles">
-            <div class="dp-moat-title">이 회사의 핵심 해자</div>
+            <div class="dp-moat-title"><span id="dp-moat-conf" class="dp-conf-dot estimated" title="추정치"></span>이 회사의 핵심 해자</div>
             <div id="dp-moat-cat" class="dp-moat-cat">—</div>
           </div>
           <span id="dp-moat-source" class="dp-moat-source" title="해자 정보의 출처">—</span>
@@ -2939,7 +3146,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         <div class="dp-segments-head">
           <span class="dp-segments-icon">📊</span>
           <div class="dp-segments-titles">
-            <div class="dp-segments-title">매출 세그먼트</div>
+            <div class="dp-segments-title"><span id="dp-segments-conf" class="dp-conf-dot estimated" title="추정치"></span>매출 세그먼트</div>
             <div id="dp-segments-meta" class="dp-segments-meta">—</div>
           </div>
           <span id="dp-segments-count" class="dp-segments-count">—</span>
@@ -2957,11 +3164,55 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         </div>
       </div>
 
+      <div id="dp-insider-card" class="dp-insider-card" style="display:none;">
+        <div class="dp-insider-head">
+          <span class="dp-insider-icon">🕵️</span>
+          <div class="dp-insider-titles">
+            <div class="dp-insider-title">인사이더 거래</div>
+            <div class="dp-insider-sub">최근 6개월 · 임원·내부자 매매</div>
+          </div>
+          <span id="dp-insider-net" class="dp-insider-net zero">—</span>
+        </div>
+        <div class="dp-insider-summary">
+          <div class="dp-insider-sum-cell">
+            <div class="dp-insider-sum-key">매수</div>
+            <div id="dp-insider-buy" class="dp-insider-sum-val buy">—</div>
+          </div>
+          <div class="dp-insider-sum-cell">
+            <div class="dp-insider-sum-key">매도</div>
+            <div id="dp-insider-sell" class="dp-insider-sum-val sell">—</div>
+          </div>
+          <div class="dp-insider-sum-cell">
+            <div class="dp-insider-sum-key">건수</div>
+            <div id="dp-insider-count" class="dp-insider-sum-val">—</div>
+          </div>
+        </div>
+        <div id="dp-insider-body" class="dp-insider-body"></div>
+        <div class="dp-insider-footnote">
+          SEC Form 4 (yfinance) · 옵션행사·증여는 별도 분류 · 한국 종목은 미지원
+        </div>
+      </div>
+
+      <div id="dp-events-card" class="dp-events-card" style="display:none;">
+        <div class="dp-events-head">
+          <span class="dp-events-icon">📅</span>
+          <div class="dp-events-titles">
+            <div class="dp-events-title">종목 일정</div>
+            <div class="dp-events-sub">실적·배당락 (120일 이내)</div>
+          </div>
+          <span id="dp-events-count" class="dp-events-count">—</span>
+        </div>
+        <div id="dp-events-body" class="dp-events-body"></div>
+        <div class="dp-events-footnote">
+          yfinance 캘린더 · 매크로(FOMC/CPI 등)는 상단 스트립에서 확인
+        </div>
+      </div>
+
       <div id="dp-ownership-card" class="dp-ownership-card" style="display:none;">
         <div class="dp-ownership-head">
           <span class="dp-ownership-icon">👥</span>
           <div class="dp-ownership-titles">
-            <div class="dp-ownership-title">오너십 지도</div>
+            <div class="dp-ownership-title"><span id="dp-ownership-conf" class="dp-conf-dot estimated" title="추정치"></span>오너십 지도</div>
             <div id="dp-ownership-meta" class="dp-ownership-meta">—</div>
           </div>
           <span id="dp-ownership-asof" class="dp-ownership-asof">—</span>
@@ -3312,16 +3563,6 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 <script src="/static/interactive.js?v={{ v_interactive_js }}" defer></script>
 <script>
 /* ── Mobile Sidebar Toggle ─────────────────────────────────── */
-/* ── Scroll-to-top FAB ─────────────────────────────────────── */
-(function() {
-  var fab = document.getElementById('scroll-top-fab');
-  var list = document.getElementById('mobile-stock-list');
-  if (!fab || !list) return;
-  list.addEventListener('scroll', function() {
-    if (list.scrollTop > 200) { fab.classList.add('visible'); }
-    else { fab.classList.remove('visible'); }
-  }, { passive: true });
-})();
 
 /* ── Swipe left/right on detail panel to switch tabs ───────── */
 (function() {
@@ -3497,12 +3738,8 @@ document.addEventListener('click', function(e) {
 })();
 </script>
 
-<!-- 운영자 정보 / 면책 푸터 -->
+<!-- 운영자 정보 푸터 -->
 <footer class="site-footer" role="contentinfo">
-  <div class="sf-row sf-disclaimer">
-    <b>면책</b>
-    <span>본 사이트는 정보 제공 목적의 알고리즘 스크리닝 결과이며, 투자 권유·자문이 아닙니다. 모든 투자 판단·손익 책임은 사용자 본인에게 있습니다. 데이터 지연·오류·누락이 발생할 수 있습니다.</span>
-  </div>
   <div class="sf-row sf-meta">
     <span>운영: 종목스캐너 (개인 운영) · <a href="mailto:hyan.narek@gmail.com">hyan.narek@gmail.com</a></span>
     <span>데이터: Yahoo Finance · Naver 증권 · DART · Finnhub · SEC EDGAR</span>

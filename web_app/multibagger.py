@@ -105,3 +105,12 @@ def eval_f6(f: Fundamentals, t: dict) -> Optional[bool]:
     if _missing(f.ebitda_yoy, f.assets_yoy):
         return None
     return f.ebitda_yoy >= f.assets_yoy
+
+
+def eval_f7(f: Fundamentals, t: dict) -> Optional[bool]:
+    if _missing(f.icr, f.debt_ebitda):
+        return None
+    hirate = f.dgs10_pct is not None and f.dgs10_pct >= t["F7_HIRATE_DGS10_PCT"]
+    icr_min = t["F7_ICR_MIN_HIRATE"] if hirate else t["F7_ICR_MIN"]
+    de_max = t["F7_DEBT_EBITDA_MAX_HIRATE"] if hirate else t["F7_DEBT_EBITDA_MAX"]
+    return f.icr >= icr_min and f.debt_ebitda <= de_max

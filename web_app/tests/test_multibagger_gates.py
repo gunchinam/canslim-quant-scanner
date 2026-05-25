@@ -78,3 +78,27 @@ def test_f6_capital_allocation():
     assert mb.eval_f6(ok, mb.DEFAULTS) is True
     waste = mb.Fundamentals(ebitda_yoy=0.05, assets_yoy=0.20)
     assert mb.eval_f6(waste, mb.DEFAULTS) is False
+
+
+def test_f7_normal_rates():
+    f = mb.Fundamentals(icr=5.0, debt_ebitda=2.0, dgs10_pct=3.0)
+    assert mb.eval_f7(f, mb.DEFAULTS) is True
+
+def test_f7_normal_icr_fail():
+    f = mb.Fundamentals(icr=2.0, debt_ebitda=2.0, dgs10_pct=3.0)
+    assert mb.eval_f7(f, mb.DEFAULTS) is False
+
+def test_f7_hirate_strengthens():
+    # 금리 4.5% → ICR≥4.0 D/E≤2.5 로 강화
+    borderline = mb.Fundamentals(icr=3.5, debt_ebitda=2.7, dgs10_pct=4.5)
+    assert mb.eval_f7(borderline, mb.DEFAULTS) is False  # 평시엔 통과지만 고금리에선 탈락
+
+    strong = mb.Fundamentals(icr=4.5, debt_ebitda=2.0, dgs10_pct=4.5)
+    assert mb.eval_f7(strong, mb.DEFAULTS) is True
+
+def test_f7_dgs10_missing_uses_normal():
+    f = mb.Fundamentals(icr=3.5, debt_ebitda=2.7, dgs10_pct=None)
+    assert mb.eval_f7(f, mb.DEFAULTS) is True  # 평시 임계로 평가
+
+def test_f7_inputs_missing():
+    assert mb.eval_f7(mb.Fundamentals(dgs10_pct=3.0), mb.DEFAULTS) is None

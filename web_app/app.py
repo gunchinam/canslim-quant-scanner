@@ -18,6 +18,7 @@ import queue
 import time
 import urllib.request
 import urllib.parse
+import pickle
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -1364,6 +1365,60 @@ def api_segments(ticker: str):
     })
 
 
+# ── 오너십 지도 ────────────────────────────────────────────────────────────
+_ownership_data_cache: dict = {}
+_ownership_data_mtime: float = 0.0
+_ownership_data_lock = threading.Lock()
+
+
+def _load_ownership_data() -> dict:
+    """ownership_data.json 을 mtime 기반으로 캐시 로드."""
+    global _ownership_data_cache, _ownership_data_mtime
+    path = os.path.join(os.path.dirname(__file__), "ownership_data.json")
+    try:
+        mt = os.path.getmtime(path)
+    except OSError:
+        return {}
+    with _ownership_data_lock:
+        if mt != _ownership_data_mtime or not _ownership_data_cache:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    _ownership_data_cache = json.load(f)
+                _ownership_data_mtime = mt
+            except Exception as e:
+                logging.warning("ownership_data load failed: %s", e)
+                return _ownership_data_cache or {}
+        return _ownership_data_cache
+
+
+@app.route("/api/ownership/<ticker>")
+def api_ownership(ticker: str):
+    """GET /api/ownership/AAPL → 지분 구조(큐레이션 사전)."""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
+    data = _load_ownership_data()
+    if not data:
+        return jsonify({"ok": False, "reason": "no_dict",
+                        "message": "오너십 사전이 없습니다."})
+    rec = data.get(ticker)
+    if not rec:
+        return jsonify({"ok": False, "reason": "not_found",
+                        "message": "이 종목은 아직 오너십 사전에 없습니다."})
+    breakdown = rec.get("breakdown") or []
+    if not isinstance(breakdown, list) or not breakdown:
+        return jsonify({"ok": False, "reason": "empty"})
+    top = rec.get("top") or []
+    return jsonify({
+        "ok":        True,
+        "ticker":    ticker,
+        "asof":      rec.get("asof") or "",
+        "source":    rec.get("source") or "",
+        "breakdown": breakdown,
+        "top":       top if isinstance(top, list) else [],
+    })
+
+
 @app.route("/api/consensus/<ticker>")
 def api_consensus(ticker: str):
     """??? ???? ??: ??? ??, ??/??, ?? ???."""
@@ -2009,6 +2064,7 @@ def api_deep_analysis(ticker: str):
 _multibagger_results_cache = {}  # {"_ts": ..., "data": {"pass":[], "watch":[], "meta":{}}}
 _multibagger_build_lock = threading.Lock()
 _MULTIBAGGER_TTL_SEC = 12 * 3600
+_MULTIBAGGER_BAGGERS_PATH = os.path.join(app.root_path, "cache_v19", "baggers_us.pkl")
 
 
 @app.route("/multibagger")
@@ -2061,6 +2117,49 @@ def api_multibagger_ticker(sym):
         if row["ticker"].upper() == sym_up:
             return jsonify(row)
     return jsonify({"error": "not found"}), 404
+
+
+@app.route("/api/multibagger/diff")
+def api_multibagger_diff():
+    import multibagger as mb
+    path = _MULTIBAGGER_BAGGERS_PATH
+    if not os.path.exists(path):
+        return jsonify({"baggers": [], "stats": {"available": False}})
+    try:
+        with open(path, "rb") as f:
+            blob = pickle.load(f)
+    except Exception:
+        return jsonify({"baggers": [], "stats": {"available": False}})
+
+    items = blob.get("baggers", [])
+    out = []
+    pass_n = watch_n = miss_n = 0
+    fail_counter = {}
+    for b in items:
+        snap = b.get("snapshot_at_start") or {}
+        if not snap:
+            out.append({**b, "classify": "UNKNOWN", "fail_gates": []})
+            continue
+        f = mb.Fundamentals(**{k: snap.get(k) for k in mb.Fundamentals.__dataclass_fields__})
+        cls = mb.classify(f, mb.DEFAULTS)
+        if cls.layer == "PASS":
+            pass_n += 1
+        elif cls.layer == "WATCH":
+            watch_n += 1
+        else:
+            miss_n += 1
+        for g in cls.gates_failed | cls.gates_missing:
+            fail_counter[g] = fail_counter.get(g, 0) + 1
+        out.append({**b, "classify": cls.layer, "fail_gates": sorted(cls.gates_failed | cls.gates_missing)})
+
+    return jsonify({
+        "baggers": out,
+        "stats": {
+            "available": True,
+            "pass_n": pass_n, "watch_n": watch_n, "miss_n": miss_n,
+            "top_fail_gates": sorted(fail_counter.items(), key=lambda x: -x[1])[:5],
+        },
+    })
 
 
 def _multibagger_warmup_loop(interval_sec: int = 3600):

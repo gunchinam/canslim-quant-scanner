@@ -1,7 +1,7 @@
 # 멀티배거 파인더 메뉴 설계
 
 **Date**: 2026-05-25
-**Status**: Design (pending user review)
+**Status**: Implemented
 **Scope**: Flask 종목스캐너에 독립 페이지 `/multibagger` 추가. US 종목 중 잠재적 멀티배거 후보를 PASS / WATCH 두 레이어로 식별하고, 과거 5년 10배 종목과 회고 검증(DIFF) 제공.
 **Inspiration source**: Yartseva, *The Alchemy of Multibagger Stocks* (CAFE Working Paper 33) — 영감이며 충실 매핑 대상은 아님. 실제 베거 식별 효과 우선.
 

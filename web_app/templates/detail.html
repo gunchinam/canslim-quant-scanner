@@ -1420,6 +1420,37 @@ html, body {
       <div id="deep-sources" style="padding:0 24px 24px;"></div>
     </div>
 
+    <!-- 멀티배거 평가 위젯 -->
+    <div style="padding:12px 24px 0;">
+      <style>
+        #multibagger-widget { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-card); padding:14px 16px; }
+        #multibagger-widget h3 { font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:10px; }
+        #multibagger-widget .mb-badge { display:inline-block; font-size:11px; font-weight:700; padding:3px 8px; border-radius:100px; background:rgba(52,199,89,0.12); color:var(--success,#34c759); margin:2px; }
+        #multibagger-widget .mb-badge.fail { background:rgba(255,59,48,0.10); color:var(--destructive,#ff3b30); }
+      </style>
+      <section id="multibagger-widget" data-ticker="{{ ticker }}">
+        <h3>멀티배거 평가</h3>
+        <div id="mb-widget-body">로딩 중…</div>
+      </section>
+    </div>
+    <div style="height:24px;"></div>
+    <script>
+    (function () {
+      const sym = document.getElementById("multibagger-widget").dataset.ticker;
+      fetch("/api/multibagger/ticker/" + encodeURIComponent(sym))
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          const body = document.getElementById("mb-widget-body");
+          if (!d) { body.innerHTML = "<small>이 종목은 멀티배거 후보 풀에 없음 (시총·수익성 사전필터 탈락)</small>"; return; }
+          const gates = ["F1","F2","F3","F4","F5","F6","F7","F8"].map(g => {
+            const ok = d.gates_passed.includes(g);
+            return `<span class="mb-badge${ok ? '' : ' fail'}">${g} ${ok ? '✓' : '✗'}</span>`;
+          }).join(" ");
+          body.innerHTML = `<div>레이어: <b>${d.layer}</b> · 점수: <b>${d.score.toFixed(1)}</b></div><div style="margin-top:8px">${gates}</div>`;
+        });
+    })();
+    </script>
+
   </div><!-- end scroll-content -->
 </div><!-- end shell -->
 

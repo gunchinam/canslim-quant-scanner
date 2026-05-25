@@ -276,3 +276,104 @@ def tie_break_key(f: Fundamentals) -> tuple:
         score_q2(f) or 0,
         -(f.market_cap or 1e18),
     )
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator: build_results
+# ---------------------------------------------------------------------------
+
+def _pre_filter_F1_F2(base: list, t: dict) -> list:
+    out = []
+    for row in base:
+        mc = row.get("market_cap") or row.get("MarketCap") or row.get("marketCap")
+        eb = row.get("ebitda") or row.get("EBITDA")
+        fc = row.get("fcf") or row.get("FCF") or row.get("freeCashflow")
+        if mc is None or eb is None or fc is None:
+            continue
+        if not (t["F1_MCAP_MIN"] <= mc <= t["F1_MCAP_MAX"]):
+            continue
+        if eb <= 0 or fc <= 0:
+            continue
+        ticker = row.get("Ticker") or row.get("ticker") or row.get("symbol")
+        if not ticker:
+            continue
+        out.append(ticker)
+    return out
+
+
+def _row_summary(ticker: str, f: Fundamentals, cls: GateResult, score: float) -> dict:
+    return {
+        "ticker": ticker,
+        "score": round(score, 1),
+        "market_cap": f.market_cap,
+        "roic": f.roic,
+        "fcf_yield": f.fcf_yield,
+        "pb": f.pb,
+        "ebitda_yoy": f.ebitda_yoy,
+        "revenue_yoy": f.revenue_yoy,
+        "assets_yoy": f.assets_yoy,
+        "from_52w_high": f.from_52w_high,
+        "sector": f.sector,
+        "layer": cls.layer,
+        "gates_passed": sorted(cls.gates_passed),
+        "gates_failed": sorted(cls.gates_failed),
+        "gates_missing": sorted(cls.gates_missing),
+    }
+
+
+def build_results(base_rows: list, dgs10_pct: Optional[float],
+                  enrich_fn, max_workers: int = 8,
+                  thresholds: Optional[dict] = None) -> dict:
+    """베이스 스캔 결과 → PASS/WATCH 분류 + 점수 랭킹."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    t = thresholds or DEFAULTS
+    candidates = _pre_filter_F1_F2(base_rows, t)
+
+    pass_rows, watch_rows = [], []
+    enrich_failed = 0
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = {ex.submit(enrich_fn, sym, dgs10_pct): sym for sym in candidates}
+        for fut in as_completed(futures):
+            sym = futures[fut]
+            try:
+                f = fut.result()
+            except Exception:
+                enrich_failed += 1
+                continue
+            if f is None:
+                enrich_failed += 1
+                continue
+            cls = classify(f, t)
+            if cls.layer not in ("PASS", "WATCH"):
+                continue
+            score = compose_score(f)
+            row = _row_summary(sym, f, cls, score)
+            (pass_rows if cls.layer == "PASS" else watch_rows).append(row)
+
+    def _blank_for_sort(r):
+        return Fundamentals(
+            ebitda_yoy=r.get("ebitda_yoy"), assets_yoy=r.get("assets_yoy"),
+            roic=r.get("roic"), fcf_yield=r.get("fcf_yield"), pb=r.get("pb"),
+            market_cap=r.get("market_cap"),
+        )
+
+    def _sort_key(r):
+        return (-r["score"],) + tuple(-x for x in tie_break_key(_blank_for_sort(r)))
+
+    pass_rows.sort(key=_sort_key)
+    watch_rows.sort(key=lambda r: (len(r["gates_failed"]) + len(r["gates_missing"]), -r["score"]))
+
+    return {
+        "pass": pass_rows,
+        "watch": watch_rows,
+        "meta": {
+            "universe_n": len(base_rows),
+            "candidates_n": len(candidates),
+            "pass_n": len(pass_rows),
+            "watch_n": len(watch_rows),
+            "enrich_failed_n": enrich_failed,
+            "dgs10_pct": dgs10_pct,
+        },
+    }

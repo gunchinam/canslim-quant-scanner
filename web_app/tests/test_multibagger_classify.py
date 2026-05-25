@@ -58,3 +58,45 @@ def test_classify_excludes_when_3_missing_optional():
     )
     res = mb.classify(f, mb.DEFAULTS)
     assert res.layer == "EXCLUDED"
+
+
+def test_build_results_pre_filters_by_size_and_profit(monkeypatch):
+    base = [
+        {"Ticker": "SMALL", "market_cap": 1e9, "ebitda": 1e8, "fcf": 5e7},
+        {"Ticker": "BIG", "market_cap": 1e11, "ebitda": 1e10, "fcf": 1e9},
+        {"Ticker": "LOSS", "market_cap": 1e9, "ebitda": -1e8, "fcf": -5e7},
+    ]
+    def fake_enrich(sym, dgs10_pct):
+        return mb.Fundamentals(
+            market_cap=1e9, ebitda=1e8, fcf=5e7,
+            roic=0.15, fcf_yield=0.08, pb=2.0,
+            revenue_yoy=0.10, ebitda_yoy=0.15, assets_yoy=0.08,
+            icr=5.0, debt_ebitda=2.0,
+            from_52w_high=-0.20, return_1m=0.10,
+            dgs10_pct=3.5, sector="Healthcare",
+        )
+    res = mb.build_results(base, dgs10_pct=3.5, enrich_fn=fake_enrich, max_workers=2)
+    tickers = {r["ticker"] for r in res["pass"] + res["watch"]}
+    assert "SMALL" in tickers
+    assert "BIG" not in tickers
+    assert "LOSS" not in tickers
+
+
+def test_build_results_sorts_pass_by_score():
+    def enrich_factory(roic):
+        def _e(sym, dgs10_pct):
+            return mb.Fundamentals(
+                market_cap=1e9, ebitda=1e8, fcf=5e7,
+                roic=roic, fcf_yield=0.08, pb=2.0,
+                revenue_yoy=0.10, ebitda_yoy=0.15, assets_yoy=0.08,
+                icr=5.0, debt_ebitda=2.0,
+                from_52w_high=-0.20, return_1m=0.10,
+                dgs10_pct=3.5, sector="Healthcare",
+            )
+        return _e
+
+    base_a = [{"Ticker": "A", "market_cap": 1e9, "ebitda": 1e8, "fcf": 5e7}]
+    base_b = [{"Ticker": "B", "market_cap": 1e9, "ebitda": 1e8, "fcf": 5e7}]
+    res_a = mb.build_results(base_a, 3.5, enrich_factory(0.25), max_workers=1)
+    res_b = mb.build_results(base_b, 3.5, enrich_factory(0.12), max_workers=1)
+    assert res_a["pass"][0]["score"] > res_b["pass"][0]["score"]

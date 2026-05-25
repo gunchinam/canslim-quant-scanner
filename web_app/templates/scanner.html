@@ -3621,6 +3621,17 @@ document.addEventListener('click', function(e) {
   const clearBtn = document.getElementById('admin-clear-btn');
   let myNick = '', isOpen = false, unread = 0, isAdmin = false;
 
+  // 토글은 socket과 무관하게 우선 등록 (socket.io 로드 실패해도 패널은 열림)
+  toggle.addEventListener('click', () => {
+    isOpen = !isOpen;
+    panel.classList.toggle('open', isOpen);
+    if (isOpen) { unread = 0; badge.style.display = 'none'; try { input.focus(); } catch(e){} try { scrollBottom(); } catch(e){} }
+  });
+
+  if (typeof io === 'undefined') {
+    console.warn('[chat] socket.io 로드 실패 — 패널은 열리지만 메시지 전송 불가');
+    return;
+  }
   const socket = io({ transports: ['websocket','polling'] });
 
   function fmtTime(ts) {
@@ -3733,11 +3744,6 @@ document.addEventListener('click', function(e) {
   sendBtn.addEventListener('click', send);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
 
-  toggle.addEventListener('click', () => {
-    isOpen = !isOpen;
-    panel.classList.toggle('open', isOpen);
-    if (isOpen) { unread = 0; badge.style.display = 'none'; input.focus(); scrollBottom(); }
-  });
 })();
 </script>
 

@@ -188,7 +188,7 @@ def _store_scan_cache(key: tuple, ts: int, rows: list) -> bytes:
     with _scan_results_cache_lock:
         _scan_results_cache[key] = {"_ts": ts, "data": rows}
     try:
-        raw = json.dumps(rows, ensure_ascii=False).encode("utf-8")
+        raw = json.dumps(_sanitize_nan(rows), ensure_ascii=False, allow_nan=False).encode("utf-8")
         compressed = _gz.compress(raw, compresslevel=1)
     except Exception:
         compressed = b""
@@ -637,6 +637,17 @@ def _warmup_fill_cache(market: str) -> None:
             _store_scan_cache((market, "BALANCED", ""), ts, results)
             _populate_sector_caches(market, "BALANCED", results, ts)
             logging.info("%s quick-warm done: %d tickers (from pickle)", market, len(results))
+            # 상위 20개 4축 차트 선제 생성 — 첫 클릭 즉시 표시 (matplotlib 직렬화로 단일 스레드)
+            _top20 = sorted(results, key=lambda r: r.get("TotalScore") or 0, reverse=True)[:20]
+            def _bg_4ax_warm(_tickers=_top20, _mkt=market):
+                for _r in _tickers:
+                    _tk = _r.get("Ticker", "")
+                    if _tk:
+                        try:
+                            _warm_four_axis(_tk, _mkt)
+                        except Exception as _e:
+                            logging.debug("4ax-warm %s: %s", _tk, _e)
+            threading.Thread(target=_bg_4ax_warm, daemon=True, name=f"4ax-warm-{market}").start()
     except Exception as e:
         logging.warning("%s quick-warm failed: %s", market, e)
 
@@ -2323,6 +2334,201 @@ def api_regime(ticker: str):
         return jsonify({"error": str(e)}), 500
 
 
+def _compute_four_axis_payload(ticker: str, market: str) -> tuple:
+    """yfinance + FourAxisAnalyzer + HandDrawnChartRenderer → (payload_dict|None, err_str|None)."""
+    try:
+        import yfinance as yf
+        _configure_yf_cache()
+        from four_axis_analyzer import FourAxisAnalyzer
+        from handdrawn_renderer import HandDrawnChartRenderer
+
+        candidates = _build_yf_candidates(ticker, market)
+        fetch_timeout_sec = _get_config_int("FOUR_AXIS_FETCH_TIMEOUT_SEC", 20, minimum=5, maximum=120)
+        info_timeout_sec = _get_config_int("FOUR_AXIS_INFO_TIMEOUT_SEC", 8, minimum=3, maximum=60)
+        min_rows = _get_config_int("FOUR_AXIS_MIN_ROWS", 20, minimum=10, maximum=252)
+
+        hist = None
+        tried = []
+        periods = ("2y", "1y", "6mo", "3mo")
+        for yt in candidates:
+            rate_limited_break = False
+            for period in periods:
+                tried.append(f"{yt}({period})")
+                try:
+                    h = _run_with_timeout(
+                        lambda yt=yt, period=period: yf.Ticker(yt).history(
+                            period=period,
+                            auto_adjust=True,
+                            timeout=fetch_timeout_sec,
+                        ),
+                        fetch_timeout_sec,
+                        f"four_axis history {yt} {period}",
+                    )
+                    if h is not None and not h.empty and len(h) >= min_rows:
+                        hist = h
+                        break
+                except Exception as exc:
+                    msg = str(exc).lower()
+                    logging.warning("four_axis history fetch failed: %s", exc)
+                    if "too many requests" in msg or "rate" in msg and "limit" in msg:
+                        try:
+                            time.sleep(1.0)
+                            h = _run_with_timeout(
+                                lambda yt=yt, period=period: yf.Ticker(yt).history(
+                                    period=period,
+                                    auto_adjust=True,
+                                    timeout=fetch_timeout_sec,
+                                ),
+                                fetch_timeout_sec,
+                                f"four_axis history {yt} {period} retry",
+                            )
+                            if h is not None and not h.empty and len(h) >= min_rows:
+                                hist = h
+                                break
+                        except Exception as _e:
+                            logging.debug("silent except (app.py): %s", _e)
+                        rate_limited_break = True
+                        break
+                    continue
+            if hist is not None:
+                break
+
+        if (hist is None or hist.empty or len(hist) < min_rows) and market == "KR":
+            try:
+                import FinanceDataReader as fdr
+                from datetime import datetime, timedelta
+                code6 = _strip_kr_suffix(ticker).zfill(6)
+                start = (datetime.now() - timedelta(days=750)).strftime("%Y-%m-%d")
+                tried.append(f"FDR:{code6}")
+                fdr_df = _run_with_timeout(
+                    lambda: fdr.DataReader(code6, start),
+                    fetch_timeout_sec,
+                    f"four_axis FDR {code6}",
+                )
+                if fdr_df is not None and not fdr_df.empty and len(fdr_df) >= min_rows:
+                    keep = ["Open", "High", "Low", "Close", "Volume"]
+                    hist = fdr_df[keep].copy()
+            except Exception as exc:
+                logging.warning("four_axis FDR fallback failed: %s", exc)
+
+        if hist is None or hist.empty or len(hist) < min_rows:
+            _rows_n = 0 if hist is None or hist.empty else len(hist)
+            return None, f"데이터 부족 (시도: {', '.join(tried[:6])} / 확보: {_rows_n}일, 필요: {min_rows}일)"
+
+        analyzer = FourAxisAnalyzer(hist, ticker)
+        result = analyzer.analyze()
+
+        chart_title = ""
+        try:
+            if market == "KR":
+                code6 = _strip_kr_suffix(ticker).zfill(6)
+                try:
+                    from quant_nexus_v20 import QuantNexusApp
+                    chart_title = (
+                        QuantNexusApp.KR_NAMES.get(f"{code6}.KS")
+                        or QuantNexusApp.KR_NAMES.get(f"{code6}.KQ")
+                        or ""
+                    )
+                except Exception as _e:
+                    logging.debug("silent except (app.py): %s", _e)
+                try:
+                    from swing_scan.config import stock_names as _sn
+                    nm = _sn.get_name(code6)
+                    if nm and nm != code6:
+                        chart_title = str(nm)
+                except Exception as _e:
+                    logging.debug("silent except (app.py): %s", _e)
+            if not chart_title and market == "US":
+                try:
+                    yt0 = candidates[0] if candidates else ticker
+                    yinfo = _run_with_timeout(
+                        lambda yt0=yt0: yf.Ticker(yt0).info or {},
+                        info_timeout_sec,
+                        f"four_axis info {yt0}",
+                    )
+                    chart_title = (yinfo.get("longName") or yinfo.get("shortName") or "")
+                except Exception as _e:
+                    logging.debug("silent except (app.py): %s", _e)
+        except Exception as _e:
+            logging.debug("silent except (app.py): %s", _e)
+        chart_title = chart_title or ticker
+
+        renderer = HandDrawnChartRenderer(
+            hist, result, ticker=chart_title,
+            width_px=1200, height_px=560, dpi=100,
+        )
+        img = renderer.render()
+
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        chart_b64 = base64.b64encode(buf.read()).decode("ascii")
+
+        import numpy as np
+
+        def _sanitize_np(obj):
+            if isinstance(obj, dict):
+                return {k: _sanitize_np(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple)):
+                return [_sanitize_np(v) for v in obj]
+            if isinstance(obj, (np.integer,)):
+                return int(obj)
+            if isinstance(obj, (np.floating,)):
+                return float(obj)
+            if isinstance(obj, (np.bool_,)):
+                return bool(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            return obj
+
+        rd = _sanitize_np(result.to_dict())
+        payload = {
+            "chart": chart_b64,
+            "phase": rd["phase"],
+            "signal_stars": rd["signal_stars"],
+            "haiku": rd["haiku"],
+            "trend": rd["trend"],
+            "momentum": rd["momentum"],
+            "volatility": rd["volatility"],
+            "volume": rd["volume"],
+            "key_observation": rd.get("key_observation", ""),
+            "structured_analysis": rd.get("structured_analysis", ""),
+        }
+        return payload, None
+    except Exception as e:
+        logging.debug("_compute_four_axis_payload %s/%s: %s", market, ticker, e)
+        return None, str(e)
+
+
+_four_axis_render_lock = threading.Lock()  # BG warm만 직렬화 — 유저 요청은 락 없이 즉시 실행
+
+
+def _warm_four_axis(ticker: str, market: str) -> None:
+    """BG 선제 4축 캐시 채우기 — 클릭 시 차트 즉시 표시."""
+    cache_key = f"{ticker}:{market}"
+    with _four_axis_cache_lock:
+        if cache_key in _four_axis_cache:
+            return
+    # 비블로킹 — 다른 BG warm이 실행 중이면 스킵 (유저 요청을 막지 않기 위해)
+    if not _four_axis_render_lock.acquire(blocking=False):
+        return
+    try:
+        with _four_axis_cache_lock:
+            if cache_key in _four_axis_cache:
+                return
+        payload, err = _compute_four_axis_payload(ticker, market)
+        if payload:
+            with _four_axis_cache_lock:
+                if len(_four_axis_cache) >= _FOUR_AXIS_MAX:
+                    _four_axis_cache.pop(next(iter(_four_axis_cache)), None)
+                _four_axis_cache[cache_key] = {"data": payload, "_ts": int(time.time())}
+            logging.info("4axis pre-warm: %s/%s OK", market, ticker)
+        elif err:
+            logging.debug("4axis pre-warm: %s/%s failed: %s", market, ticker, err)
+    finally:
+        _four_axis_render_lock.release()
+
+
 @app.route("/api/four_axis/<ticker>")
 def api_four_axis(ticker: str):
     """4축 핸드드로윙 차트 + 분석 데이터 반환 (base64 PNG)."""
@@ -2350,189 +2556,15 @@ def api_four_axis(ticker: str):
         cached = _four_axis_cache.get(cache_key)
         if cached and (now - cached.get("_ts", 0)) < _FOUR_AXIS_TTL_SEC:
             return jsonify(cached["data"])
-    try:
-        import yfinance as yf
-        _configure_yf_cache()
-        from four_axis_analyzer import FourAxisAnalyzer
-        from handdrawn_renderer import HandDrawnChartRenderer
-
-        candidates = _build_yf_candidates(ticker, market)
-        fetch_timeout_sec = _get_config_int("FOUR_AXIS_FETCH_TIMEOUT_SEC", 20, minimum=5, maximum=120)
-        info_timeout_sec = _get_config_int("FOUR_AXIS_INFO_TIMEOUT_SEC", 8, minimum=3, maximum=60)
-        min_rows = _get_config_int("FOUR_AXIS_MIN_ROWS", 20, minimum=10, maximum=252)
-
-        # 다중 기간 폴백 — 2y → 1y → 6mo → 3mo 순으로 시도
-        # 일부 ETF/저유동 종목은 1y로는 비어있고 6mo 이하에서만 데이터가 나오기도 함
-        # 429 (rate-limited) 수신 시 한 번 backoff 후 재시도하고, 그래도 실패면
-        # 즉시 다음 후보로 이동(같은 후보로 4 period 모두 두드리는 N+1 회피).
-        hist = None
-        tried = []
-        periods = ("2y", "1y", "6mo", "3mo")
-        for yt in candidates:
-            # rate-limit 은 후보(ticker suffix)별로 따로 판단 — .KS 가 막혔다고
-            # .KQ 까지 포기하면 멀쩡한 대체 후보를 놓친다.
-            rate_limited_break = False
-            for period in periods:
-                tried.append(f"{yt}({period})")
-                try:
-                    h = _run_with_timeout(
-                        lambda yt=yt, period=period: yf.Ticker(yt).history(
-                            period=period,
-                            auto_adjust=True,
-                            timeout=fetch_timeout_sec,
-                        ),
-                        fetch_timeout_sec,
-                        f"four_axis history {yt} {period}",
-                    )
-                    if h is not None and not h.empty and len(h) >= min_rows:
-                        hist = h
-                        break
-                except Exception as exc:
-                    msg = str(exc).lower()
-                    logging.warning("four_axis history fetch failed: %s", exc)
-                    if "too many requests" in msg or "rate" in msg and "limit" in msg:
-                        # 한 번만 짧게 backoff 하고 같은 period 재시도, 그래도 실패면 후보 자체를 포기
-                        try:
-                            time.sleep(1.0)
-                            h = _run_with_timeout(
-                                lambda yt=yt, period=period: yf.Ticker(yt).history(
-                                    period=period,
-                                    auto_adjust=True,
-                                    timeout=fetch_timeout_sec,
-                                ),
-                                fetch_timeout_sec,
-                                f"four_axis history {yt} {period} retry",
-                            )
-                            if h is not None and not h.empty and len(h) >= min_rows:
-                                hist = h
-                                break
-                        except Exception as _e:
-                            logging.debug("silent except (app.py): %s", _e)
-                        rate_limited_break = True
-                        break
-                    continue
-            if hist is not None:
-                break
-
-        # yfinance가 KR 종목에 빈 데이터를 자주 반환 → FinanceDataReader 폴백
-        if (hist is None or hist.empty or len(hist) < min_rows) and market == "KR":
-            try:
-                import FinanceDataReader as fdr
-                from datetime import datetime, timedelta
-                code6 = _strip_kr_suffix(ticker).zfill(6)
-                start = (datetime.now() - timedelta(days=750)).strftime("%Y-%m-%d")
-                tried.append(f"FDR:{code6}")
-                fdr_df = _run_with_timeout(
-                    lambda: fdr.DataReader(code6, start),
-                    fetch_timeout_sec,
-                    f"four_axis FDR {code6}",
-                )
-                if fdr_df is not None and not fdr_df.empty and len(fdr_df) >= min_rows:
-                    keep = ["Open", "High", "Low", "Close", "Volume"]
-                    hist = fdr_df[keep].copy()
-            except Exception as exc:
-                logging.warning("four_axis FDR fallback failed: %s", exc)
-
-        if hist is None or hist.empty or len(hist) < min_rows:
-            rows = 0 if hist is None or hist.empty else len(hist)
-            return jsonify({
-                "error": f"데이터 부족 (시도: {', '.join(tried[:6])} / 확보: {rows}일, 필요: {min_rows}일)"
-            }), 404
-
-        analyzer = FourAxisAnalyzer(hist, ticker)
-        result = analyzer.analyze()
-
-        # 차트 제목에 종목명 표시 (티커 코드 대신).
-        # KR 우선순위: kr_company_info → yfinance longName/shortName → 티커 폴백.
-        chart_title = ""
-        try:
-            if market == "KR":
-                code6 = _strip_kr_suffix(ticker).zfill(6)
-                try:
-                    from quant_nexus_v20 import QuantNexusApp
-                    chart_title = (
-                        QuantNexusApp.KR_NAMES.get(f"{code6}.KS")
-                        or QuantNexusApp.KR_NAMES.get(f"{code6}.KQ")
-                        or ""
-                    )
-                except Exception as _e:
-                    logging.debug("silent except (app.py): %s", _e)
-                try:
-                    from swing_scan.config import stock_names as _sn
-                    nm = _sn.get_name(code6)
-                    if nm and nm != code6:
-                        chart_title = str(nm)
-                except Exception as _e:
-                    logging.debug("silent except (app.py): %s", _e)
-            # yf.Ticker(...).info 호출은 매우 느리고 hang 위험이 큼.
-            # KR은 stock_names 미스 시 ticker 폴백 (info 호출 안 함).
-            # US만 보조 폴백으로 info 사용.
-            if not chart_title and market == "US":
-                try:
-                    yt0 = candidates[0] if candidates else ticker
-                    yinfo = _run_with_timeout(
-                        lambda yt0=yt0: yf.Ticker(yt0).info or {},
-                        info_timeout_sec,
-                        f"four_axis info {yt0}",
-                    )
-                    chart_title = (yinfo.get("longName")
-                                   or yinfo.get("shortName") or "")
-                except Exception as _e:
-                    logging.debug("silent except (app.py): %s", _e)
-        except Exception as _e:
-            logging.debug("silent except (app.py): %s", _e)
-        chart_title = chart_title or ticker
-
-        # 큰 차트 렌더링 (1200x560) — 2패널(가격+거래량) 구성
-        renderer = HandDrawnChartRenderer(
-            hist, result, ticker=chart_title,
-            width_px=1200, height_px=560, dpi=100,
-        )
-        img = renderer.render()
-
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        buf.seek(0)
-        chart_b64 = base64.b64encode(buf.read()).decode("ascii")
-
-        import numpy as np
-
-        def _sanitize(obj):
-            if isinstance(obj, dict):
-                return {k: _sanitize(v) for k, v in obj.items()}
-            if isinstance(obj, (list, tuple)):
-                return [_sanitize(v) for v in obj]
-            if isinstance(obj, (np.integer,)):
-                return int(obj)
-            if isinstance(obj, (np.floating,)):
-                return float(obj)
-            if isinstance(obj, (np.bool_,)):
-                return bool(obj)
-            if isinstance(obj, np.ndarray):
-                return obj.tolist()
-            return obj
-
-        rd = _sanitize(result.to_dict())
-        payload = {
-            "chart": chart_b64,
-            "phase": rd["phase"],
-            "signal_stars": rd["signal_stars"],
-            "haiku": rd["haiku"],
-            "trend": rd["trend"],
-            "momentum": rd["momentum"],
-            "volatility": rd["volatility"],
-            "volume": rd["volume"],
-            "key_observation": rd.get("key_observation", ""),
-            "structured_analysis": rd.get("structured_analysis", ""),
-        }
-        with _four_axis_cache_lock:
-            if len(_four_axis_cache) >= _FOUR_AXIS_MAX:
-                _four_axis_cache.pop(next(iter(_four_axis_cache)), None)
-            _four_axis_cache[cache_key] = {"data": payload, "_ts": int(time.time())}
-        return jsonify(payload)
-    except Exception as e:
-        logging.exception("api_four_axis")
-        return jsonify({"error": str(e)}), 500
+    # 유저 요청은 락 없이 즉시 실행 — BG warm과 경쟁해도 Agg 백엔드에서 안전
+    payload, err = _compute_four_axis_payload(ticker, market)
+    if payload is None:
+        return jsonify({"error": err or "생성 실패"}), (404 if "데이터 부족" in (err or "") else 500)
+    with _four_axis_cache_lock:
+        if len(_four_axis_cache) >= _FOUR_AXIS_MAX:
+            _four_axis_cache.pop(next(iter(_four_axis_cache)), None)
+        _four_axis_cache[cache_key] = {"data": payload, "_ts": int(time.time())}
+    return jsonify(payload)
 
 
 # ── 공시·뉴스 API (DART + Naver News) ─────────────────────────────────
@@ -2930,7 +2962,7 @@ threading.Thread(target=_warmup_moat_cache, daemon=True, name="moat-cache-warmup
 def _cold_start_fill():
     """서버 기동 직후 파일 잠금 없이 US/KR 캐시를 즉시 채운다.
     파일 잠금 실패로 quick-warm이 건너뛰어질 때도 첫 요청이 캐시 히트하도록 보장."""
-    time.sleep(0.5)  # Flask/SocketIO 초기화 완료 대기
+    time.sleep(0.1)  # Flask/SocketIO 초기화 완료 대기
     for _m in ("US", "KR"):
         try:
             # 이미 채워진 캐시는 덮어쓰지 않음

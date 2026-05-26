@@ -73,6 +73,20 @@ if errorlevel 1 (
     )
 )
 
+rem -- finnhub critical check (sentiment/peers data depends on it).
+rem Missing finnhub silently zeroes out insider/peers/news cards.
+%PYEXE% -c "import finnhub" >nul 2>&1
+if errorlevel 1 (
+    echo [run_quant_nexus] finnhub-python missing — installing ...
+    %PYEXE% -m pip install --quiet --disable-pip-version-check "finnhub-python>=2.4"
+    %PYEXE% -c "import finnhub" >nul 2>&1
+    if errorlevel 1 (
+        echo [run_quant_nexus] WARNING: finnhub install failed. US sentiment/peers cards will be empty.
+    ) else (
+        echo [run_quant_nexus] finnhub-python installed.
+    )
+)
+
 rem -- Pre-flight: if port 5000 is already occupied, skip launch.
 rem Open browser for existing instance and exit cleanly.
 rem (Prevents WinError 10048 traceback + wrong page display)

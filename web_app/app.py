@@ -1221,9 +1221,11 @@ def api_ticker(ticker: str):
     with _ticker_detail_cache_lock:
         _td_cached = _ticker_detail_cache.get(_td_key)
         if _td_cached and (_td_now - _td_cached.get("_ts", 0)) < _TICKER_DETAIL_TTL_SEC:
-            # 한줄평은 항상 최신 로직으로 재생성 (캐시는 raw 데이터만 재사용)
+            # 한줄평은 최신 로직으로 재생성하되, moat(disk I/O)는 재계산하지 않음
             try:
-                fresh = _annotate_one_liners([_td_cached["data"]], force=True)[0]
+                from one_liner import annotate as _ol_annotate
+                fresh = dict(_td_cached["data"])
+                _ol_annotate([fresh])
             except Exception:
                 fresh = _td_cached["data"]
             return jsonify(fresh)
@@ -1248,16 +1250,8 @@ def api_ticker(ticker: str):
                         result["Name"] = fixed
                 except Exception as _e:
                     logging.debug("silent except (app.py): %s", _e)
-            # 네이버 금융 투자자 매매동향 (외인/기관 순매수, 단위: 주)
-            try:
-                from naver_finance import get_investor_flow
-                inv = get_investor_flow(code6)
-                if inv.get("rows"):
-                    result["_Investor_Foreign"] = int(inv.get("foreign_net_latest") or 0)
-                    result["_Investor_Institution"] = int(inv.get("inst_net_latest") or 0)
-                    result["_Investor_Available"] = True
-            except Exception as ne:
-                logging.debug("naver investor flow failed for %s: %s", ticker, ne)
+            # 네이버 투자자 동향은 /api/investor_flow/<ticker>로 분리 (lazy-load)
+            result["_Investor_Available"] = False
         else:
             # US 종목: yfinance + Finnhub 센티먼트는 /api/sentiment/<ticker>로 분리 (lazy-load).
             # 종목 상세 패널 첫 paint 지연(5~10s yfinance .info hang)을 제거하기 위함.
@@ -1360,6 +1354,36 @@ def api_sentiment(ticker: str):
         out["_FH_Available"] = False
 
     return jsonify(out)
+
+
+@app.route("/api/investor_flow/<ticker>")
+def api_investor_flow(ticker: str):
+    """GET /api/investor_flow/005930?market=KR → 네이버 외인/기관 순매수 (lazy-load).
+
+    /api/ticker의 KR blocking 병목 제거를 위해 분리.
+    """
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
+    market = (request.args.get("market") or "KR").upper()
+    if market != "KR":
+        return jsonify({"ok": False, "reason": "us_not_supported"})
+    try:
+        from naver_finance import get_investor_flow
+        code6 = _strip_kr_suffix(ticker).zfill(6)
+        inv = get_investor_flow(code6)
+        if inv.get("rows"):
+            return jsonify({
+                "ok": True,
+                "ticker": ticker,
+                "_Investor_Foreign": int(inv.get("foreign_net_latest") or 0),
+                "_Investor_Institution": int(inv.get("inst_net_latest") or 0),
+                "_Investor_Available": True,
+            })
+        return jsonify({"ok": False, "ticker": ticker, "_Investor_Available": False})
+    except Exception as e:
+        logging.debug("investor_flow failed for %s: %s", ticker, e)
+        return jsonify({"ok": False, "_Investor_Available": False})
 
 
 @app.route("/api/aq_signal/<ticker>")

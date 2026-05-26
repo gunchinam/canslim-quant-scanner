@@ -2504,6 +2504,7 @@ async function openDetail(ticker) {
   loadDpFourAxis(ticker);
   _loadAqSignal(ticker, seq);
   _loadSentiment(ticker, currentMarket, seq);
+  _loadInvestorFlow(ticker, currentMarket, seq);
   loadConsensus(ticker, 'dp-consensus-card', 'dpcons');
   loadSignalHistory(ticker, currentMarket);
 
@@ -2565,6 +2566,22 @@ async function _loadAqSignal(ticker, seq) {
   } catch (e) {
     console.error('AQ signal 로드 실패:', e);
     aqRow.style.display = 'none';
+  }
+}
+
+async function _loadInvestorFlow(ticker, market, seq) {
+  if (market !== 'KR') return;
+  try {
+    const res = await fetch(`/api/investor_flow/${encodeURIComponent(ticker)}?market=KR`);
+    if (seq !== _detailSeq) return;
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.ok || seq !== _detailSeq) return;
+    if (!_lastDetailData || _lastDetailData.Ticker !== ticker) return;
+    Object.assign(_lastDetailData, data);
+    _renderInvestorCard(_lastDetailData);
+  } catch (e) {
+    console.debug('investor_flow 로드 실패:', e);
   }
 }
 

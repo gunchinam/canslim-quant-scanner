@@ -2825,67 +2825,6 @@ def api_score_history(ticker: str):
     return jsonify({"ticker": ticker, "market": market, "points": points})
 
 
-@app.route("/api/signal-history/<ticker>")
-def api_signal_history(ticker):
-    ticker = _validate_ticker(ticker)
-    if not ticker:
-        return jsonify({"error": "invalid ticker"}), 400
-    market = request.args.get("market")
-    if market not in ("KR", "US"):
-        return jsonify({"error": "market must be KR or US"}), 400
-    try:
-        import history
-        timeline = history.load_timeline(ticker, market)
-    except Exception as e:
-        logging.warning("signal-history failed (%s): %s", ticker, e)
-        return jsonify({"ticker": ticker, "market": market, "timeline": []}), 500
-    return jsonify({"ticker": ticker, "market": market, "timeline": timeline})
-
-
-@app.route("/api/deep-analysis/<ticker>")
-def api_deep_analysis(ticker: str):
-    ticker_valid = _validate_ticker(ticker)
-    if not ticker_valid:
-        return jsonify({"error": "invalid ticker"}), 400
-    ticker = ticker_valid
-    """Gemini 2.0 Flash + Google Search 그라운딩 기반 8-Phase 종목 심층 분석.
-
-    Query: market=KR|US, mode=brief|standard|detail, force=1 (캐시 무시)
-    """
-    market = (request.args.get("market") or "KR").upper()
-    mode = (request.args.get("mode") or "standard").lower()
-    if mode not in ("brief", "standard", "detail"):
-        mode = "standard"
-    force = (request.args.get("force") or "").lower() in ("1", "true", "yes")
-    cache_only = (request.args.get("cache_only") or "").lower() in ("1", "true", "yes")
-    name = (request.args.get("name") or "").strip() or None
-
-    try:
-        import deep_analysis
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"deep_analysis 모듈 로드 실패: {e}"}), 500
-
-    # cache_only: 캐시 적중 시만 결과, 미적중 시 304 의미로 빈 응답
-    if cache_only:
-        cached = deep_analysis._load_cache(ticker, mode)  # noqa: SLF001
-        if cached:
-            return jsonify(cached)
-        return jsonify({"ok": False, "error": "no-cache", "_cached": False}), 204
-
-    if not deep_analysis.is_available():
-        return jsonify({
-            "ok": False,
-            "error": "GEMINI_API_KEY가 설정되지 않았습니다. 설정 화면에서 등록해주세요.",
-        }), 503
-
-    try:
-        result = deep_analysis.analyze(
-            ticker=ticker, market=market, mode=mode, name=name, force=force,
-        )
-        return jsonify(result)
-    except Exception as e:
-        logging.exception("deep-analysis failed: %s", ticker)
-        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/bucket-stats")

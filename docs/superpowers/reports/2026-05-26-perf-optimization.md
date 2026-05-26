@@ -245,6 +245,106 @@ _run_with_timeout(lambda: yf.Ticker(ticker).info, 5, ...)
 
 ---
 
+### W12 — 피어 분석 _build_row yf.info 타임아웃 래핑
+**파일:** `web_app/app.py` (~line 1409)
+
+```python
+# Before — 무한 대기 가능
+yi = yf.Ticker(tk).info or {}
+
+# After
+yi = _run_with_timeout(lambda: yf.Ticker(tk).info or {}, 5, f"peer_info_{tk}") or {}
+```
+
+피어 종목 1개당 최대 5 s로 제한. 10개 피어 기준 최악 케이스 **∞ → 50 s**.
+
+---
+
+### W13 — 어닝 캘린더 calendar/info 타임아웃 래핑
+**파일:** `web_app/app.py` (~line 1822)
+
+```python
+# Before
+cal = t.calendar
+info = t.info or {}
+
+# After
+cal = _run_with_timeout(lambda: t.calendar, 5, "ticker_events_cal")
+info = _run_with_timeout(lambda: t.info or {}, 5, "ticker_events_info") or {}
+```
+
+실적·배당 캘린더 조회 블로킹 제거. 각 최대 5 s.
+
+---
+
+### W14 — insider_transactions 타임아웃 래핑
+**파일:** `web_app/app.py` (~line 1960)
+
+```python
+# Before
+df = t.insider_transactions
+
+# After
+df = _run_with_timeout(lambda: t.insider_transactions, 8, "insider_transactions")
+```
+
+내부자 거래 조회 블로킹 제거. 최대 8 s (DataFrame이 커서 약간 여유).
+
+---
+
+### W15 — us-insight holders/upgrades 타임아웃 래핑
+**파일:** `web_app/app.py` (~line 2624)
+
+```python
+# Before
+info = yf.Ticker(ticker).info or {}
+...
+yf.Ticker(ticker).upgrades_downgrades  # Ticker 객체 2회 생성
+
+# After — 단일 객체 공유 + timeout
+_t_insight = yf.Ticker(ticker)
+info = _run_with_timeout(lambda: _t_insight.info or {}, 5, "us_insight_info") or {}
+...
+_upgrades = _run_with_timeout(lambda: _t_insight.upgrades_downgrades, 5, "us_insight_upgrades")
+```
+
+Ticker 객체 중복 생성 1회 제거 + 각 속성 접근 5 s cap.
+
+---
+
+### W16 — macro.py naver scrape timeout 단축
+**파일:** `web_app/macro.py` (~line 142)
+
+```python
+urlopen(req, timeout=7)  →  urlopen(req, timeout=5)
+```
+
+한국/미국 기준금리 스크래핑 대기 단축.
+
+---
+
+### A1 — agentquant_signal._fetch_ohlcv 타임아웃 래핑
+**파일:** `web_app/agentquant_signal.py`
+
+```python
+# Before — yf.Ticker().history() 무한 대기 가능
+df = yf.Ticker(yf_ticker).history(period=period, auto_adjust=False)
+
+# After — 12s thread-timeout 래퍼
+_q: queue.Queue = queue.Queue(maxsize=1)
+def _worker():
+    _q.put((True, yf.Ticker(yf_ticker).history(...)))
+_t = threading.Thread(target=_worker, daemon=True)
+_t.start()
+_t.join(timeout=12)
+if _t.is_alive():
+    return None  # 타임아웃 → graceful skip
+```
+
+AgentQuant 레짐 신호 조회가 yfinance I/O 지연으로 종목 상세 페이지 전체를 블로킹하던 문제 해소.
+
+---
+
 ## 3. 결과 요약표
 
 | # | 항목 | 이전 | 이후 | 절감 |
@@ -263,6 +363,12 @@ _run_with_timeout(lambda: yf.Ticker(ticker).info, 5, ...)
 | W9 | 검색 자동완성 | 2,500개 매 요청 스캔 | pre-built blob 조회 | **매우 빠름** |
 | W10 | 첫 검색 응답 | 인덱스 빌드 지연 | 백그라운드 사전 워밍 | 즉시 응답 |
 | W11 | api_ticker yf.info | 10 s max | 5 s max | **50%** |
+| W12 | 피어 분석 yf.info | 무제한 | 5 s/종목 | 블로킹 제거 |
+| W13 | 어닝 캘린더 calendar+info | 무제한 | 5 s × 2 | 블로킹 제거 |
+| W14 | insider_transactions | 무제한 | 8 s | 블로킹 제거 |
+| W15 | us-insight info+upgrades | 무제한 + 객체 2회 | 5 s × 2 + 객체 1회 | 블로킹 제거 |
+| W16 | macro.py naver scrape | 7 s | 5 s | 29% |
+| A1 | agentquant _fetch_ohlcv | 무제한 | 12 s | 블로킹 제거 |
 
 ---
 

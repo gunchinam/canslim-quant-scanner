@@ -617,6 +617,13 @@ def _populate_sector_caches(market: str, strategy: str, results: list, ts: int) 
 def _warmup_fill_cache(market: str) -> None:
     """prefer_cache=True로 pickle에서 in-memory cache를 빠르게 채운다 (quick-warm pass)."""
     try:
+        # moat 메모리 캐시가 비어 있으면 먼저 채운다 — annotate_one_liners 디스크 I/O 제거
+        try:
+            import moat as _moat
+            if not _moat._mem_cache:
+                _moat.preload_cache()
+        except Exception:
+            pass
         adapter_cls = _get_scan_adapter_cls()
         adapter = adapter_cls(market=market, strategy="BALANCED")
         results = adapter.scan_all(prefer_cache=True, cache_only=True, max_workers=8)
@@ -2918,6 +2925,24 @@ def _warmup_moat_cache():
 
 
 threading.Thread(target=_warmup_moat_cache, daemon=True, name="moat-cache-warmup").start()
+
+
+def _cold_start_fill():
+    """서버 기동 직후 파일 잠금 없이 US/KR 캐시를 즉시 채운다.
+    파일 잠금 실패로 quick-warm이 건너뛰어질 때도 첫 요청이 캐시 히트하도록 보장."""
+    time.sleep(0.5)  # Flask/SocketIO 초기화 완료 대기
+    for _m in ("US", "KR"):
+        try:
+            # 이미 채워진 캐시는 덮어쓰지 않음
+            with _scan_results_cache_lock:
+                _already = _scan_results_cache.get((_m, "BALANCED", ""))
+            if not _already:
+                _warmup_fill_cache(_m)
+        except Exception as _e:
+            logging.warning("cold-start-fill %s failed: %s", _m, _e)
+
+
+threading.Thread(target=_cold_start_fill, daemon=True, name="cold-start-fill").start()
 
 if __name__ == "__main__":
     debug = (os.environ.get("FLASK_DEBUG") or "0").strip().lower() in ("1", "true", "yes")

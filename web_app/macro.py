@@ -139,7 +139,7 @@ def _fetch_naver_rate(key: str, query: str) -> float | None:
             headers={"User-Agent":
                      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) scanner-macro"},
         )
-        with urllib.request.urlopen(req, timeout=7) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:
             htm = resp.read().decode("utf-8", "ignore")
         anchor = htm.find("기준금리 표")
         if anchor == -1:

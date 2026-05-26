@@ -1406,7 +1406,7 @@ def _peers_from_finnhub(ticker: str, limit: int) -> dict | None:
         def _build_row(tk: str, name_fallback: str = "") -> dict:
             try:
                 import yfinance as yf
-                yi = yf.Ticker(tk).info or {}
+                yi = _run_with_timeout(lambda: yf.Ticker(tk).info or {}, 5, f"peer_info_{tk}") or {}
             except Exception:
                 yi = {}
             fin = fh.get_basic_financials(tk)
@@ -1820,7 +1820,7 @@ def _fetch_ticker_events(ticker: str) -> list:
         t = yf.Ticker(ticker)
         # 다음 실적일
         try:
-            cal = t.calendar
+            cal = _run_with_timeout(lambda: t.calendar, 5, "ticker_events_cal")
             if isinstance(cal, dict):
                 ed = cal.get("Earnings Date")
                 if ed:
@@ -1837,7 +1837,7 @@ def _fetch_ticker_events(ticker: str) -> list:
             logging.debug("silent except (app.py): %s", _e)
         # info에서 보조 필드
         try:
-            info = t.info or {}
+            info = _run_with_timeout(lambda: t.info or {}, 5, "ticker_events_info") or {}
             ts_earn = info.get("earningsTimestamp") or info.get("earningsTimestampStart")
             if ts_earn and not any(e["kind"] == "earnings" for e in events):
                 d = _dt.datetime.fromtimestamp(int(ts_earn), tz=_dt.timezone.utc).date().isoformat()
@@ -1957,7 +1957,7 @@ def _fetch_insider_transactions(ticker: str) -> dict:
         t = yf.Ticker(ticker)
         df = None
         try:
-            df = t.insider_transactions
+            df = _run_with_timeout(lambda: t.insider_transactions, 8, "insider_transactions")
         except Exception:
             df = None
         if df is None or df.empty:
@@ -2201,7 +2201,9 @@ def api_consensus(ticker: str):
     else:  # US ? yfinance ??? (?? broker ???? ??)
         try:
             import yfinance as yf
-            info = yf.Ticker(ticker).info or {}
+            info = _run_with_timeout(
+                lambda: yf.Ticker(ticker).info or {}, 5, f"consensus yf {ticker}"
+            ) or {}
             def _flt(v):
                 try: return float(v)
                 except: return 0
@@ -2619,7 +2621,8 @@ def api_us_insight(ticker: str):
     # 2) 기관보유 + 공매도
     try:
         import yfinance as yf
-        info = yf.Ticker(ticker).info or {}
+        _t_insight = yf.Ticker(ticker)
+        info = _run_with_timeout(lambda: _t_insight.info or {}, 5, "us_insight_info") or {}
         holders = {
             "institutional_pct": info.get("heldPercentInstitutions"),
             "insider_pct": info.get("heldPercentInsiders"),
@@ -2642,8 +2645,8 @@ def api_us_insight(ticker: str):
         #    여기 리스트와 헤드라인 '증권사 목표가 평균'이 항상 일치한다.
         try:
             import analyst_consensus
-            _cons = analyst_consensus.summarize_upgrades_downgrades(
-                yf.Ticker(ticker).upgrades_downgrades)
+            _upgrades = _run_with_timeout(lambda: _t_insight.upgrades_downgrades, 5, "us_insight_upgrades")
+            _cons = analyst_consensus.summarize_upgrades_downgrades(_upgrades)
             if _cons["rows"]:
                 result["recommendations"] = _cons["rows"]
         except Exception as _e:

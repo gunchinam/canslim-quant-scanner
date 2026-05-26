@@ -127,7 +127,8 @@ app.json = _SafeJSONProvider(app)
 _FLASK_COMPRESS_OK = False
 try:
     from flask_compress import Compress as _Compress
-    app.config.setdefault("COMPRESS_ALGORITHM", ["br", "gzip", "deflate"])
+    app.config.setdefault("COMPRESS_ALGORITHM", ["gzip"])  # br은 CPU 비용이 너무 높음
+    app.config.setdefault("COMPRESS_LEVEL", 1)             # 최속 압축 (속도 우선)
     _Compress(app)
     _FLASK_COMPRESS_OK = True
 except ImportError:
@@ -175,6 +176,25 @@ def _strip_heavy(rows: list) -> list:
     if not _SCAN_STRIP_FIELDS or not rows:
         return rows
     return [{k: v for k, v in r.items() if k not in _SCAN_STRIP_FIELDS} if isinstance(r, dict) else r for r in rows]
+
+# ── 스캔 응답 사전 압축 캐시 — cache hit 시 재직렬화/재압축 제거 ──
+# jsonify+flask_compress(brotli/gzip) 는 5.5MB 응답에 2~4s 소요 → 1회만 실행, 이후 bytes 직접 서빙
+_scan_gz_cache: dict[tuple, bytes] = {}
+_scan_gz_cache_lock = threading.Lock()
+
+def _store_scan_cache(key: tuple, ts: int, rows: list) -> bytes:
+    """rows를 _scan_results_cache + gzip 사전압축 캐시에 동시 저장. 압축 bytes 반환."""
+    import gzip as _gz
+    with _scan_results_cache_lock:
+        _scan_results_cache[key] = {"_ts": ts, "data": rows}
+    try:
+        raw = json.dumps(rows, ensure_ascii=False).encode("utf-8")
+        compressed = _gz.compress(raw, compresslevel=1)
+    except Exception:
+        compressed = b""
+    with _scan_gz_cache_lock:
+        _scan_gz_cache[key] = compressed
+    return compressed
 
 # ── 검색 인덱스 (앱 시작 시 1회 빌드 — 매 요청 선형 스캔 제거) ──
 # 각 항목: (ticker, display_name, blob) — blob = ticker|name 소문자 결합 문자열
@@ -436,13 +456,10 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
             # Phase-3: moat 주입 후 투기주 졸업 재평가
             from speculative_themes import apply_speculative_correction as _spec_reeval_batch
             _spec_reeval_batch(results)
-            # 스캔 결과 전체 캐시 갱신 (Breakdown 제거 — 상세는 /api/ticker 에서 제공)
+            # 스캔 결과 전체 캐시 갱신 (Breakdown 제거 + 사전 압축)
             if results:
                 _cached_results = _strip_heavy(results)
-                with _scan_results_cache_lock:
-                    _scan_results_cache[(market, strategy, sector)] = {
-                        "_ts": int(time.time()), "data": _cached_results,
-                    }
+                _store_scan_cache((market, strategy, sector), int(time.time()), _cached_results)
         except Exception as e:
             logging.warning("background scan refresh failed: %s", e)
         finally:
@@ -610,8 +627,7 @@ def _warmup_fill_cache(market: str) -> None:
                 logging.debug("silent except (app.py): %s", _e)
             results = _strip_heavy(results)
             ts = int(time.time())
-            with _scan_results_cache_lock:
-                _scan_results_cache[(market, "BALANCED", "")] = {"_ts": ts, "data": results}
+            _store_scan_cache((market, "BALANCED", ""), ts, results)
             _populate_sector_caches(market, "BALANCED", results, ts)
             logging.info("%s quick-warm done: %d tickers (from pickle)", market, len(results))
     except Exception as e:
@@ -652,10 +668,7 @@ def _kr_warmup_loop(interval_sec: int = 1800) -> None:
                             logging.debug("silent except (app.py): %s", _e)
                         results = _strip_heavy(results)
                         ts = int(time.time())
-                        with _scan_results_cache_lock:
-                            _scan_results_cache[("KR", "BALANCED", "")] = {
-                                "_ts": ts, "data": results,
-                            }
+                        _store_scan_cache(("KR", "BALANCED", ""), ts, results)
                         _populate_sector_caches("KR", "BALANCED", results, ts)
                 except Exception as e:
                     logging.warning("KR warm-up failed: %s", e)
@@ -788,10 +801,7 @@ def _us_warmup_loop(interval_sec: int = 1800) -> None:
                             logging.debug("silent except (app.py): %s", _e)
                         results = _strip_heavy(results)
                         ts = int(time.time())
-                        with _scan_results_cache_lock:
-                            _scan_results_cache[("US", "BALANCED", "")] = {
-                                "_ts": ts, "data": results,
-                            }
+                        _store_scan_cache(("US", "BALANCED", ""), ts, results)
                         _populate_sector_caches("US", "BALANCED", results, ts)
                 except Exception as e:
                     logging.warning("US warm-up failed: %s", e)
@@ -1008,7 +1018,14 @@ def api_scan():
             _age_sec = _sr_now - _sr_cached.get("_ts", 0)
             if _age_sec > _SCAN_RESULTS_TTL_SEC:
                 _refresh_scan_background(market, strategy, sector)
-            resp = jsonify(_sr_cached["data"])
+            # 사전 압축 캐시 히트 — flask_compress 재압축 완전 우회
+            with _scan_gz_cache_lock:
+                _gz_bytes = _scan_gz_cache.get(_sr_key)
+            if _gz_bytes:
+                resp = Response(_gz_bytes, mimetype="application/json")
+                resp.headers["Content-Encoding"] = "gzip"
+            else:
+                resp = jsonify(_sr_cached["data"])
             try:
                 cache_age_min, as_of_iso = _scan_cache_meta(market)
                 if cache_age_min is not None:
@@ -1090,13 +1107,15 @@ def api_scan():
                 results = _apply_aq_fusion(results, market, top_n=aq_top)
             except Exception as ae:
                 logging.warning("aq fusion failed: %s", ae)
-        # ── 스캔 결과 전체 캐시 저장 (Breakdown 제거) ──
+        # ── 스캔 결과 전체 캐시 저장 (Breakdown 제거 + 사전 압축) ──
         results = _strip_heavy(results)
-        if results:
-            with _scan_results_cache_lock:
-                _scan_results_cache[_sr_key] = {"_ts": _sr_now, "data": results}
-        # Stale-data UX 헤더 (non-breaking: 본문은 array 유지)
-        resp = jsonify(results)
+        _gz_bytes = _store_scan_cache(_sr_key, _sr_now, results) if results else b""
+        # 사전 압축 bytes 직접 서빙 — flask_compress 재압축 우회 (gzip 지원 클라이언트 한정)
+        if _gz_bytes and "gzip" in request.headers.get("Accept-Encoding", ""):
+            resp = Response(_gz_bytes, mimetype="application/json")
+            resp.headers["Content-Encoding"] = "gzip"
+        else:
+            resp = jsonify(results)
         try:
             cache_age_min, as_of_iso = _scan_cache_meta(market)
             if cache_age_min is not None:

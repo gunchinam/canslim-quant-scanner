@@ -1753,6 +1753,32 @@ class WallStreetQuantStrategies:
             elif dte < 100:    result["investment_score"] = 5
             elif dte > 200:    result["investment_score"] = -5
 
+            # ── Phase-2b 패치: 적자 성장주 대안 profitability/value ──
+            # FCF ≤ 0이면 ROE·PE가 구조적 음수 → 매출성장률·매출총이익률로 대체.
+            _fcf_ff = safe_get(info.get("freeCashflow"), 0.0)
+            if _fcf_ff is not None and float(_fcf_ff) <= 0:
+                _rg_ff = safe_get(info.get("revenueGrowth"), 0.0)
+                _gm_ff = safe_get(info.get("grossMargins"), 0.0)
+                # profitability 대안: 매출성장 + 매출총이익률
+                alt_prof = 0
+                if _rg_ff > 1.0:      alt_prof += 15
+                elif _rg_ff > 0.5:    alt_prof += 10
+                elif _rg_ff > 0.2:    alt_prof += 5
+                elif _rg_ff <= 0:     alt_prof -= 10
+                if _gm_ff > 0.5:      alt_prof += 8
+                elif _gm_ff > 0.3:    alt_prof += 4
+                elif _gm_ff <= 0:     alt_prof -= 8
+                if alt_prof > result["profitability_score"]:
+                    result["profitability_score"] = alt_prof
+                    result["a_score"] = alt_prof
+                # value 대안: PE 무의미 시 매출성장으로 대체
+                if pe <= 0:
+                    alt_val = 0
+                    if _rg_ff > 0.5:      alt_val += 8
+                    elif _rg_ff > 0.2:    alt_val += 4
+                    if alt_val > result["value_score"]:
+                        result["value_score"] = alt_val
+
             result["factor_alpha"] = (
                 result["size_score"]          * 0.12 +
                 result["value_score"]         * 0.18 +
@@ -2386,6 +2412,32 @@ class WallStreetQuantStrategies:
                 if cf_ratio > 0.15:   score += 5
                 elif cf_ratio < 0.05: score -= 3
 
+            # ── Phase-2 패치: 적자 성장주 대안 품질 점수 ──────────
+            # FCF ≤ 0이면 전통 quality(영업이익률/CF)가 구조적으로 0 이하.
+            # 매출성장률 + 매출총이익률 + 유동비율(캐시런웨이)로 대안 산출,
+            # 기존 score와 비교해 높은 쪽 채택. (월가 퀀트 패널 Phase 2)
+            _fcf_q = safe_get(info.get("freeCashflow"), 0.0)
+            if _fcf_q is not None and float(_fcf_q) <= 0:
+                _rg = safe_get(info.get("revenueGrowth"), 0.0)
+                _gm = safe_get(info.get("grossMargins"), 0.0)
+                alt = 0
+                # 매출성장률이 적자 성장주의 핵심 quality 시그널
+                if _rg > 1.0:      alt += 15   # >100% YoY
+                elif _rg > 0.5:    alt += 10   # >50%
+                elif _rg > 0.2:    alt += 5    # >20%
+                elif _rg <= 0:     alt -= 5    # 매출 역성장
+                # 매출총이익률 양수 = 코어 제품에 가치 있음
+                if _gm > 0.5:      alt += 8
+                elif _gm > 0.2:    alt += 4
+                elif _gm <= 0:     alt -= 5    # 원가도 못 건짐
+                # 유동비율 = 캐시런웨이 프록시
+                if cr > 3:         alt += 5
+                elif cr > 1.5:     alt += 2
+                elif cr < 1:       alt -= 5    # 현금 고갈 위험
+                if alt > score:
+                    score = alt
+                    result["profitability"] = "GROWTH"
+
             result["quality_score"]    = score
             result["earnings_quality"] = min(100, max(0, 50 + score))
         except Exception as e:
@@ -2899,6 +2951,15 @@ class WallStreetQuantStrategies:
                 "cash":              safe_get(info.get("totalCash"),        0.0),
                 "debt":              safe_get(info.get("totalDebt"),        0.0)}
             ticker = str(info.get("symbol") or info.get("ticker") or "")
+            # ── Phase-1 패치: 적자 기업(FCF≤0) DCF 면제 ──────────
+            # FCF가 음수이면 3-Stage DCF가 구조적으로 파괴되어
+            # 현재가 대비 1/10 수준의 목표가가 산출됨.
+            # 이 경우 score=0(중립)으로 조기 리턴하여 페널티를 방지.
+            # (월가 퀀트 패널 합의: 르네상스/골드만/투시그마/시타델 전원 찬성)
+            _fcf = financials.get("fcf", 0.0)
+            if _fcf is not None and float(_fcf) <= 0:
+                result["view"] = "NOT_APPLICABLE"
+                return result   # score=0, view=NOT_APPLICABLE
             vr = valuation_engine.run(
                 ticker=ticker,
                 current_price=float(cur_price or 0.0),

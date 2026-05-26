@@ -380,6 +380,9 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
                 bonus = r.get("MoatBonus", 0)
                 if bonus and isinstance(r.get("TotalScore"), (int, float)):
                     r["TotalScore"] = min(100.0, r["TotalScore"] + bonus)
+            # Phase-3: moat 주입 후 투기주 졸업 재평가
+            from speculative_themes import apply_speculative_correction as _spec_reeval_batch
+            _spec_reeval_batch(results)
             # 스캔 결과 전체 캐시 갱신
             if results:
                 with _scan_results_cache_lock:
@@ -1002,6 +1005,9 @@ def api_scan():
             bonus = r.get("MoatBonus", 0)
             if bonus and isinstance(r.get("TotalScore"), (int, float)):
                 r["TotalScore"] = min(100.0, r["TotalScore"] + bonus)
+        # Phase-3: moat 주입 후 투기주 졸업 재평가
+        from speculative_themes import apply_speculative_correction as _spec_reeval_sync
+        _spec_reeval_sync(results)
         # AgentQuant 융합 (상위 N개)
         if aq_top > 0:
             try:
@@ -1270,6 +1276,10 @@ def api_ticker(ticker: str):
         bonus = result.get("MoatBonus", 0)
         if bonus and isinstance(result.get("TotalScore"), (int, float)):
             result["TotalScore"] = min(100.0, result["TotalScore"] + bonus)
+        # Phase-3: moat 주입 후 투기주 졸업 재평가
+        # (engine_adapter에서 moat 없이 1차 평가 → moat 주입 후 2차 재평가)
+        from speculative_themes import apply_to_row as _spec_reeval
+        _spec_reeval(result)
         # AQ 융합은 /api/aq_signal/<ticker> 로 분리 (드로어 lazy-load)
         # ── 응답 캐시 저장 ──
         with _ticker_detail_cache_lock:

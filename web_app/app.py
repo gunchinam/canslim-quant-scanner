@@ -598,6 +598,7 @@ def _warmup_fill_cache(market: str) -> None:
                 results = _annotate_one_liners(results)
             except Exception as _e:
                 logging.debug("silent except (app.py): %s", _e)
+            results = _strip_heavy(results)
             ts = int(time.time())
             with _scan_results_cache_lock:
                 _scan_results_cache[(market, "BALANCED", "")] = {"_ts": ts, "data": results}
@@ -639,6 +640,7 @@ def _kr_warmup_loop(interval_sec: int = 1800) -> None:
                             results = _annotate_one_liners(results)
                         except Exception as _e:
                             logging.debug("silent except (app.py): %s", _e)
+                        results = _strip_heavy(results)
                         ts = int(time.time())
                         with _scan_results_cache_lock:
                             _scan_results_cache[("KR", "BALANCED", "")] = {
@@ -774,6 +776,7 @@ def _us_warmup_loop(interval_sec: int = 1800) -> None:
                             results = _annotate_one_liners(results)
                         except Exception as _e:
                             logging.debug("silent except (app.py): %s", _e)
+                        results = _strip_heavy(results)
                         ts = int(time.time())
                         with _scan_results_cache_lock:
                             _scan_results_cache[("US", "BALANCED", "")] = {

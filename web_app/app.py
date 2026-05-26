@@ -459,10 +459,18 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
 
 
 # ── 캐시 메타데이터 (stale-data UX 헤더용) ─────────────────────────────────
+_scan_cache_meta_result: dict[str, tuple] = {}
+_scan_cache_meta_ts: dict[str, float] = {}
+_SCAN_CACHE_META_TTL = 120  # 2분 캐시 — 6,773개 파일 stat을 매 요청 반복하지 않도록
+
+
 def _scan_cache_meta(market: str) -> tuple[int | None, str | None]:
     """cache_v19/ 디렉토리에서 해당 market 캐시 파일들의 최고령(가장 오래된) 분 + 가장 최신 mtime ISO 반환.
-    실패/없음 시 (None, None).
+    실패/없음 시 (None, None). 결과는 2분 캐시 (6,773개 파일 stat 매 요청 방지).
     """
+    _now = time.time()
+    if market in _scan_cache_meta_result and (_now - _scan_cache_meta_ts.get(market, 0)) < _SCAN_CACHE_META_TTL:
+        return _scan_cache_meta_result[market]
     try:
         from datetime import datetime, timezone
         cache_dir = os.path.join(_BASE, "cache_v19")
@@ -502,6 +510,8 @@ def _scan_cache_meta(market: str) -> tuple[int | None, str | None]:
             return (None, None)
         cache_age_min = int(oldest_age_sec // 60)
         as_of_iso = datetime.fromtimestamp(newest_mtime, tz=timezone.utc).isoformat()
+        _scan_cache_meta_result[market] = (cache_age_min, as_of_iso)
+        _scan_cache_meta_ts[market] = _now
         return (cache_age_min, as_of_iso)
     except Exception:
         return (None, None)

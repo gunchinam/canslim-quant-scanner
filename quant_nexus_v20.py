@@ -318,6 +318,12 @@ except ImportError:
     print("필수 라이브러리 설치 필요: pip install yfinance pandas xlsxwriter numpy")
     sys.exit(1)
 
+# swing_scan 종목명 조회 — 루프마다 import 하지 않도록 1회 캐시
+try:
+    from swing_scan.config import stock_names as _SWING_SCAN_STOCK_NAMES
+except Exception:
+    _SWING_SCAN_STOCK_NAMES = None
+
 
 _FALLBACK_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -331,10 +337,10 @@ _FALLBACK_UA = (
 #       오염시키고 시간을 낭비함. fetch 레이어에서 short-circuit 한다.
 # UI 섹터 트리에는 그대로 노출되며(역사적 컨텍스트), fetch 만 차단된다.
 # ════════════════════════════════════════════════════════════════════════
-_US_DELISTED: set[str] = {
-           
-         
-}
+_US_DELISTED: set[str] = set()
+# 회귀 가드 — 빈 `{}` 는 set 이 아니라 dict 이므로 .add() 가 깨진다.
+# 코드 어디서 dict 로 재할당되면 import 시점에 즉시 실패해 알린다.
+assert isinstance(_US_DELISTED, set), "_US_DELISTED must be a set (not dict)"
 _DELISTED_CACHE_PATH = os.path.join(_YF_CACHE_DIR, "delisted.json") \
     if "_YF_CACHE_DIR" in globals() else None
 
@@ -420,7 +426,7 @@ def _fetch_yahoo_chart_history(ticker: str, *, raise_on_404: bool = False) -> pd
     )
     last_err = None
     saw_404 = False
-    for attempt, timeout_sec in enumerate((10, 15)):
+    for attempt, timeout_sec in enumerate((5, 8)):
         try:
             req = urllib.request.Request(url, headers={
                 "User-Agent": _FALLBACK_UA,
@@ -461,13 +467,13 @@ def _fetch_yahoo_chart_history(ticker: str, *, raise_on_404: bool = False) -> pd
                 saw_404 = True
                 break  # 404 는 재시도 무의미
             if attempt == 0:
-                time.sleep(0.8 + random.random() * 0.7)
+                time.sleep(0.4 + random.random() * 0.4)
                 continue
             break
         except Exception as e:
             last_err = e
             if attempt == 0:
-                time.sleep(0.8 + random.random() * 0.7)
+                time.sleep(0.4 + random.random() * 0.4)
                 continue
             break
     if saw_404:
@@ -827,6 +833,14 @@ for _mode, _w in STRATEGY_WEIGHTS.items():
         f"R6 추세 노출 상한 위반. 가중치를 조정하거나 상한 변경 근거를 주석으로 명시하세요."
     )
 
+# F6: 5전략 × 23팩터 dot product를 numpy matmul 1회로 대체 — per-ticker dict 루프 제거
+_SW_KEYS: tuple = tuple(next(iter(STRATEGY_WEIGHTS.values())).keys())
+_SW_MODES: tuple = tuple(STRATEGY_WEIGHTS.keys())
+_SW_MATRIX = np.array(
+    [[STRATEGY_WEIGHTS[m].get(k, 0.0) for k in _SW_KEYS] for m in _SW_MODES],
+    dtype=np.float64,
+)  # shape (5, 23)
+
 # ─── 열 툴팁 ──────────────────────────────────────────────────────────
 COLUMN_TOOLTIPS = {
     "TICKER":   "종목 코드\n주식을 식별하는 고유 심볼입니다.",
@@ -1036,10 +1050,7 @@ def _compute_entry_status(
             )
         if len(_c) >= 30 and _atr_p > 0:
             h_, l_, c_ = hist["High"], hist["Low"], hist["Close"]
-            tr = pd.concat([
-                (h_ - l_).abs(),
-                (h_ - c_.shift()).abs(),
-                (l_ - c_.shift()).abs()], axis=1).max(axis=1)
+            tr = np.maximum(np.maximum((h_ - l_).abs(), (h_ - c_.shift()).abs()), (l_ - c_.shift()).abs())
             atr_series = (tr.rolling(14).mean() / c_) * 100
             _atr_avg30 = float(atr_series.rolling(30).mean().iloc[-1])
             _atr_squeeze = bool(_atr_p < _atr_avg30 * 0.8)
@@ -1206,10 +1217,7 @@ def _compute_entry_status_v2(
             )
         if len(_c) >= 30 and _atr_p > 0:
             h_, l_, c_ = hist["High"], hist["Low"], hist["Close"]
-            tr = pd.concat([
-                (h_ - l_).abs(),
-                (h_ - c_.shift()).abs(),
-                (l_ - c_.shift()).abs()], axis=1).max(axis=1)
+            tr = np.maximum(np.maximum((h_ - l_).abs(), (h_ - c_.shift()).abs()), (l_ - c_.shift()).abs())
             atr_series = (tr.rolling(14).mean() / c_) * 100
             _atr_avg30 = float(atr_series.rolling(30).mean().iloc[-1])
             _atr_squeeze = bool(_atr_p < _atr_avg30 * 0.8)
@@ -2171,7 +2179,7 @@ class WallStreetQuantStrategies:
             if len(hist) < 14:
                 return result
             h, l, c = hist["High"], hist["Low"], hist["Close"]
-            tr = pd.concat([h - l, (h - c.shift(1)).abs(), (l - c.shift(1)).abs()], axis=1).max(axis=1)
+            tr = np.maximum(np.maximum(h - l, (h - c.shift(1)).abs()), (l - c.shift(1)).abs())
             atr14 = float(tr.ewm(alpha=1/14, adjust=False).mean().iloc[-1])
             if not np.isfinite(atr14) or atr14 <= 0:
                 return result
@@ -2340,7 +2348,7 @@ class WallStreetQuantStrategies:
             ndm = (-l.diff()).clip(lower=0)
             pdm = pdm.where(pdm > ndm, 0)
             ndm = ndm.where(ndm > pdm, 0)
-            tr  = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1)
+            tr  = np.maximum(np.maximum(h - l, (h - c.shift()).abs()), (l - c.shift()).abs())
             atr14 = tr.ewm(alpha=1/14, adjust=False).mean()
             pdi   = 100 * pdm.ewm(alpha=1/14, adjust=False).mean() / (atr14 + 1e-9)
             mdi   = 100 * ndm.ewm(alpha=1/14, adjust=False).mean() / (atr14 + 1e-9)
@@ -3546,7 +3554,7 @@ class QuantNexusApp:
         try:
             url = f"https://m.stock.naver.com/api/stock/{code}/integration"
             req = urllib.request.Request(url, headers=_ua)
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=3) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
             ci = data.get('consensusInfo', {})
             tp_str = ci.get('priceTargetMean', '')
@@ -3566,7 +3574,7 @@ class QuantNexusApp:
                 f"https://m.stock.naver.com/api/stock/{code}/finance/research?pageSize=8",
                 f"https://m.stock.naver.com/api/stock/{code}/research?pageSize=8"]:
                 req = urllib.request.Request(ep, headers=_ua)
-                with urllib.request.urlopen(req, timeout=5) as resp:
+                with urllib.request.urlopen(req, timeout=3) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                 items = data if isinstance(data, list) else (data.get('list') or data.get('reports') or data.get('items') or [])
                 tps = []
@@ -3637,7 +3645,7 @@ class QuantNexusApp:
             req = urllib.request.Request(url, headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
             })
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=3) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
 
             fi = data.get('financeInfo', {})
@@ -4679,11 +4687,44 @@ class QuantNexusApp:
         # GUI 업데이트 배치: 5개마다 or 마지막
         UPDATE_BATCH = 5
 
-        # 동적 워커 수: 종목 많으면 rate limit 보호를 위해 줄임
-        n_workers = 2 if total > 80 else 3 if total > 40 else 4
+        # 동적 워커 수: F1(sleep 0.5s) 적용 후 rate-limit 페널티 감소 → 워커 증가 가능
+        n_workers = 4 if total > 80 else 6 if total > 40 else 8
         PROGRESSIVE_BATCH = 20  # 중간 결과 표시 단위
         PROGRESS_THROTTLE_SEC = 0.2  # after 콜백 폭주 방지: 200ms 간격
         last_progress_ts = [0.0]
+
+        # KR 재무 데이터 사전 병렬 로드 — naver는 rate-limit 없으므로 8 workers 사용
+        # 메인 스캔 루프에서는 캐시 히트로 즉시 반환됨
+        _kr_uncached = [
+            t for t in tickers
+            if (t.endswith(".KS") or t.endswith(".KQ"))
+            and t.split(".")[0] not in self._naver_fund_cache
+        ]
+        if _kr_uncached:
+            self._log(f"📡 KR 재무 데이터 사전 로드 ({len(_kr_uncached)}개)...")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as _naver_ex:
+                list(_naver_ex.map(self._fetch_naver_fundamentals, _kr_uncached))
+
+        # F5: 종목명 사전 1회 구축 — _analyze_ticker 내 3단계 조회를 dict 1회 조회로 대체
+        _kr_names_d = getattr(QuantNexusApp, "KR_NAMES", {})
+        _us_names_d = getattr(QuantNexusApp, "US_NAMES", {})
+        _name_pre: dict[str, str] = {}
+        for _nt in tickers:
+            _is_kr_nt = _nt.endswith(".KS") or _nt.endswith(".KQ")
+            _nn: str | None = None
+            if _is_kr_nt and _SWING_SCAN_STOCK_NAMES is not None:
+                try:
+                    _c6n = _nt.split(".")[0].zfill(6)
+                    _nn2 = _SWING_SCAN_STOCK_NAMES.get_name(_c6n)
+                    if _nn2 and _nn2 != _c6n:
+                        _nn = _nn2
+                except Exception:
+                    pass
+            if not _nn:
+                _nn = _kr_names_d.get(_nt) if _is_kr_nt else _us_names_d.get(_nt)
+            if _nn:
+                _name_pre[_nt] = _nn
+        self._ticker_name_cache = _name_pre
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as ex:
             fmap = {ex.submit(self._analyze_ticker, t): t for t in tickers}
@@ -4942,7 +4983,7 @@ class QuantNexusApp:
                 except _YFRL:
                     _yf_rate_limited = True
                     if _attempt == 0:
-                        time.sleep(2.0 + random.random() * 2.0)
+                        time.sleep(0.5 + random.random() * 0.5)
                         continue
                     logging.warning("[yf] rate-limited %s (%s)", ticker, self._scan_market)
                     break
@@ -4989,6 +5030,20 @@ class QuantNexusApp:
                 except Exception:
                     info = {}
 
+            # ── US 종목: yfinance info 핵심 재무 필드 결측 시 Finnhub 폴백 ──
+            if is_us and not info.get("returnOnEquity") and not info.get("operatingMargins") and not info.get("revenueGrowth"):
+                try:
+                    import finnhub_api as _fh
+                    _fh_data = _fh.get_basic_financials(ticker)
+                    if _fh_data:
+                        for _fk, _fv in _fh_data.items():
+                            if _fv is not None and not info.get(_fk):
+                                info[_fk] = _fv
+                        if _fh_data:
+                            logging.info("[finnhub-fallback] %s: %d fields補充", ticker, len(_fh_data))
+                except Exception as _fhe:
+                    logging.debug("[finnhub-fallback] %s failed: %s", ticker, _fhe)
+
             # 실시간 현재가 우선 (장중 등락 정확도): info > fast_info > hist 마지막 봉
             _rt_price = (safe_get(info.get("regularMarketPrice"))
                          or safe_get(info.get("currentPrice"))
@@ -5008,21 +5063,7 @@ class QuantNexusApp:
             # 주의: KR_NAMES 에는 재상장·코드재사용·사명변경으로 stale 된 항목이 91건 존재,
             # KRX 공식명을 항상 우선해 잘못된 한글명 매칭을 차단한다.
             _is_kr_t = bool(ticker) and (ticker.endswith(".KS") or ticker.endswith(".KQ"))
-            _name = None
-            if _is_kr_t:
-                try:
-                    from swing_scan.config import stock_names as _sn
-                    code6 = ticker.split(".")[0].zfill(6)
-                    nm2 = _sn.get_name(code6)
-                    if nm2 and nm2 != code6:
-                        _name = nm2
-                except Exception:
-                    pass
-                if not _name:
-                    _name = getattr(QuantNexusApp, "KR_NAMES", {}).get(ticker)
-            if not _name and not _is_kr_t:
-                _us_names = getattr(QuantNexusApp, "US_NAMES", {})
-                _name = _us_names.get(ticker)
+            _name = getattr(self, "_ticker_name_cache", {}).get(ticker)
             if not _name:
                 _name = info.get("longName") or info.get("shortName")
             name = (_name or ticker)[:20]
@@ -5651,36 +5692,21 @@ class QuantNexusApp:
             # 정규화 팩터(STEP 1~3)는 전략 무관, STEP 4의 가중치만 다르며
             # STEP 5~10.5 후처리도 전략 무관이므로 동일 시퀀스를 반복한다.
             # ════════════════════════════════════════════════════════════
-            _factor_values = {
-                "momentum":       f_momentum,
-                "fama_french":    f_fama_french,
-                "mean_reversion": f_mean_reversion,
-                "quality":        f_quality,
-                "regime":         f_regime,
-                "smart_money":    f_smart_money,
-                "mtf":            f_mtf,
-                "drawdown":       f_drawdown,
-                "volume":         f_volume,
-                "rs":             f_rs,
-                "price_target":   f_price_target,
-                "short_int":      f_short_int,
-                "math":           f_math,
-                "sentiment":      f_sentiment,
-                "cs_c":           f_cs_c,
-                "cs_a":           f_cs_a,
-                "cs_n":           f_cs_n,
-                "cs_s":           f_cs_s,
-                "cs_l":           f_cs_l,
-                "cs_i":           f_cs_i,
-                "orb":            f_orb,
-                "nr7":            f_nr7,
-                "bb_revert":      f_bb_revert}
+            # F6: 5전략 dot product를 numpy matmul 1회로 일괄 계산
+            _fv_arr = np.array([
+                f_momentum, f_fama_french, f_mean_reversion, f_quality, f_regime,
+                f_smart_money, f_mtf, f_drawdown, f_volume, f_rs, f_price_target,
+                f_short_int, f_math, f_sentiment, f_cs_c, f_cs_a, f_cs_n, f_cs_s,
+                f_cs_l, f_cs_i, f_orb, f_nr7, f_bb_revert,
+            ], dtype=np.float64)
+            if _is_holdco:
+                _holdco_wv = np.array([w.get(k, 0.0) for k in _SW_KEYS], dtype=np.float64)
+                _raw_b_arr = np.full(len(_SW_MODES), float(_holdco_wv @ _fv_arr))
+            else:
+                _raw_b_arr = _SW_MATRIX @ _fv_arr  # shape (5,)
             all_scores: dict[str, float] = {}
-            for _mode, _w in STRATEGY_WEIGHTS.items():
-                # 지주사 평가는 전략(공격/방어 등) 무관 — NAV-할인 가중으로 통일
-                if _is_holdco:
-                    _w = w
-                _b = sum(_factor_values[k] * _w.get(k, 0.0) for k in _factor_values)
+            for _i, _mode in enumerate(_SW_MODES):
+                _b = float(_raw_b_arr[_i])
                 _b = max(0.0, min(120.0, _b))
                 _b = max(0.0, min(120.0, _b * hurst_kalman_trust))
                 if fail_safe_triggered:

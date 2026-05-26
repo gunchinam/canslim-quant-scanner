@@ -146,6 +146,42 @@ class ScanAdapter:
     def _log(self, msg: str) -> None:
         logging.debug("[ScanAdapter] %s", msg)
 
+    def _pre_build_scan_caches(self, tickers: list[str]) -> None:
+        """스캔 루프 전 1회 실행 — F5(종목명 dict) + F2b(KR 재무 병렬 사전 로드)."""
+        # F5: 종목명 사전 구축
+        _kr_names_d = getattr(self, "KR_NAMES", {})
+        _us_names_d = getattr(_qn.QuantNexusApp, "US_NAMES", {})
+        _sw = _qn._SWING_SCAN_STOCK_NAMES
+        _name_pre: dict[str, str] = {}
+        for _nt in tickers:
+            _is_kr_nt = _nt.endswith(".KS") or _nt.endswith(".KQ")
+            _nn = None
+            if _is_kr_nt and _sw is not None:
+                try:
+                    _c6n = _nt.split(".")[0].zfill(6)
+                    _nn2 = _sw.get_name(_c6n)
+                    if _nn2 and _nn2 != _c6n:
+                        _nn = _nn2
+                except Exception:
+                    pass
+            if not _nn:
+                _nn = _kr_names_d.get(_nt) if _is_kr_nt else _us_names_d.get(_nt)
+            if _nn:
+                _name_pre[_nt] = _nn
+        self._ticker_name_cache = _name_pre
+        # F2b: KR 재무 데이터 사전 병렬 로드
+        if self._market == "KR":
+            _fetch_fund = _qn.QuantNexusApp._fetch_naver_fundamentals
+            _kr_uncached = [
+                t for t in tickers
+                if (t.endswith(".KS") or t.endswith(".KQ"))
+                and t.split(".")[0] not in self._naver_fund_cache
+            ]
+            if _kr_uncached:
+                logging.debug("[ScanAdapter] KR 재무 사전 로드 %d개", len(_kr_uncached))
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as _nex:
+                    list(_nex.map(lambda t: _fetch_fund(self, t), _kr_uncached))
+
     def _fetch_naver_target(self, ticker: str):
         """(DEPRECATED) DCF 목표가로 대체됨 — 호환성 유지용."""
         return _qn.QuantNexusApp._fetch_naver_target(self, ticker)
@@ -212,6 +248,7 @@ class ScanAdapter:
     def scan_sector(self, sector: str, *, max_workers: int = int(os.environ.get("SCAN_WORKERS", "4")), prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
         """특정 섹터 종목을 병렬 분석 후 TotalScore 내림차순 반환."""
         tickers = self._sectors.get(sector, [])
+        self._pre_build_scan_caches(tickers)
         results: list[dict] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
             futures = {
@@ -240,6 +277,8 @@ class ScanAdapter:
                 if t not in ticker_sector:
                     ticker_sector[t] = sector
 
+        all_tickers = list(ticker_sector.keys())
+        self._pre_build_scan_caches(all_tickers)
         results: list[dict] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
             futures = {

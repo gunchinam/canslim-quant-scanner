@@ -99,6 +99,9 @@ from flask.json.provider import DefaultJSONProvider as _DefaultJSONProvider
 
 
 def _sanitize_nan(obj):
+    # bool은 int 서브클래스라 먼저 체크 — str/int/bool/None은 대부분의 값이므로 즉시 반환
+    if isinstance(obj, (bool, int, str)) or obj is None:
+        return obj
     if isinstance(obj, float):
         return None if not _math.isfinite(obj) else obj
     if isinstance(obj, dict):
@@ -164,6 +167,48 @@ _scan_refresh_inflight: set[tuple[str, str, str]] = set()
 _SCAN_RESULTS_TTL_SEC = 300  # 5분
 _scan_results_cache: dict[tuple[str, str, str], dict] = {}
 _scan_results_cache_lock = threading.Lock()
+
+# ── 검색 인덱스 (앱 시작 시 1회 빌드 — 매 요청 선형 스캔 제거) ──
+# 각 항목: (ticker, display_name, blob) — blob = ticker|name 소문자 결합 문자열
+_SEARCH_IDX: dict[str, list] = {}
+_SEARCH_IDX_LOCK = threading.Lock()
+
+
+def _get_search_idx(market: str) -> list:
+    if market in _SEARCH_IDX:
+        return _SEARCH_IDX[market]
+    with _SEARCH_IDX_LOCK:
+        if market in _SEARCH_IDX:
+            return _SEARCH_IDX[market]
+        try:
+            from quant_nexus_v20 import QuantNexusApp
+            if market == "KR":
+                idx: list = []
+                for tk, nm in QuantNexusApp.KR_NAMES.items():
+                    code = tk.split(".")[0]
+                    idx.append((tk, nm, f"{tk.lower()}|{nm.lower()}|{code}"))
+                _SEARCH_IDX["KR"] = idx
+            else:
+                us_names = getattr(QuantNexusApp, "US_NAMES", {}) or {}
+                us_desc  = getattr(QuantNexusApp, "US_DESC", {}) or {}
+                try:
+                    from us_company_info import US_COMPANY_INFO as _uci
+                except Exception:
+                    _uci = {}
+                seen: set[str] = set()
+                idx = []
+                for tk, nm in us_names.items():
+                    label = nm or us_desc.get(tk) or _uci.get(tk) or tk
+                    idx.append((tk, label, f"{tk.lower()}|{(label or '').lower()}"))
+                    seen.add(tk)
+                for tk, desc in _uci.items():
+                    if tk not in seen:
+                        idx.append((tk, desc, f"{tk.lower()}|{(desc or '').lower()}"))
+                _SEARCH_IDX["US"] = idx
+        except Exception as e:
+            logging.warning("_get_search_idx failed: %s", e)
+            _SEARCH_IDX[market] = []
+        return _SEARCH_IDX.get(market, [])
 
 
 def _configure_yf_cache() -> None:
@@ -1143,28 +1188,16 @@ def api_search():
     """GET /api/search?q=rf&market=KR → [{ticker, name}, ...] 이름/티커 부분매칭."""
     q = (request.args.get("q") or "").strip().lower()
     market = (request.args.get("market") or "US").upper()
-    if not q or len(q) < 1:
+    if not q:
         return jsonify([])
     hits = []
     try:
-        from quant_nexus_v20 import QuantNexusApp
-        if market == "KR":
-            for tk, nm in QuantNexusApp.KR_NAMES.items():
-                code = tk.split(".")[0]
-                if q in nm.lower() or q in tk.lower() or q in code.lower():
-                    hits.append({"ticker": tk, "name": nm})
-        else:
-            try:
-                from us_company_info import US_COMPANY_INFO
-            except Exception:
-                US_COMPANY_INFO = {}
-            for tk, desc in US_COMPANY_INFO.items():
-                if q in tk.lower() or q in desc.lower():
-                    hits.append({"ticker": tk, "name": desc})
+        for tk, nm, blob in _get_search_idx(market):
+            if q in blob:
+                hits.append({"ticker": tk, "name": nm})
     except Exception as e:
         logging.warning("api_search failed: %s", e)
     # 정렬: (1) 이름이 q로 시작 (2) 티커가 q로 시작 (3) 이름 길이 짧은 순 (4) 알파벳
-    # 짧은 이름 우선 — '한' 검색 시 '한켐'(2자)이 '한국가스공사'(6자)보다 위로.
     hits.sort(key=lambda h: (
         not h["name"].lower().startswith(q),
         not h["ticker"].lower().startswith(q),
@@ -1230,7 +1263,7 @@ def api_ticker(ticker: str):
             try:
                 import yfinance as yf
                 yf_info = _run_with_timeout(
-                    lambda: yf.Ticker(ticker).info, 10, f"yf_info {ticker}"
+                    lambda: yf.Ticker(ticker).info, 5, f"yf_info {ticker}"
                 ) or {}
                 short_pct = yf_info.get("shortPercentOfFloat")
                 inst_pct = yf_info.get("heldPercentInstitutions")
@@ -1265,6 +1298,13 @@ def api_ticker(ticker: str):
                         result["_FH_RecChange"] = fh["rec_change"]
                         result["_FH_EarnSurprise"] = fh["earnings_surprise_pct"]
                         result["_FH_EarnStreak"] = fh["earnings_beat_streak"]
+                        # 신규: 실적 D-day, 뉴스, 실시간 시세
+                        result["_FH_DaysToEarnings"] = fh.get("days_to_earnings_est", -1)
+                        result["_FH_NextEarnings"] = fh.get("next_earnings_estimate", "")
+                        result["_FH_News7d"] = fh.get("news_count_7d", 0)
+                        result["_FH_Headlines"] = fh.get("news_headlines", [])
+                        result["_FH_DayChangePct"] = fh.get("day_change_pct", 0)
+                        result["_FH_CurrentPrice"] = fh.get("current_price", 0)
                         result["_FH_Available"] = True
             except Exception as fe:
                 logging.debug("Finnhub sentiment failed for %s: %s", ticker, fe)
@@ -1320,6 +1360,70 @@ def api_aq_signal(ticker: str):
 
 
 
+def _peers_from_finnhub(ticker: str, limit: int) -> dict | None:
+    """US 종목 전용: Finnhub company_peers + basic_financials로 라이브 데이터 생성.
+
+    스캔 캐시 의존성을 우회해 stale 시총/PE 문제를 해결한다.
+    """
+    try:
+        import finnhub_api as fh
+        if not fh.is_available():
+            return None
+        peer_tickers = fh.get_peers(ticker)
+        if not peer_tickers:
+            return None
+
+        def _build_row(tk: str, name_fallback: str = "") -> dict:
+            try:
+                import yfinance as yf
+                yi = yf.Ticker(tk).info or {}
+            except Exception:
+                yi = {}
+            fin = fh.get_basic_financials(tk)
+            try:
+                q = fh._client().quote(tk)
+                price = q.get("c") if q else None
+            except Exception:
+                price = yi.get("currentPrice") or yi.get("regularMarketPrice")
+            return {
+                "Ticker":          tk,
+                "Name":            yi.get("shortName") or yi.get("longName") or name_fallback or tk,
+                "Sector":          yi.get("sector") or "",
+                "Industry":        yi.get("industry") or "",
+                "Price":           price,
+                "TotalScore":      None,
+                "MarketCap":       fin.get("marketCap") or yi.get("marketCap"),
+                "PER":             fin.get("trailingPE") or yi.get("trailingPE"),
+                "PBR":             fin.get("priceToBook") or yi.get("priceToBook"),
+                "ROE":             fin.get("returnOnEquity") or yi.get("returnOnEquity"),
+                "OperatingMargin": fin.get("operatingMargins") or yi.get("operatingMargins"),
+                "Mom12M":          None,
+                "DivYield":        fin.get("dividendYield") or yi.get("dividendYield"),
+            }
+
+        me_row = _build_row(ticker)
+        peer_rows = []
+        for tk in peer_tickers[:limit]:
+            try:
+                peer_rows.append(_build_row(tk))
+            except Exception as e:
+                logging.warning("peer row build failed for %s: %s", tk, e)
+        # 시총 큰 순
+        peer_rows.sort(key=lambda r: -float(r.get("MarketCap") or 0))
+        return {
+            "ok": True,
+            "self":  me_row,
+            "peers": peer_rows,
+            "sector":   me_row.get("Sector") or "",
+            "industry": me_row.get("Industry") or "",
+            "count":    len(peer_rows),
+            "source":   "finnhub",
+        }
+    except Exception as e:
+        logging.warning("_peers_from_finnhub(%s) failed: %s", ticker, e)
+        return None
+
+
 @app.route("/api/peers/<ticker>")
 def api_peers(ticker: str):
     """GET /api/peers/AAPL?market=US&limit=5 → 같은 섹터 동종업체 비교 카드 데이터."""
@@ -1332,7 +1436,14 @@ def api_peers(ticker: str):
     except (TypeError, ValueError):
         limit = 5
 
-    # 스캔 캐시에서 전체 종목 목록 조회 (sector="" 인 BALANCED 캐시)
+    # US 종목: Finnhub 라이브 우선 (스캔 캐시 stale 회피)
+    is_kr = ticker.endswith(".KS") or ticker.endswith(".KQ") or ticker.isdigit()
+    if market == "US" and not is_kr:
+        fh_payload = _peers_from_finnhub(ticker, limit)
+        if fh_payload:
+            return jsonify(fh_payload)
+
+    # KR 또는 Finnhub 실패 시 기존 스캔 캐시 폴백
     rows = []
     with _scan_results_cache_lock:
         for strat in ("BALANCED", "AGGRESSIVE", "CONSERVATIVE"):
@@ -1400,6 +1511,186 @@ def api_peers(ticker: str):
         "sector":   sector,
         "industry": industry,
         "count":    len(peers),
+    })
+
+
+# ── SWOT 자동 생성 ────────────────────────────────────────────────────────
+def _build_swot(me: dict, peers: list, market: str) -> dict:
+    """스캔 캐시 row + moat 데이터를 조합해 SWOT 4분면 항목 생성.
+
+    각 항목은 {"text": str, "metric": str} 형태. 외부 API 호출 없음.
+    """
+    def _f(x):
+        try:
+            v = float(x)
+            return v if v == v else None  # NaN 차단
+        except (TypeError, ValueError):
+            return None
+
+    per   = _f(me.get("_PER"))
+    pbr   = _f(me.get("_PBR"))
+    roe   = _f(me.get("_ROE"))
+    opm   = _f(me.get("_OperatingMargin"))
+    div   = _f(me.get("_DivYield"))
+    rev_g = _f(me.get("_RevenueGrowth"))
+    eps_g = _f(me.get("_EPSGrowth"))
+    mom   = _f(me.get("Mom12M"))
+    mcap  = _f(me.get("_MarketCap"))
+
+    moat_label = (me.get("MoatLabel") or "").strip()
+    moat_bonus = _f(me.get("MoatBonus")) or 0.0
+    moat_cat   = (me.get("MoatCategory") or "").strip()
+
+    # peers 평균 (PER/PBR 비교용)
+    peer_pers = [_f(p.get("_PER")) for p in peers]
+    peer_pers = [v for v in peer_pers if v and v > 0]
+    peer_per_avg = (sum(peer_pers) / len(peer_pers)) if peer_pers else None
+
+    S, W, O, T = [], [], [], []
+
+    # ── Strengths ──
+    if moat_label and moat_bonus >= 1.5:
+        S.append({"text": f"경제적 해자: {moat_label}", "metric": f"+{moat_bonus:.1f}pt"})
+    if roe is not None and roe >= 0.15:
+        S.append({"text": "고ROE — 자본효율 우수", "metric": f"ROE {roe*100:.1f}%"})
+    if opm is not None and opm >= 0.20:
+        S.append({"text": "고마진 영업구조", "metric": f"OPM {opm*100:.1f}%"})
+    if mom is not None and mom >= 0.20:
+        S.append({"text": "12개월 모멘텀 강세", "metric": f"+{mom*100:.1f}%"})
+    if rev_g is not None and rev_g >= 0.15:
+        S.append({"text": "두 자릿수 매출 성장", "metric": f"+{rev_g*100:.1f}%"})
+    if div is not None and div >= 0.03 and (roe is None or roe > 0):
+        S.append({"text": "안정 배당 (3% 이상)", "metric": f"{div*100:.2f}%"})
+
+    # ── Weaknesses ──
+    if per is not None and per > 50:
+        W.append({"text": "고PER — 밸류에이션 부담", "metric": f"PER {per:.1f}"})
+    if pbr is not None and pbr > 7:
+        W.append({"text": "고PBR — 자산 대비 고평가", "metric": f"PBR {pbr:.1f}"})
+    if roe is not None and roe < 0:
+        W.append({"text": "적자 — 자본 잠식 위험", "metric": f"ROE {roe*100:.1f}%"})
+    if opm is not None and opm < 0:
+        W.append({"text": "영업적자", "metric": f"OPM {opm*100:.1f}%"})
+    if rev_g is not None and rev_g < -0.05:
+        W.append({"text": "매출 역성장", "metric": f"{rev_g*100:.1f}%"})
+    if eps_g is not None and eps_g < -0.10:
+        W.append({"text": "EPS 감소", "metric": f"{eps_g*100:.1f}%"})
+
+    # ── Opportunities ──
+    tgt_gap = _f(me.get("_YF_TargetGapPct"))
+    if tgt_gap is not None and tgt_gap >= 15:
+        O.append({"text": "애널리스트 목표가 상방 여력", "metric": f"+{tgt_gap:.1f}%"})
+    rec = _f(me.get("_YF_RecMean"))
+    if rec is not None and rec <= 2.0:
+        O.append({"text": "월가 매수 컨센서스", "metric": f"Buy {rec:.1f}/5"})
+    earn_streak = _f(me.get("_FH_EarnStreak"))
+    if earn_streak is not None and earn_streak >= 3:
+        O.append({"text": "실적 서프라이즈 연속", "metric": f"{int(earn_streak)}분기"})
+    if peer_per_avg and per and per > 0 and per < peer_per_avg * 0.8:
+        O.append({"text": "동종 대비 밸류에이션 디스카운트",
+                  "metric": f"PER {per:.1f} vs 평균 {peer_per_avg:.1f}"})
+    if moat_cat in {"INTANGIBLE", "NETWORK", "SWITCHING"} and rev_g and rev_g >= 0.10:
+        O.append({"text": "해자 + 성장 동력 동행", "metric": moat_cat})
+
+    # ── Threats ──
+    short_pct = _f(me.get("_YF_ShortPctFloat"))
+    if short_pct is not None and short_pct >= 10:
+        T.append({"text": "공매도 과열", "metric": f"{short_pct:.1f}% of float"})
+    if peer_per_avg and per and per > peer_per_avg * 1.5:
+        T.append({"text": "동종 대비 밸류에이션 프리미엄",
+                  "metric": f"PER {per:.1f} vs 평균 {peer_per_avg:.1f}"})
+    if mom is not None and mom <= -0.20:
+        T.append({"text": "12개월 모멘텀 약세", "metric": f"{mom*100:.1f}%"})
+    fh_sell = _f(me.get("_FH_RecSell"))
+    fh_buy  = _f(me.get("_FH_RecBuy"))
+    if fh_sell is not None and fh_buy is not None and fh_sell > fh_buy:
+        T.append({"text": "애널리스트 매도 의견 우세", "metric": f"S{int(fh_sell)} vs B{int(fh_buy)}"})
+    insider = _f(me.get("_FH_InsiderNet"))
+    if insider is not None and insider < 0 and abs(insider) > 10000:
+        T.append({"text": "내부자 순매도", "metric": f"{int(insider):,}주"})
+
+    # 빈 분면 폴백
+    if not S: S.append({"text": "두드러진 강점 신호 없음", "metric": "—"})
+    if not W: W.append({"text": "두드러진 약점 신호 없음", "metric": "—"})
+    if not O: O.append({"text": "특별한 기회 신호 없음", "metric": "—"})
+    if not T: T.append({"text": "특별한 위협 신호 없음", "metric": "—"})
+
+    return {"S": S[:4], "W": W[:4], "O": O[:4], "T": T[:4]}
+
+
+@app.route("/api/swot/<ticker>")
+def api_swot(ticker: str):
+    """GET /api/swot/AAPL?market=US → 자동 생성 SWOT 4분면.
+
+    스캔 캐시 row + ticker detail 결과를 조합. 외부 API 호출 없음.
+    """
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
+    market = (request.args.get("market") or "US").upper()
+
+    # 1) 스캔 캐시에서 본인 + 동종 peers row 확보
+    rows = []
+    with _scan_results_cache_lock:
+        for strat in ("BALANCED", "AGGRESSIVE", "CONSERVATIVE"):
+            cached = _scan_results_cache.get((market, strat, ""))
+            if cached and cached.get("data"):
+                rows = cached["data"]
+                break
+    me = next((r for r in rows if (r.get("Ticker") or "") == ticker), None)
+    if not me:
+        return jsonify({"ok": False, "reason": "ticker_not_in_cache",
+                        "message": "스캔 캐시에 없습니다. 스캔을 먼저 실행해 주세요."})
+    sector = (me.get("Sector") or "").strip()
+    peers = [r for r in rows if r.get("Ticker") != ticker
+             and (r.get("Sector") or "").strip() == sector][:8]
+
+    # 2) ticker detail 캐시에서 yfinance/Finnhub 보조 지표 병합 (있을 때만)
+    me_aug = dict(me)
+    with _ticker_detail_cache_lock:
+        for k_strat in ("BALANCED", "AGGRESSIVE", "CONSERVATIVE"):
+            entry = _ticker_detail_cache.get(f"{ticker}:{market}:{k_strat}")
+            if entry and entry.get("data"):
+                d = entry["data"]
+                for k in ("_YF_TargetGapPct", "_YF_RecMean", "_YF_ShortPctFloat",
+                          "_FH_EarnStreak", "_FH_RecBuy", "_FH_RecSell", "_FH_InsiderNet"):
+                    if d.get(k) is not None:
+                        me_aug[k] = d.get(k)
+                break
+
+    swot = _build_swot(me_aug, peers, market)
+
+    # ── LLM 정성 분석 병합 (회사 고유의 사업 스토리) ──
+    llm_payload = None
+    try:
+        from swot import get_swot as _swot_get
+        llm_payload = _swot_get(
+            ticker=ticker,
+            name=me.get("Name") or ticker,
+            sector=sector,
+            industry=(me.get("Industry") or "").strip(),
+            mcap=me.get("_MarketCap"),
+            moat=me.get("MoatLabel") or "",
+        )
+    except Exception as se:
+        logging.debug("swot LLM call failed for %s: %s", ticker, se)
+
+    if llm_payload:
+        # LLM 항목을 각 분면 앞쪽에 삽입 (정성 우선, 정량 보조)
+        for k in ("S", "W", "O", "T"):
+            llm_items = [{"text": t, "metric": "✦"} for t in (llm_payload.get(k) or [])]
+            rule_items = [it for it in swot.get(k, []) if it.get("metric") != "—"]
+            merged = llm_items + rule_items
+            swot[k] = merged[:5] if merged else swot.get(k, [])
+
+    return jsonify({
+        "ok": True,
+        "ticker": ticker,
+        "name": me.get("Name") or ticker,
+        "sector": sector,
+        "moat": me.get("MoatLabel") or "",
+        "swot": swot,
+        "llm": bool(llm_payload),
     })
 
 
@@ -2489,6 +2780,19 @@ try:
     _start_multibagger_warmup_once()
 except Exception as _e:
     logging.warning("multibagger warm-up bootstrap failed: %s", _e)
+
+# 검색 인덱스 사전 빌드 (백그라운드) — 첫 검색 요청 시 지연 제거
+def _warmup_search_index():
+    try:
+        _get_search_idx("KR")
+        _get_search_idx("US")
+        logging.info("[search-idx] pre-built KR=%d US=%d",
+                     len(_SEARCH_IDX.get("KR", [])),
+                     len(_SEARCH_IDX.get("US", [])))
+    except Exception as _e:
+        logging.warning("search index warmup failed: %s", _e)
+
+threading.Thread(target=_warmup_search_index, daemon=True, name="search-idx-warmup").start()
 
 if __name__ == "__main__":
     debug = (os.environ.get("FLASK_DEBUG") or "0").strip().lower() in ("1", "true", "yes")

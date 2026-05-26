@@ -168,6 +168,14 @@ _SCAN_RESULTS_TTL_SEC = 300  # 5분
 _scan_results_cache: dict[tuple[str, str, str], dict] = {}
 _scan_results_cache_lock = threading.Lock()
 
+# 스캔 JSON 응답에서 제거할 무거운 필드 (상세 패널은 /api/ticker 에서 별도 제공)
+_SCAN_STRIP_FIELDS: frozenset = frozenset({"Breakdown"})
+
+def _strip_heavy(rows: list) -> list:
+    if not _SCAN_STRIP_FIELDS or not rows:
+        return rows
+    return [{k: v for k, v in r.items() if k not in _SCAN_STRIP_FIELDS} if isinstance(r, dict) else r for r in rows]
+
 # ── 검색 인덱스 (앱 시작 시 1회 빌드 — 매 요청 선형 스캔 제거) ──
 # 각 항목: (ticker, display_name, blob) — blob = ticker|name 소문자 결합 문자열
 _SEARCH_IDX: dict[str, list] = {}
@@ -428,11 +436,12 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
             # Phase-3: moat 주입 후 투기주 졸업 재평가
             from speculative_themes import apply_speculative_correction as _spec_reeval_batch
             _spec_reeval_batch(results)
-            # 스캔 결과 전체 캐시 갱신
+            # 스캔 결과 전체 캐시 갱신 (Breakdown 제거 — 상세는 /api/ticker 에서 제공)
             if results:
+                _cached_results = _strip_heavy(results)
                 with _scan_results_cache_lock:
                     _scan_results_cache[(market, strategy, sector)] = {
-                        "_ts": int(time.time()), "data": results,
+                        "_ts": int(time.time()), "data": _cached_results,
                     }
         except Exception as e:
             logging.warning("background scan refresh failed: %s", e)
@@ -1027,10 +1036,18 @@ def api_scan():
         try:
             import history
             results = history.annotate_deltas(results, market)
-            # 섹터 스캔이 아닐 때만 스냅샷 저장 (전체 스캔만 저장)
+            # 섹터 스캔이 아닐 때만 스냅샷 저장 — 백그라운드로 이동해 응답 차단 제거
             if not sector:
-                universe = {t for ts in adapter.get_sectors().values() for t in ts}
-                history.save_snapshot(results, market, universe=universe)
+                _snap_rows = list(results)
+                _snap_market = market
+                _snap_universe = {t for ts in adapter.get_sectors().values() for t in ts}
+                def _bg_snap(_r=_snap_rows, _m=_snap_market, _u=_snap_universe):
+                    try:
+                        import history as _h
+                        _h.save_snapshot(_r, _m, universe=_u)
+                    except Exception as _e:
+                        logging.warning("bg save_snapshot failed: %s", _e)
+                threading.Thread(target=_bg_snap, daemon=True).start()
         except Exception as he:
             logging.warning("history annotate/save failed: %s", he)
         # KR 종목은 네이버 실시간 등락률로 즉시 오버라이드 (yfinance 장중 고착 회피).
@@ -1059,7 +1076,8 @@ def api_scan():
                 results = _apply_aq_fusion(results, market, top_n=aq_top)
             except Exception as ae:
                 logging.warning("aq fusion failed: %s", ae)
-        # ── 스캔 결과 전체 캐시 저장 ──
+        # ── 스캔 결과 전체 캐시 저장 (Breakdown 제거) ──
+        results = _strip_heavy(results)
         if results:
             with _scan_results_cache_lock:
                 _scan_results_cache[_sr_key] = {"_ts": _sr_now, "data": results}
@@ -2850,6 +2868,23 @@ def _warmup_search_index():
         logging.warning("search index warmup failed: %s", _e)
 
 threading.Thread(target=_warmup_search_index, daemon=True, name="search-idx-warmup").start()
+
+
+def _warmup_moat_cache():
+    try:
+        import moat
+        n = moat.preload_cache()
+        logging.info("[moat-cache] preloaded %d entries into memory", n)
+    except Exception as _e:
+        logging.warning("moat cache preload failed: %s", _e)
+    # speculative_themes도 미리 로드해 첫 스캔 import 지연 제거
+    try:
+        import speculative_themes  # noqa: F401
+    except Exception:
+        pass
+
+
+threading.Thread(target=_warmup_moat_cache, daemon=True, name="moat-cache-warmup").start()
 
 if __name__ == "__main__":
     debug = (os.environ.get("FLASK_DEBUG") or "0").strip().lower() in ("1", "true", "yes")

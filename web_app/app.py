@@ -408,7 +408,7 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
         try:
             adapter_cls = _get_scan_adapter_cls()
             adapter = adapter_cls(market=market, strategy=strategy)
-            results = adapter.scan_sector(sector, prefer_cache=True) if sector else adapter.scan_all(prefer_cache=True, max_workers=8)
+            results = adapter.scan_sector(sector, prefer_cache=True, cache_only=True) if sector else adapter.scan_all(prefer_cache=True, cache_only=True, max_workers=8)
             try:
                 import history
                 results = history.annotate_deltas(results, market)
@@ -1005,7 +1005,9 @@ def api_scan():
         with _scan_results_cache_lock:
             _sr_cached = _scan_results_cache.get(_sr_key)
         if _sr_cached:
-            _refresh_scan_background(market, strategy, sector)
+            _age_sec = _sr_now - _sr_cached.get("_ts", 0)
+            if _age_sec > _SCAN_RESULTS_TTL_SEC:
+                _refresh_scan_background(market, strategy, sector)
             resp = jsonify(_sr_cached["data"])
             try:
                 cache_age_min, as_of_iso = _scan_cache_meta(market)
@@ -1013,7 +1015,6 @@ def api_scan():
                     resp.headers["X-Cache-Age-Min"] = str(cache_age_min)
                 if as_of_iso:
                     resp.headers["X-As-Of"] = as_of_iso
-                _age_sec = _sr_now - _sr_cached.get("_ts", 0)
                 resp.headers["X-Warming-In-Progress"] = "true" if _age_sec > _SCAN_RESULTS_TTL_SEC else "false"
             except Exception as _e:
                 logging.debug("silent except (app.py): %s", _e)

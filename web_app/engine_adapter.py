@@ -109,9 +109,9 @@ class ScanAdapter:
         import yfinance as _yf
         for attempt in range(3):
             if attempt == 1:
-                time.sleep(random.uniform(3.0, 5.0))
+                time.sleep(random.uniform(1.0, 2.0))
             elif attempt == 2:
-                time.sleep(random.uniform(8.0, 12.0))
+                time.sleep(random.uniform(3.0, 5.0))
             try:
                 v = _yf.Ticker("^VIX").history(period="5d")
                 if not v.empty:
@@ -245,7 +245,7 @@ class ScanAdapter:
         result = _qn.QuantNexusApp._analyze_ticker(self, ticker)
         return apply_to_row(result) if result else result
 
-    def scan_sector(self, sector: str, *, max_workers: int = int(os.environ.get("SCAN_WORKERS", "4")), prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
+    def scan_sector(self, sector: str, *, max_workers: int = int(os.environ.get("SCAN_WORKERS", "8")), prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
         """특정 섹터 종목을 병렬 분석 후 TotalScore 내림차순 반환."""
         tickers = self._sectors.get(sector, [])
         self._pre_build_scan_caches(tickers)
@@ -269,7 +269,7 @@ class ScanAdapter:
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         return results
 
-    def scan_all(self, *, max_workers: int = int(os.environ.get("SCAN_WORKERS", "4")), prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
+    def scan_all(self, *, max_workers: int = int(os.environ.get("SCAN_WORKERS", "8")), prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
         """전체 섹터 종목을 병렬 분석 (중복 ticker 제거) 후 TotalScore 내림차순 반환."""
         ticker_sector: dict[str, str] = {}
         for sector, tickers in self._sectors.items():

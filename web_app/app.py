@@ -622,7 +622,7 @@ def _kr_warmup_loop(interval_sec: int = 1800) -> None:
                 try:
                     adapter_cls = _get_scan_adapter_cls()
                     adapter = adapter_cls(market="KR", strategy="BALANCED")
-                    _wm_workers = _get_config_int("WARMUP_WORKERS", 4, minimum=1, maximum=16)
+                    _wm_workers = _get_config_int("WARMUP_WORKERS", 8, minimum=1, maximum=16)
                     results = adapter.scan_all(max_workers=_wm_workers)
                     logging.info("KR warm-up done: %d tickers", len(results) if results else 0)
                     if results:
@@ -757,7 +757,7 @@ def _us_warmup_loop(interval_sec: int = 1800) -> None:
                     logging.info("US warm-up started (slow-refresh)")
                     adapter_cls = _get_scan_adapter_cls()
                     adapter = adapter_cls(market="US", strategy="BALANCED")
-                    _wm_workers = _get_config_int("WARMUP_WORKERS", 4, minimum=1, maximum=16)
+                    _wm_workers = _get_config_int("WARMUP_WORKERS", 8, minimum=1, maximum=16)
                     results = adapter.scan_all(max_workers=_wm_workers)
                     logging.info("US warm-up done: %d tickers", len(results) if results else 0)
                     if results:
@@ -1259,55 +1259,11 @@ def api_ticker(ticker: str):
             except Exception as ne:
                 logging.debug("naver investor flow failed for %s: %s", ticker, ne)
         else:
-            # US 종목: yfinance 수급/센티먼트 데이터
-            try:
-                import yfinance as yf
-                yf_info = _run_with_timeout(
-                    lambda: yf.Ticker(ticker).info, 5, f"yf_info {ticker}"
-                ) or {}
-                short_pct = yf_info.get("shortPercentOfFloat")
-                inst_pct = yf_info.get("heldPercentInstitutions")
-                rec_mean = yf_info.get("recommendationMean")
-                target_mean = yf_info.get("targetMeanPrice")
-                cur_price = yf_info.get("currentPrice")
-                n_analysts = yf_info.get("numberOfAnalystOpinions")
-                if short_pct is not None:
-                    result["_YF_ShortPctFloat"] = round(short_pct * 100, 2)
-                if inst_pct is not None:
-                    result["_YF_InstPct"] = round(inst_pct * 100, 1)
-                if rec_mean is not None and n_analysts:
-                    result["_YF_RecMean"] = round(rec_mean, 2)
-                    result["_YF_RecKey"] = yf_info.get("recommendationKey", "")
-                    result["_YF_NumAnalysts"] = int(n_analysts)
-                if target_mean and cur_price and cur_price > 0:
-                    gap_pct = (target_mean - cur_price) / cur_price * 100
-                    result["_YF_TargetGapPct"] = round(gap_pct, 1)
-                result["_YF_Available"] = True
-            except Exception as ye:
-                logging.debug("yfinance sentiment failed for %s: %s", ticker, ye)
-            # Finnhub 데이터 (내부자 거래, 애널리스트 추천 변화, 실적 서프라이즈)
-            try:
-                from finnhub_api import get_sentiment_data, is_available as fh_ok
-                if fh_ok():
-                    fh = get_sentiment_data(ticker)
-                    if fh.get("available"):
-                        result["_FH_InsiderNet"] = fh["insider_net_shares"]
-                        result["_FH_InsiderCount"] = fh["insider_tx_count"]
-                        result["_FH_RecBuy"] = fh["rec_strong_buy"] + fh["rec_buy"]
-                        result["_FH_RecSell"] = fh["rec_sell"]
-                        result["_FH_RecChange"] = fh["rec_change"]
-                        result["_FH_EarnSurprise"] = fh["earnings_surprise_pct"]
-                        result["_FH_EarnStreak"] = fh["earnings_beat_streak"]
-                        # 신규: 실적 D-day, 뉴스, 실시간 시세
-                        result["_FH_DaysToEarnings"] = fh.get("days_to_earnings_est", -1)
-                        result["_FH_NextEarnings"] = fh.get("next_earnings_estimate", "")
-                        result["_FH_News7d"] = fh.get("news_count_7d", 0)
-                        result["_FH_Headlines"] = fh.get("news_headlines", [])
-                        result["_FH_DayChangePct"] = fh.get("day_change_pct", 0)
-                        result["_FH_CurrentPrice"] = fh.get("current_price", 0)
-                        result["_FH_Available"] = True
-            except Exception as fe:
-                logging.debug("Finnhub sentiment failed for %s: %s", ticker, fe)
+            # US 종목: yfinance + Finnhub 센티먼트는 /api/sentiment/<ticker>로 분리 (lazy-load).
+            # 종목 상세 패널 첫 paint 지연(5~10s yfinance .info hang)을 제거하기 위함.
+            # 프론트는 sentiment 응답 도착 시 _YF_*/_FH_* 키를 머지.
+            result["_YF_Available"] = False
+            result["_FH_Available"] = False
         try:
             result = _annotate_one_liners([result])[0]
         except Exception as oe:
@@ -1330,6 +1286,80 @@ def api_ticker(ticker: str):
     except Exception as e:
         logging.exception("api_ticker")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/sentiment/<ticker>")
+def api_sentiment(ticker: str):
+    """GET /api/sentiment/AAPL → yfinance + Finnhub 센티먼트 (lazy-load).
+
+    /api/ticker 응답 후 프론트가 별도로 호출해서 _YF_*/_FH_* 키를 머지한다.
+    yfinance .info 호출이 5~10초 hang하는 케이스를 격리해 첫 paint 지연을 막는다.
+    """
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
+    market = (request.args.get("market") or "US").upper()
+    if market == "KR":
+        return jsonify({"ok": False, "reason": "kr_not_supported"})
+
+    out: dict = {"ok": True, "ticker": ticker}
+    # yfinance 수급/센티먼트
+    try:
+        import yfinance as yf
+        yf_info = _run_with_timeout(
+            lambda: yf.Ticker(ticker).info, 5, f"yf_info {ticker}"
+        ) or {}
+        short_pct = yf_info.get("shortPercentOfFloat")
+        inst_pct = yf_info.get("heldPercentInstitutions")
+        rec_mean = yf_info.get("recommendationMean")
+        target_mean = yf_info.get("targetMeanPrice")
+        cur_price = yf_info.get("currentPrice")
+        n_analysts = yf_info.get("numberOfAnalystOpinions")
+        if short_pct is not None:
+            out["_YF_ShortPctFloat"] = round(short_pct * 100, 2)
+        if inst_pct is not None:
+            out["_YF_InstPct"] = round(inst_pct * 100, 1)
+        if rec_mean is not None and n_analysts:
+            out["_YF_RecMean"] = round(rec_mean, 2)
+            out["_YF_RecKey"] = yf_info.get("recommendationKey", "")
+            out["_YF_NumAnalysts"] = int(n_analysts)
+        if target_mean and cur_price and cur_price > 0:
+            gap_pct = (target_mean - cur_price) / cur_price * 100
+            out["_YF_TargetGapPct"] = round(gap_pct, 1)
+        out["_YF_Available"] = True
+    except Exception as ye:
+        logging.debug("yfinance sentiment failed for %s: %s", ticker, ye)
+        out["_YF_Available"] = False
+
+    # Finnhub 데이터 (내부자/추천 변화/실적 서프라이즈/뉴스/실시간 시세)
+    try:
+        from finnhub_api import get_sentiment_data, is_available as fh_ok
+        if fh_ok():
+            fh = get_sentiment_data(ticker)
+            if fh.get("available"):
+                out["_FH_InsiderNet"] = fh["insider_net_shares"]
+                out["_FH_InsiderCount"] = fh["insider_tx_count"]
+                out["_FH_RecBuy"] = fh["rec_strong_buy"] + fh["rec_buy"]
+                out["_FH_RecSell"] = fh["rec_sell"]
+                out["_FH_RecChange"] = fh["rec_change"]
+                out["_FH_EarnSurprise"] = fh["earnings_surprise_pct"]
+                out["_FH_EarnStreak"] = fh["earnings_beat_streak"]
+                out["_FH_DaysToEarnings"] = fh.get("days_to_earnings_est", -1)
+                out["_FH_NextEarnings"] = fh.get("next_earnings_estimate", "")
+                out["_FH_News7d"] = fh.get("news_count_7d", 0)
+                out["_FH_Headlines"] = fh.get("news_headlines", [])
+                out["_FH_DayChangePct"] = fh.get("day_change_pct", 0)
+                out["_FH_CurrentPrice"] = fh.get("current_price", 0)
+                out["_FH_Available"] = True
+            else:
+                out["_FH_Available"] = False
+        else:
+            out["_FH_Available"] = False
+    except Exception as fe:
+        logging.debug("Finnhub sentiment failed for %s: %s", ticker, fe)
+        out["_FH_Available"] = False
+
+    return jsonify(out)
 
 
 @app.route("/api/aq_signal/<ticker>")
@@ -2279,7 +2309,7 @@ def api_four_axis(ticker: str):
                     if "too many requests" in msg or "rate" in msg and "limit" in msg:
                         # 한 번만 짧게 backoff 하고 같은 period 재시도, 그래도 실패면 후보 자체를 포기
                         try:
-                            time.sleep(2.0)
+                            time.sleep(1.0)
                             h = _run_with_timeout(
                                 lambda yt=yt, period=period: yf.Ticker(yt).history(
                                     period=period,
@@ -2502,7 +2532,7 @@ def _load_sec_cik_map() -> dict:
         "Accept-Encoding": "gzip",
     })
     try:
-        with urllib.request.urlopen(req, timeout=15) as r:
+        with urllib.request.urlopen(req, timeout=8) as r:
             raw = r.read()
             if raw[:2] == b'\x1f\x8b':
                 raw = _gzip.decompress(raw)
@@ -2529,7 +2559,7 @@ def _get_sec_filings(ticker: str, count: int = 10) -> list:
         "User-Agent": "StockScanner admin@example.com",
     })
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with urllib.request.urlopen(req, timeout=6) as r:
             data = _json.loads(r.read().decode("utf-8"))
         recent = data.get("filings", {}).get("recent", {})
         forms = recent.get("form", [])

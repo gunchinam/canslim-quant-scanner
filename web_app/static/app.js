@@ -324,50 +324,7 @@ function _renderEntryCard(d) {
   const fill = document.getElementById('dp-entry-bar-fill');
   if (fill) fill.style.width = (score != null ? Math.max(0, Math.min(100, score)) : 0) + '%';
   if (cls) card.classList.add(cls);
-  setText('dp-entry-px-entry', plan.entry != null ? fmtPrice(plan.entry) : '—');
-  setText('dp-entry-px-stop',  plan.stop  != null ? fmtPrice(plan.stop)  : '—');
-  setText('dp-entry-px-t1',    plan.t1    != null ? fmtPrice(plan.t1)    : '—');
-  setText('dp-entry-px-t2',    plan.t2    != null ? fmtPrice(plan.t2)    : '—');
   setText('dp-entry-type', plan.entry_type || '—');
-  setText('dp-entry-current', plan.current != null ? fmtPrice(plan.current) : '—');
-  // 할인율 표시
-  const discEl = document.getElementById('dp-entry-discount');
-  if (discEl) {
-    const dv = plan.entry_discount;
-    if (dv != null) {
-      const sign = dv > 0 ? '-' : (dv < 0 ? '+' : '');
-      discEl.textContent = `${sign}${Math.abs(dv).toFixed(2)}%`;
-      discEl.style.color = dv > 0 ? 'var(--success)' : dv < 0 ? 'var(--destructive)' : 'var(--muted)';
-    } else {
-      discEl.textContent = '';
-    }
-  }
-  // R:R 비율 (NaN/Infinity 방어)
-  const rrEl = document.getElementById('dp-entry-rr');
-  if (rrEl) {
-    const rr = plan.rr;
-    if (rr != null && Number.isFinite(rr) && rr > 0) {
-      const rrNow = plan.rr_now;
-      const nowTxt = (rrNow != null && Number.isFinite(rrNow) && Math.abs(rrNow - rr) > 0.05) ? ` (현재 ${rrNow.toFixed(1)})` : '';
-      rrEl.textContent = `R:R ${rr.toFixed(1)}:1${nowTxt}`;
-      rrEl.style.color = rr >= 3 ? 'var(--success)' : rr >= 2 ? 'var(--brand)' : 'var(--destructive)';
-    } else {
-      rrEl.textContent = '산출 불가';
-      rrEl.style.color = 'var(--text-tertiary)';
-    }
-  }
-  // 손절 방법 + 승률
-  const smEl = document.getElementById('dp-entry-stop-method');
-  if (smEl) {
-    if (plan.stop_method) {
-      const methodKo = {'지지선': '지지선', 'SWING_LOW': '스윙 저점', 'ATR': 'ATR'}[plan.stop_method] || plan.stop_method;
-      const wr = plan.win_rate;
-      const wrText = wr != null && wr > 0 ? ` · 승률 ${Math.min(100, Math.max(0, wr)).toFixed(0)}%` : '';
-      smEl.innerHTML = methodKo + (wrText ? `<span style="color:${wr >= 60 ? 'var(--success)' : wr >= 40 ? 'var(--brand)' : 'var(--destructive)'};font-weight:700;">${wrText}</span>` : '');
-    } else {
-      smEl.textContent = '—';
-    }
-  }
   // 신뢰도 밴드 — 승률 + R:R 괴리를 1개 배지로 추상화 (탭하면 원수치)
   const confEl  = document.getElementById('dp-entry-confidence');
   const confRaw = document.getElementById('dp-entry-conf-raw');
@@ -2631,7 +2588,7 @@ function _clearPanelDetail() {
   const _nb = document.getElementById('dp-news-bar');
   if (_nb) _nb.style.display = 'none';
   ['dp-name','dp-ticker','dp-sector','dp-about','dp-score','dp-signal',
-   'dp-price','dp-day-chg','dp-target','dp-broker-target','dp-rsi','dp-conviction',
+   'dp-price','dp-day-chg','dp-target','dp-broker-target','dp-rsi',
    'dp-axis-eps-val','dp-axis-roe-val','dp-axis-mom-val','dp-axis-rs-val'].forEach(id => setText(id, '…'));
   ['dp-dcf-upside','dp-broker-upside'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = ''; });
   const loading = '<div style="padding:32px 16px;text-align:center;color:var(--text-tertiary);font-size:13px;">로딩 중...</div>';
@@ -2720,7 +2677,6 @@ function _populatePanelDetail(d, skipFourAxis) {
     }
   }
   setText('dp-rsi',     d.RSI    != null ? fmt(d.RSI, 1) : '—');
-  setText('dp-conviction', _trKo(d.Conviction || '—'));
 
   const dayChg = d.DayChg || 0;
   const chgEl  = document.getElementById('dp-day-chg');

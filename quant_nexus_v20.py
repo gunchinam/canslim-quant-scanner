@@ -94,6 +94,20 @@ from functools import wraps
 import re
 import urllib.request
 import urllib.error
+try:
+    import urllib3 as _urllib3
+    # 네이버 fundamentals 전용 connection pool — TCP/TLS 핸드셰이크 비용 제거.
+    # num_pools=1 (m.stock.naver.com 단일 호스트), maxsize=16 (ThreadPoolExecutor 12 + 여유).
+    # retries=False: 상위 레벨에서 graceful fallback 처리. timeout total=2.0s.
+    _NAVER_HTTP = _urllib3.PoolManager(
+        num_pools=1,
+        maxsize=16,
+        retries=False,
+        timeout=_urllib3.Timeout(total=2.0),
+    )
+except Exception:
+    _urllib3 = None
+    _NAVER_HTTP = None
 import valuation_engine
 from entry_pricing import strong_entry_floor as _strong_entry_floor
 from us_company_info import US_COMPANY_INFO as _US_COMPANY_INFO
@@ -3672,11 +3686,14 @@ class QuantNexusApp:
         result = {}
         try:
             url = f"https://m.stock.naver.com/api/stock/{code}/finance/annual"
-            req = urllib.request.Request(url, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-            })
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
+            _headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+            if _NAVER_HTTP is not None:
+                _resp = _NAVER_HTTP.request('GET', url, headers=_headers)
+                data = json.loads(_resp.data.decode('utf-8'))
+            else:
+                req = urllib.request.Request(url, headers=_headers)
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    data = json.loads(resp.read().decode('utf-8'))
 
             fi = data.get('financeInfo', {})
             # 최신 실적 연도 키 (컨센서스 제외)

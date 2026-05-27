@@ -229,7 +229,8 @@ class ScanAdapter:
             ]
             if _kr_uncached:
                 logging.debug("[ScanAdapter] KR 재무 사전 로드 %d개", len(_kr_uncached))
-                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as _nex:
+                # max_workers 12 — urllib3 PoolManager(maxsize=16) 한도 내, KR fundamentals 사전 로드 가속
+                with concurrent.futures.ThreadPoolExecutor(max_workers=12) as _nex:
                     list(_nex.map(lambda t: _fetch_fund(self, t), _kr_uncached))
 
     def _fetch_naver_target(self, ticker: str):

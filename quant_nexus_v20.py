@@ -3476,6 +3476,9 @@ class QuantNexusApp:
         self._fitted_widths    = {}
         self._scan_cancelled   = False
         self._stats_lock       = threading.Lock()
+        # yfinance 429 글로벌 cooldown 게이트 — 한 티커가 rate-limit 맞으면 모든 워커가 잠시 대기
+        self._yf_cooldown_until = 0.0
+        self._yf_cooldown_lock  = threading.Lock()
         self._slim_mode        = False  # 기본: 전체 컬럼 표시
 
         self._sidebar_default_width = 280
@@ -4943,6 +4946,12 @@ class QuantNexusApp:
          12. CAN SLIM 시그널 결정 + Breakdown 구성
         """
         try:
+            # ── yfinance 429 글로벌 cooldown 게이트
+            # 직전 티커에서 rate-limit 맞았다면 모든 워커가 함께 대기 (Yahoo IP 차단 회피)
+            with self._yf_cooldown_lock:
+                _wait = self._yf_cooldown_until - time.time()
+            if _wait > 0:
+                time.sleep(min(_wait, 60))
             # ── 전략 독립 캐시 키: "AAPL__BALANCED", "005930.KS__CAN_SLIM" 등
             # DataCache 내부를 수정하지 않고, 호출부에서 복합 키를 조합한다.
             # _path()의 replace 규칙("."->"_", "/"->"_")과 충돌하지 않도록
@@ -4986,6 +4995,10 @@ class QuantNexusApp:
                         time.sleep(0.5 + random.random() * 0.5)
                         continue
                     logging.warning("[yf] rate-limited %s (%s)", ticker, self._scan_market)
+                    # 글로벌 cooldown 30초 — 다음 워커가 즉시 같은 IP를 두드리지 못하도록
+                    with self._yf_cooldown_lock:
+                        self._yf_cooldown_until = max(
+                            self._yf_cooldown_until, time.time() + 30.0)
                     break
                 except Exception as _e:
                     logging.warning("[yf] history failed %s: %s", ticker, _e)
@@ -5020,6 +5033,12 @@ class QuantNexusApp:
             except Exception as _e:
                 logging.warning(f"[yf.info] {ticker} 실패: {_e}")
                 info = {}
+                # rate-limit 메시지면 글로벌 cooldown — fast_info도 같은 IP라 호출해도 또 429
+                _msg = str(_e).lower()
+                if "too many" in _msg or "rate" in _msg or "429" in _msg:
+                    with self._yf_cooldown_lock:
+                        self._yf_cooldown_until = max(
+                            self._yf_cooldown_until, time.time() + 30.0)
             if not info:
                 # info 빈 경우 즉시 fast_info fallback (KR 전용 retry+sleep 제거)
                 try:

@@ -1339,7 +1339,7 @@ def api_ticker(ticker: str):
         # (engine_adapter에서 moat 없이 1차 평가 → moat 주입 후 2차 재평가)
         from speculative_themes import apply_to_row as _spec_reeval
         _spec_reeval(result)
-        # AQ 융합은 /api/aq_signal/<ticker> 로 분리 (드로어 lazy-load)
+
         # ── 응답 캐시 저장 ──
         with _ticker_detail_cache_lock:
             if len(_ticker_detail_cache) >= _TICKER_DETAIL_MAX:
@@ -1455,30 +1455,6 @@ def api_investor_flow(ticker: str):
         return jsonify({"ok": False, "_Investor_Available": False})
 
 
-@app.route("/api/aq_signal/<ticker>")
-def api_aq_signal(ticker: str):
-    """GET /api/aq_signal/AAPL?market=US → AgentQuant 진입 타이밍 (lazy-load)."""
-    ticker = _validate_ticker(ticker)
-    if not ticker:
-        return jsonify({"error": "invalid ticker"}), 400
-    market = (request.args.get("market") or "US").upper()
-    try:
-        from agentquant_signal import get_regime_signal
-        aq = get_regime_signal(ticker, market=market)
-        if not aq or not aq.get("stock"):
-            return jsonify({"ok": False})
-        stock = aq["stock"]
-        return jsonify({
-            "ok": True,
-            "EntryScore_aq": float(stock.get("score") or 0),
-            "AQ_Verdict": stock.get("verdict_kr"),
-            "AQ_VerdictCode": stock.get("verdict"),
-            "AQ_Regime": aq.get("market", {}).get("label"),
-            "AQ_Reasons": stock.get("reasons", [])[:4],
-        })
-    except Exception as e:
-        logging.warning("api_aq_signal failed for %s: %s", ticker, e)
-        return jsonify({"ok": False, "error": str(e)})
 
 
 

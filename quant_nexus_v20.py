@@ -403,6 +403,33 @@ except Exception:
     pass
 
 
+# ── yfinance 429 글로벌 cooldown 게이트 (모듈 레벨, 프로세스 전역) ──
+# KR/US ScanAdapter가 별도 인스턴스라도 같은 IP를 공유하므로 module-level 가 필수.
+# _VIX_CACHE 와 동일 패턴.
+_YF_COOLDOWN: dict = {"until": 0.0}
+_YF_COOLDOWN_LOCK = threading.Lock()
+
+
+def _yf_cooldown_wait() -> None:
+    """현재 cooldown 이 활성이면 그만큼 대기. 최대 60초로 클램프."""
+    with _YF_COOLDOWN_LOCK:
+        _w = _YF_COOLDOWN["until"] - time.time()
+    if _w > 0:
+        time.sleep(min(_w, 60.0))
+
+
+def _yf_mark_rate_limited(seconds: float = 30.0) -> None:
+    """rate-limit 감지 시 호출 — 모든 워커가 함께 대기하도록 cooldown 세팅."""
+    with _YF_COOLDOWN_LOCK:
+        _YF_COOLDOWN["until"] = max(_YF_COOLDOWN["until"], time.time() + seconds)
+
+
+def _is_rate_limit_error(exc: BaseException) -> bool:
+    """yfinance 가 일반 Exception 으로 던지는 케이스까지 메시지로 판별."""
+    _m = str(exc).lower()
+    return ("too many" in _m) or ("rate" in _m and "limit" in _m) or ("429" in _m)
+
+
 class _YahooNotFound(Exception):
     """Yahoo chart API 가 404 (definitive not found) — Stooq 재시도 무의미."""
 
@@ -4946,12 +4973,8 @@ class QuantNexusApp:
          12. CAN SLIM 시그널 결정 + Breakdown 구성
         """
         try:
-            # ── yfinance 429 글로벌 cooldown 게이트
-            # 직전 티커에서 rate-limit 맞았다면 모든 워커가 함께 대기 (Yahoo IP 차단 회피)
-            with self._yf_cooldown_lock:
-                _wait = self._yf_cooldown_until - time.time()
-            if _wait > 0:
-                time.sleep(min(_wait, 60))
+            # ── yfinance 429 글로벌 cooldown 게이트 (module-level → KR↔US 어댑터 공유)
+            _yf_cooldown_wait()
             # ── 전략 독립 캐시 키: "AAPL__BALANCED", "005930.KS__CAN_SLIM" 등
             # DataCache 내부를 수정하지 않고, 호출부에서 복합 키를 조합한다.
             # _path()의 replace 규칙("."->"_", "/"->"_")과 충돌하지 않도록
@@ -4995,13 +5018,14 @@ class QuantNexusApp:
                         time.sleep(0.5 + random.random() * 0.5)
                         continue
                     logging.warning("[yf] rate-limited %s (%s)", ticker, self._scan_market)
-                    # 글로벌 cooldown 30초 — 다음 워커가 즉시 같은 IP를 두드리지 못하도록
-                    with self._yf_cooldown_lock:
-                        self._yf_cooldown_until = max(
-                            self._yf_cooldown_until, time.time() + 30.0)
+                    _yf_mark_rate_limited(30.0)
                     break
                 except Exception as _e:
                     logging.warning("[yf] history failed %s: %s", ticker, _e)
+                    # YFRateLimitError 가 아닌 형태로 던져진 rate-limit 도 감지
+                    if _is_rate_limit_error(_e):
+                        _yf_rate_limited = True
+                        _yf_mark_rate_limited(30.0)
                     break
             if hist is None or hist.empty or len(hist) < 30:
                 stale = self.cache.get(strategy_key, max_age_minutes=60 * 24 * 30)
@@ -5013,40 +5037,50 @@ class QuantNexusApp:
                 if is_us:
                     try:
                         hist = _fetch_us_fallback_history(ticker)
-                    except Exception:
+                    except Exception as _fe:
+                        if _is_rate_limit_error(_fe):
+                            _yf_mark_rate_limited(30.0)
                         hist = None
                 else:
+                    # cooldown 활성 시 KR fallback 호출 자체를 skip — 같은 IP 추가 차단 회피
+                    _yf_cooldown_wait()
                     try:
                         hist = stock.history(period="1y")
-                    except Exception:
+                    except Exception as _fe1:
+                        if _is_rate_limit_error(_fe1):
+                            _yf_mark_rate_limited(30.0)
                         hist = None
                     if hist is None or hist.empty or len(hist) < 30:
+                        _yf_cooldown_wait()
                         try:
                             hist = stock.history(period="6mo")
-                        except Exception:
+                        except Exception as _fe2:
+                            if _is_rate_limit_error(_fe2):
+                                _yf_mark_rate_limited(30.0)
                             hist = None
                 if hist is None or hist.empty or len(hist) < 30:
                     return None
 
+            _yf_cooldown_wait()
+            _info_rate_limited = False
             try:
                 info = stock.info or {}
             except Exception as _e:
                 logging.warning(f"[yf.info] {ticker} 실패: {_e}")
                 info = {}
-                # rate-limit 메시지면 글로벌 cooldown — fast_info도 같은 IP라 호출해도 또 429
-                _msg = str(_e).lower()
-                if "too many" in _msg or "rate" in _msg or "429" in _msg:
-                    with self._yf_cooldown_lock:
-                        self._yf_cooldown_until = max(
-                            self._yf_cooldown_until, time.time() + 30.0)
-            if not info:
-                # info 빈 경우 즉시 fast_info fallback (KR 전용 retry+sleep 제거)
+                if _is_rate_limit_error(_e):
+                    _info_rate_limited = True
+                    _yf_mark_rate_limited(30.0)
+            # rate-limit 였다면 fast_info 도 같은 IP라 또 429 — 폴백 자체를 skip
+            if not info and not _info_rate_limited:
                 try:
                     fi = stock.fast_info
                     info = {
                         "marketCap": getattr(fi, "market_cap", 0) or 0,
                         "currentPrice": getattr(fi, "last_price", 0) or 0}
-                except Exception:
+                except Exception as _fie:
+                    if _is_rate_limit_error(_fie):
+                        _yf_mark_rate_limited(30.0)
                     info = {}
 
             # ── US 종목: yfinance info 핵심 재무 필드 결측 시 Finnhub 폴백 ──

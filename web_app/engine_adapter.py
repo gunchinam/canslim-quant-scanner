@@ -58,6 +58,9 @@ class ScanAdapter:
         self._scan_strategy = strategy
         self._scan_market   = market
         self._stats_lock    = threading.Lock()
+        # yfinance 429 글로벌 cooldown 게이트 (원본 엔진과 동일 인터페이스)
+        self._yf_cooldown_until = 0.0
+        self._yf_cooldown_lock  = threading.Lock()
         self.stats          = {
             "cache_hits": 0, "cache_misses": 0,
             "scanned": 0, "strong_buy": 0, "buy": 0, "hold": 0, "sell": 0,

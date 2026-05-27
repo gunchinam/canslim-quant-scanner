@@ -170,7 +170,10 @@ _scan_results_cache: dict[tuple[str, str, str], dict] = {}
 _scan_results_cache_lock = threading.Lock()
 
 # 스캔 JSON 응답에서 제거할 무거운 필드 (상세 패널은 /api/ticker 에서 별도 제공)
-_SCAN_STRIP_FIELDS: frozenset = frozenset({"Breakdown"})
+# Breakdown: 점수 분해 배열 (detail에서 /api/ticker로 재취득)
+# Scores: 멀티 전략 점수 dict (Tkinter 전용, web frontend 미사용 — _sortKey='TotalScore' 직접 사용)
+# Reason: 한줄 사유 문자열 (web frontend 미사용 — 한줄평은 OneLiner/OneLinerData 사용)
+_SCAN_STRIP_FIELDS: frozenset = frozenset({"Breakdown", "Scores", "Reason"})
 
 def _strip_heavy(rows: list) -> list:
     if not _SCAN_STRIP_FIELDS or not rows:

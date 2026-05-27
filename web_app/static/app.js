@@ -2255,7 +2255,8 @@ async function openDetail(ticker) {
   if (cached) _populatePanelDetail(cached, /* skipFourAxis */ true);
 
   // 4축 차트 + 종목 상세 + AQ 시그널 + 증권사 컨센서스 + 센티먼트를 모두 병렬로 요청
-  loadDpFourAxis(ticker);
+  // F6: 4축 차트는 IntersectionObserver로 가시영역 진입 시 1회 호출 (rootMargin 200px 사전로딩)
+  _scheduleLoadDpFourAxis(ticker);
   _loadSentiment(ticker, currentMarket, seq);
   _loadInvestorFlow(ticker, currentMarket, seq);
   loadConsensus(ticker, 'dp-consensus-card', 'dpcons');
@@ -2521,7 +2522,7 @@ function _populatePanelDetail(d, skipFourAxis) {
   if (!skipFourAxis) {
     const tk = (document.getElementById('dp-ticker')?.textContent || '').trim();
     if (tk && tk !== '—' && tk !== '…' && _dpFourAxisLoadedFor !== tk) {
-      loadDpFourAxis(tk);
+      _scheduleLoadDpFourAxis(tk);
     }
   }
 }
@@ -2976,6 +2977,29 @@ let _dpFourAxisLoadingFor = null;
 let _dpFourAxisReqSeq = 0;
 let _detailFourAxisReqSeq = 0;
 const FOUR_AXIS_FETCH_TIMEOUT_MS = 90000;
+
+/* ── F6: IntersectionObserver lazy load — 차트 섹션이 뷰포트 진입 시 1회 호출 ── */
+let _dpFourAxisIO = null;
+function _scheduleLoadDpFourAxis(ticker) {
+  if (!('IntersectionObserver' in window)) { loadDpFourAxis(ticker); return; }
+  const target = document.getElementById('dp-fouraxis-chart-wrap')
+              || document.querySelector('.dp-chart-section');
+  if (!target) { loadDpFourAxis(ticker); return; }
+  if (_dpFourAxisIO) { try { _dpFourAxisIO.disconnect(); } catch(_) {} _dpFourAxisIO = null; }
+  const scrollRoot = document.querySelector('#detail-panel .dp-scroll') || null;
+  const io = new IntersectionObserver(function(entries) {
+    for (const e of entries) {
+      if (e.isIntersecting) {
+        try { io.disconnect(); } catch(_) {}
+        if (_dpFourAxisIO === io) _dpFourAxisIO = null;
+        loadDpFourAxis(ticker);
+        return;
+      }
+    }
+  }, { root: scrollRoot, rootMargin: '200px 0px', threshold: 0.01 });
+  _dpFourAxisIO = io;
+  io.observe(target);
+}
 
 async function _fetchWithTimeout(url, options = {}, timeoutMs = FOUR_AXIS_FETCH_TIMEOUT_MS) {
   const controller = new AbortController();

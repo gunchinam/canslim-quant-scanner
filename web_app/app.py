@@ -147,7 +147,9 @@ def _render_deployment() -> bool:
 # ── 4축 차트 / 컨센서스 캐시 (성능 최적화) ──
 _FOUR_AXIS_TTL_SEC = 1800  # 30분
 _FOUR_AXIS_MAX = 200
-_four_axis_cache: dict[str, dict] = {}
+# OrderedDict LRU — move_to_end로 hot entry 보존, popitem(last=False)로 cold eviction
+from collections import OrderedDict as _OrderedDict
+_four_axis_cache: "_OrderedDict[str, dict]" = _OrderedDict()
 _four_axis_cache_lock = threading.Lock()
 
 _CONSENSUS_TTL_SEC = 900  # 15분
@@ -2407,12 +2409,12 @@ def _compute_four_axis_payload(ticker: str, market: str) -> tuple:
 _four_axis_render_lock = threading.Lock()  # BG warm만 직렬화 — 유저 요청은 락 없이 즉시 실행
 
 
-def _warm_four_axis(ticker: str, market: str) -> None:
+def _warm_four_axis(ticker: str, market: str, timeframe: str = "default") -> None:
     """BG 선제 4축 캐시 채우기 — 클릭 시 차트 즉시 표시."""
-    cache_key = f"{ticker}:{market}"
+    cache_key = f"{ticker}:{market}:{timeframe}"
     with _four_axis_cache_lock:
         if cache_key in _four_axis_cache:
-            return
+            return  # BG warm hit — move_to_end 호출 안 함 (cold entry가 hot으로 위장하는 것 방지)
     # 비블로킹 — 다른 BG warm이 실행 중이면 스킵 (유저 요청을 막지 않기 위해)
     if not _four_axis_render_lock.acquire(blocking=False):
         return
@@ -2424,7 +2426,7 @@ def _warm_four_axis(ticker: str, market: str) -> None:
         if payload:
             with _four_axis_cache_lock:
                 if len(_four_axis_cache) >= _FOUR_AXIS_MAX:
-                    _four_axis_cache.pop(next(iter(_four_axis_cache)), None)
+                    _four_axis_cache.popitem(last=False)  # LRU eviction
                 _four_axis_cache[cache_key] = {"data": payload, "_ts": int(time.time())}
             logging.info("4axis pre-warm: %s/%s OK", market, ticker)
         elif err:
@@ -2454,11 +2456,13 @@ def api_four_axis(ticker: str):
                 return jsonify({"error": f"상폐/리네임 티커: {ticker}"}), 404
         except Exception as _e:
             logging.debug("silent except (app.py): %s", _e)
-    cache_key = f"{ticker}:{market}"
+    timeframe = (request.args.get("timeframe") or "default").strip() or "default"
+    cache_key = f"{ticker}:{market}:{timeframe}"
     now = int(time.time())
     with _four_axis_cache_lock:
         cached = _four_axis_cache.get(cache_key)
         if cached and (now - cached.get("_ts", 0)) < _FOUR_AXIS_TTL_SEC:
+            _four_axis_cache.move_to_end(cache_key)  # LRU bump — 유저 요청 hit만 hot으로 보존
             return jsonify(cached["data"])
     # 유저 요청은 락 없이 즉시 실행 — BG warm과 경쟁해도 Agg 백엔드에서 안전
     payload, err = _compute_four_axis_payload(ticker, market)
@@ -2466,7 +2470,7 @@ def api_four_axis(ticker: str):
         return jsonify({"error": err or "생성 실패"}), (404 if "데이터 부족" in (err or "") else 500)
     with _four_axis_cache_lock:
         if len(_four_axis_cache) >= _FOUR_AXIS_MAX:
-            _four_axis_cache.pop(next(iter(_four_axis_cache)), None)
+            _four_axis_cache.popitem(last=False)  # LRU eviction
         _four_axis_cache[cache_key] = {"data": payload, "_ts": int(time.time())}
     return jsonify(payload)
 

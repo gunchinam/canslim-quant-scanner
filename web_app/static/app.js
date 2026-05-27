@@ -2982,8 +2982,9 @@ const FOUR_AXIS_FETCH_TIMEOUT_MS = 90000;
 let _dpFourAxisIO = null;
 function _scheduleLoadDpFourAxis(ticker) {
   if (!('IntersectionObserver' in window)) { loadDpFourAxis(ticker); return; }
-  const target = document.getElementById('dp-fouraxis-chart-wrap')
-              || document.querySelector('.dp-chart-section');
+  // .dp-chart-section은 항상 가시 (chart-wrap은 초기 display:none이라 IO가 fire 안 함)
+  const target = document.querySelector('#detail-panel .dp-chart-section')
+              || document.getElementById('dp-fa-haiku');
   if (!target) { loadDpFourAxis(ticker); return; }
   if (_dpFourAxisIO) { try { _dpFourAxisIO.disconnect(); } catch(_) {} _dpFourAxisIO = null; }
   const scrollRoot = document.querySelector('#detail-panel .dp-scroll') || null;

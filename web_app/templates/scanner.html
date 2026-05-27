@@ -3249,44 +3249,6 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           <div id="dpcons-reports" style="display:flex; flex-direction:column; gap:0;"></div>
         </div>
 
-        <!-- 진입 타이밍 카드 -->
-        <div id="dp-entry-card" class="card entry-card" style="padding:0; overflow:hidden;">
-          <!-- ① 결론존: 액션 문구 + 점수 -->
-          <div class="entry-verdict">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
-              <div style="display:flex; align-items:center; gap:8px;">
-                <span id="dp-entry-icon" style="font-size:24px;">⚪</span>
-                <div>
-                  <div style="font-size:11px; color:var(--text-tertiary); font-weight:600;">📈 진입 타이밍</div>
-                  <div id="dp-entry-phrase" style="font-size:18px; font-weight:800; color:var(--text-primary); line-height:1.15; margin-top:1px;">—</div>
-                  <div id="dp-entry-subreason" style="font-size:11px; color:var(--text-tertiary); font-weight:500; margin-top:2px;"></div>
-                </div>
-              </div>
-              <div style="text-align:right;">
-                <span id="dp-entry-score" style="font-size:28px; font-weight:800; color:var(--text-primary); line-height:1;">—</span>
-                <span style="font-size:12px; color:var(--text-tertiary); font-weight:500;">/ 100</span>
-              </div>
-            </div>
-            <div class="entry-bar"><div id="dp-entry-bar-fill" class="entry-bar-fill" style="width:0%;"></div></div>
-          </div>
-          <!-- ③ 더보기존 (토글): 점수 구성 + AI 판단 -->
-          <div id="dp-entry-detail" class="entry-detail">
-            <div style="font-size:11px; color:var(--text-tertiary); font-weight:600; margin:0 0 6px;">점수 구성 (base 40)</div>
-            <div id="dp-entry-breakdown"></div>
-            <div id="dp-aq-row" style="display:none; margin-top:10px; padding-top:8px; border-top:1px dashed var(--border); font-size:11px; color:var(--text-secondary);">
-              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                <span style="font-size:11px; color:var(--text-tertiary); font-weight:600;">AI 종합판단</span>
-                <span id="dp-aq-verdict" style="font-weight:700; padding:2px 10px; border-radius:100px; font-size:11px;"></span>
-                <span id="dp-aq-regime" style="color:var(--text-tertiary);"></span>
-                <span id="dp-aq-detail" style="color:var(--text-tertiary); margin-left:auto;"></span>
-              </div>
-              <div id="dp-aq-reasons" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; font-size:10px;"></div>
-            </div>
-          </div>
-          <div class="entry-detail-toggle" onclick="document.getElementById('dp-entry-detail').classList.toggle('open'); this.querySelector('.arrow').textContent = document.getElementById('dp-entry-detail').classList.contains('open') ? '▲' : '▼';">
-            <span class="arrow">▼</span> 상세 분석
-          </div>
-        </div>
 
       </div>
 

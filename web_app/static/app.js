@@ -287,162 +287,6 @@ function _renderQuadrant(d) {
   `;
 }
 
-function _renderEntryCard(d) {
-  const card = document.getElementById('dp-entry-card');
-  if (!card) return;
-  card.classList.remove('green', 'yellow', 'red');
-  const st = d.EntryStatus || '';
-  const cls = _ENTRY_COLOR[st] || '';
-  const ico = _ENTRY_ICON[st] || '⚪';
-  const score = d.EntryScore != null ? Math.round(d.EntryScore) : null;
-  const phrase = d.EntryPhrase || '—';
-  const plan = d.EntryPlan || {};
-  setText('dp-entry-icon', ico);
-  // 액션(헤드라인) ↔ 근거(보조) 분리.
-  // 우선 백엔드 파생필드(headline_action/one_reason)를 그대로 표시.
-  // 구버전 캐시 스캔(파생필드 없음)만 "관망 · BB 과확장 · …" 문자열을 분해.
-  const _pp = phrase.split(' · ');
-  // 진입 타이밍 라벨은 리스트 배지와 같은 어휘(진입적기/눌림대기/부적합)로 통일.
-  const _headline = _entryLabel(st, plan.entry_discount, plan.atr_pct, plan.as_of_ts) || plan.headline_action || _pp[0] || phrase;
-  let _reason = plan.one_reason || _pp.slice(1).filter(Boolean).slice(0, 2).join(' · ');
-  // EG-004: 자동 강등 시 부제에 경고 prepend
-  if (plan.degradation_reason === 'gap_too_deep') {
-    _reason = '⚠ 갭이 깊어 NEUTRAL로 강등' + (_reason ? ' · ' + _reason : '');
-  }
-  setText('dp-entry-phrase', _headline);
-  const _subEl = document.getElementById('dp-entry-subreason');
-  if (_subEl) _subEl.textContent = _reason;
-  const _phEl = document.getElementById('dp-entry-phrase');
-  if (_phEl) {
-    _phEl.style.color = cls === 'green' ? 'var(--success)' : cls === 'red' ? 'var(--destructive)' : cls === 'yellow' ? 'var(--brand)' : 'var(--text-primary)';
-    // EG-005: stale 시 회색 처리
-    const _isStale = _headline && /\(stale\)/.test(_headline);
-    _phEl.classList.toggle('entry-stale', _isStale);
-    if (_isStale) _phEl.style.color = 'var(--text-tertiary)';
-  }
-  setText('dp-entry-score', score != null ? String(score) : '—');
-  const fill = document.getElementById('dp-entry-bar-fill');
-  if (fill) fill.style.width = (score != null ? Math.max(0, Math.min(100, score)) : 0) + '%';
-  if (cls) card.classList.add(cls);
-  setText('dp-entry-type', plan.entry_type || '—');
-  // 신뢰도 밴드 — 승률 + R:R 괴리를 1개 배지로 추상화 (탭하면 원수치)
-  const confEl  = document.getElementById('dp-entry-confidence');
-  const confRaw = document.getElementById('dp-entry-conf-raw');
-  if (confEl) {
-    const wr    = (plan.win_rate != null && plan.win_rate > 0) ? plan.win_rate : null;
-    const rr    = (plan.rr     != null && Number.isFinite(plan.rr)     && plan.rr > 0)     ? plan.rr     : null;
-    const rrNow = (plan.rr_now != null && Number.isFinite(plan.rr_now) && plan.rr_now > 0) ? plan.rr_now : null;
-    let band = null;  // 'hi' | 'mid' | 'lo'
-    // 우선 백엔드 파생필드 confidence_band ("낮음"/"보통"/"높음")를 신뢰.
-    const _cb = { '낮음': 'lo', '보통': 'mid', '높음': 'hi' }[plan.confidence_band];
-    if (_cb) {
-      band = _cb;
-    } else if (plan.confidence_band == null && (wr != null || rr != null)) {
-      // 구버전 캐시 스캔(파생필드 없음)만 클라이언트에서 재계산
-      const lowWr = wr != null && wr < 40;
-      const lowRr = (rrNow != null && rrNow < 1.5) || (rr != null && rr < 1.5);
-      const hiWr  = wr != null && wr >= 55;
-      const hiRr  = rr != null && rr >= 2.5 && (rrNow == null || rrNow >= 2.0);
-      if (lowWr || lowRr)      band = 'lo';
-      else if (hiWr && hiRr)   band = 'hi';
-      else                     band = 'mid';
-    }
-    if (band) {
-      confEl.textContent = { hi: '신뢰도 높음', mid: '신뢰도 보통', lo: '신뢰도 낮음' }[band];
-      confEl.className = 'ev-conf ' + band;
-      confEl.style.display = '';
-      const parts = [];
-      if (wr != null) parts.push(`승률 ${Math.min(100, Math.max(0, wr)).toFixed(0)}%`);
-      if (rr != null) parts.push(`손익비 ${rr.toFixed(1)}:1${(rrNow != null && Math.abs(rrNow - rr) > 0.05) ? ` (현재 ${rrNow.toFixed(1)})` : ''}`);
-      if (confRaw) {
-        confRaw.textContent = parts.length ? parts.join('   ·   ') : '원수치 없음';
-        confRaw.style.display = 'none';
-      }
-      confEl.onclick = () => { if (confRaw) confRaw.style.display = (confRaw.style.display === 'none' ? '' : 'none'); };
-    } else {
-      confEl.style.display = 'none';
-      if (confRaw) confRaw.style.display = 'none';
-    }
-  }
-  // 점수 분해 바 차트
-  // (칩 dp-entry-tags 제거: score_breakdown 파생값이라 아래 breakdown 차트와 100% 중복)
-  const bdEl = document.getElementById('dp-entry-breakdown');
-  if (bdEl) {
-    const bd = plan.score_breakdown || {};
-    const keys = Object.keys(bd);
-    if (keys.length > 0) {
-      const maxAbs = Math.max(16, ...keys.map(k => Math.abs(bd[k].pts)));
-      bdEl.innerHTML = keys.map(k => {
-        const p = bd[k].pts;
-        const pct = Math.abs(p) / maxAbs * 100;
-        const cls = p >= 0 ? 'pos' : 'neg';
-        const col = p >= 0 ? '#16A34A' : '#DC2626';
-        return `<div class="bd-row">
-          <span class="bd-label">${esc(bd[k].tag || k)}</span>
-          <div class="bd-bar-wrap"><div class="bd-bar ${cls}" style="width:${pct}%;"></div></div>
-          <span class="bd-pts" style="color:${col};">${p >= 0 ? '+' : ''}${p}</span>
-        </div>`;
-      }).join('');
-    } else {
-      bdEl.innerHTML = '<div style="font-size:11px;color:var(--text-tertiary);">분해 데이터 없음</div>';
-    }
-  }
-  // AgentQuant 융합 신호 (있을 때만)
-  const aqRow = document.getElementById('dp-aq-row');
-  if (aqRow) {
-    if (d.AQ_Verdict || d.AQ_Regime || d.EntryScore_aq != null) {
-      aqRow.style.display = '';
-      const vEl = document.getElementById('dp-aq-verdict');
-      if (vEl) {
-        vEl.textContent = d.AQ_Verdict || '—';
-        const vc = d.AQ_VerdictCode;
-        const col = vc === 'BUY' ? '#16A34A' : vc === 'ACCUMULATE' ? '#F59E0B' : vc === 'AVOID' ? '#DC2626' : 'var(--text-secondary)';
-        vEl.style.color = col; vEl.style.background = col + '22';
-      }
-      setText('dp-aq-regime', d.AQ_Regime ? `시장 ${d.AQ_Regime}` : '');
-      const detail = [];
-      if (d.EntryScore_engine != null) detail.push(`기존 ${Math.round(d.EntryScore_engine)}`);
-      if (d.EntryScore_aq != null)     detail.push(`AQ ${Math.round(d.EntryScore_aq)}`);
-      setText('dp-aq-detail', detail.length ? `(융합 ${detail.join(' · ')})` : '');
-      const rEl = document.getElementById('dp-aq-reasons');
-      if (rEl) {
-        rEl.innerHTML = (Array.isArray(d.AQ_Reasons) ? d.AQ_Reasons : []).map(r =>
-          `<span style="padding:2px 8px;border:1px solid var(--border);border-radius:100px;background:var(--bg-tertiary);font-size:10px;">${esc(r)}</span>`
-        ).join('');
-      }
-    } else {
-      aqRow.style.display = 'none';
-    }
-  }
-  // 밀도 모드 적용 (기본 compact: 더보기존 접힘, 사용자 선택 localStorage 유지)
-  _applyEntryDensity();
-}
-
-// 진입 카드 밀도 모드 — compact(요약 3존) | full(전체).
-// 기본 compact: 다수 사용자는 진입·손절·목표가1 + 결론이면 결정 가능.
-// 고급 사용자가 펼치면 그 선택을 기억(= 향후 A/B 기준값).
-function _entryDensityMode() {
-  try { return localStorage.getItem('entryCardDensity') === 'full' ? 'full' : 'compact'; }
-  catch (e) { return 'compact'; }
-}
-function _applyEntryDensity() {
-  const det = document.getElementById('dp-entry-detail');
-  if (!det) return;
-  const full = _entryDensityMode() === 'full';
-  det.classList.toggle('open', full);
-  const tog = document.getElementById('dp-entry-density-toggle');
-  if (tog) {
-    const ar = tog.querySelector('.arrow');
-    const lb = tog.querySelector('.dt-label');
-    if (ar) ar.textContent = full ? '▲' : '▼';
-    if (lb) lb.textContent = full ? '간단히 보기' : '상세 분석';
-  }
-}
-function _toggleEntryDensity() {
-  const next = _entryDensityMode() === 'full' ? 'compact' : 'full';
-  try { localStorage.setItem('entryCardDensity', next); } catch (e) {}
-  _applyEntryDensity();
-}
 
 function _entryLight(stock) {
   if (!stock || !stock.EntryStatus) return '';
@@ -2459,7 +2303,6 @@ async function openDetail(ticker) {
 
   // 4축 차트 + 종목 상세 + AQ 시그널 + 증권사 컨센서스 + 센티먼트를 모두 병렬로 요청
   loadDpFourAxis(ticker);
-  _loadAqSignal(ticker, seq);
   _loadSentiment(ticker, currentMarket, seq);
   _loadInvestorFlow(ticker, currentMarket, seq);
   loadConsensus(ticker, 'dp-consensus-card', 'dpcons');
@@ -2488,42 +2331,6 @@ async function openDetail(ticker) {
   }
 }
 
-async function _loadAqSignal(ticker, seq) {
-  const aqRow = document.getElementById('dp-aq-row');
-  if (!aqRow) return;
-  // 로딩 표시
-  aqRow.style.display = '';
-  const vEl = document.getElementById('dp-aq-verdict');
-  if (vEl) { vEl.textContent = '분석 중…'; vEl.style.color = 'var(--text-tertiary)'; vEl.style.background = 'none'; }
-  setText('dp-aq-regime', '');
-  setText('dp-aq-detail', '');
-  const rEl = document.getElementById('dp-aq-reasons');
-  if (rEl) rEl.innerHTML = '';
-  try {
-    const res = await fetch(`/api/aq_signal/${encodeURIComponent(ticker)}?market=${currentMarket}`);
-    if (seq != null && seq !== _detailSeq) return; // 종목 전환됨
-    const aq = await res.json();
-    if (!aq.ok) { aqRow.style.display = 'none'; return; }
-    if (vEl) {
-      vEl.textContent = aq.AQ_Verdict || '—';
-      const vc = aq.AQ_VerdictCode;
-      const col = vc === 'BUY' ? '#16A34A' : vc === 'ACCUMULATE' ? '#F59E0B' : vc === 'AVOID' ? '#DC2626' : 'var(--text-secondary)';
-      vEl.style.color = col; vEl.style.background = col + '22';
-    }
-    setText('dp-aq-regime', aq.AQ_Regime ? `시장 ${aq.AQ_Regime}` : '');
-    const detail = [];
-    if (aq.EntryScore_aq != null) detail.push(`AQ ${Math.round(aq.EntryScore_aq)}`);
-    setText('dp-aq-detail', detail.length ? `(${detail.join(' · ')})` : '');
-    if (rEl) {
-      rEl.innerHTML = (Array.isArray(aq.AQ_Reasons) ? aq.AQ_Reasons : []).map(r =>
-        `<span style="padding:1px 7px;border:1px solid var(--border);border-radius:100px;background:var(--bg-tertiary);">${esc(r)}</span>`
-      ).join('');
-    }
-  } catch (e) {
-    console.error('AQ signal 로드 실패:', e);
-    aqRow.style.display = 'none';
-  }
-}
 
 async function _loadInvestorFlow(ticker, market, seq) {
   if (market !== 'KR') return;
@@ -2715,7 +2522,6 @@ function _populatePanelDetail(d, skipFourAxis) {
   _renderEarningsSummary(d, 'dp-earnings-card', 'dp-earnings-chips');
 
   // 진입 타이밍 카드
-  _renderEntryCard(d);
 
   // 종합×진입 2축 사분면 배지
   _renderQuadrant(d);

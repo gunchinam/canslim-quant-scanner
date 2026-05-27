@@ -1,0 +1,42 @@
+2026-05-18 22:46:04,042 - INFO - [DPI] SetProcessDpiAwareness(2) â€” Per-Monitor v2 ì ìš©
+2026-05-18 22:46:07,362 - INFO - [stock_names] FDR 2879ê°œ ì¢…ëª©ëª… ë¡œë“œ ì™„ë£Œ
+2026-05-18 23:03:44,457 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-18 23:22:31,619 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-18 23:22:34,254 - INFO - [stock_names] FDR 2879°³ Á¾¸ñ¸í ·Îµå ¿Ï·á
+2026-05-18 23:27:19,471 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-18 23:27:20,909 - INFO - [stock_names] FDR 2879°³ Á¾¸ñ¸í ·Îµå ¿Ï·á
+2026-05-18 23:29:14,172 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-18 23:29:16,674 - INFO - [stock_names] FDR 2879°³ Á¾¸ñ¸í ·Îµå ¿Ï·á
+2026-05-18 23:44:23,734 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-18 23:44:26,147 - INFO - [stock_names] FDR 2879°³ Á¾¸ñ¸í ·Îµå ¿Ï·á
+2026-05-18 23:44:55,685 - INFO - [DPI] SetProcessDpiAwareness(2) â€” Per-Monitor v2 ì ìš©
+2026-05-18 23:44:58,335 - INFO - [stock_names] FDR 2879ê°œ ì¢…ëª©ëª… ë¡œë“œ ì™„ë£Œ
+2026-05-18 23:45:28,380 - INFO - [DPI] SetProcessDpiAwareness(2) â€” Per-Monitor v2 ì ìš©
+2026-05-19 20:47:44,399 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-22 07:53:04,696 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-22 07:53:08,183 - INFO - [stock_names] FDR 2878°³ Á¾¸ñ¸í ·Îµå ¿Ï·á
+2026-05-22 07:58:43,149 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-22 07:58:43,969 - WARNING - [Adapter] vol index fetch failed (KR): Too Many Requests. Rate limited. Try after a while.
+2026-05-22 07:58:44,409 - INFO - [stock_names] FDR 2878°³ Á¾¸ñ¸í ·Îµå ¿Ï·á
+2026-05-22 07:58:44,621 - WARNING - [yf] rate-limited 000660.KS (US fast path)
+2026-05-22 07:58:44,629 - WARNING - [Cache] ¹«°á¼º ½ÇÆĞ: 000660.KS__BALANCED
+2026-05-22 07:58:44,948 - WARNING - [yf] rate-limited 403870.KQ (US fast path)
+2026-05-22 07:59:18,528 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-22 07:59:19,364 - WARNING - [Adapter] vol index fetch failed (KR): Too Many Requests. Rate limited. Try after a while.
+2026-05-22 07:59:19,762 - INFO - [stock_names] FDR 2878°³ Á¾¸ñ¸í ·Îµå ¿Ï·á
+2026-05-22 07:59:19,975 - WARNING - [yf] rate-limited 000660.KS (US fast path)
+2026-05-22 07:59:20,326 - WARNING - [yf] rate-limited 403870.KQ (US fast path)
+2026-05-22 07:59:33,623 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-22 07:59:34,531 - WARNING - [Adapter] vol index fetch failed (KR): Too Many Requests. Rate limited. Try after a while.
+2026-05-22 07:59:34,800 - WARNING - [yf] rate-limited 000660.KS (US fast path)
+2026-05-22 07:59:43,866 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-22 07:59:44,688 - WARNING - [Adapter] vol index fetch failed (KR): Too Many Requests. Rate limited. Try after a while.
+2026-05-22 08:00:19,433 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-22 08:00:20,243 - WARNING - [Adapter] vol index fetch failed (KR): Too Many Requests. Rate limited. Try after a while.
+2026-05-22 08:00:20,667 - INFO - [stock_names] FDR 2878°³ Á¾¸ñ¸í ·Îµå ¿Ï·á
+2026-05-24 01:58:34,075 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-24 10:19:00,234 - INFO - [DPI] SetProcessDpiAwareness(2) \u2014 Per-Monitor v2 Àû¿ë
+2026-05-24 10:19:02,583 - WARNING - flask_socketio unavailable; chat disabled: No module named 'flask_socketio'
+2026-05-24 10:19:02,589 - WARNING - flask_compress NOT installed \u2014 JSON responses are not gzip compressed. 11MB+ scan payloads may timeout on mobile/slow networks. Run: pip install -r requirements.txt
+2026-05-24 10:19:02,594 - WARNING - SocketIO disabled; chat features are unavailable.
+2026-05-24 22:40:33,804 - INFO - [DPI] SetProcessDpiAwareness(2) â€” Per-Monitor v2 ì ìš©

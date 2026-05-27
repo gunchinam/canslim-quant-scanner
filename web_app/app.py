@@ -2636,18 +2636,6 @@ def api_bucket_stats():
     return jsonify({"total": total, "distribution": data})
 
 
-# ── 멀티배거 파인더 — 상태(blueprint 와 공유) ─────────────────────────────
-# 라우트는 multibagger_blueprint.py 로 분리. 상태는 여기 유지(테스트가
-# flask_app._multibagger_results_cache / _MULTIBAGGER_BAGGERS_PATH 를 monkeypatch).
-_multibagger_results_cache: dict = {}
-_multibagger_build_lock = threading.Lock()
-_MULTIBAGGER_TTL_SEC = 12 * 3600
-_MULTIBAGGER_BAGGERS_PATH = os.path.join(app.root_path, "cache_v19", "baggers_us.json")
-
-from multibagger_blueprint import multibagger_bp, start_multibagger_warmup_once as _start_multibagger_warmup_once
-app.register_blueprint(multibagger_bp)
-
-
 # SocketIO 초기화 (gunicorn / 직접 실행 모두 대응)
 socketio.init_app(app)
 
@@ -2660,10 +2648,6 @@ try:
     _start_us_warmup_once()
 except Exception as _e:
     logging.warning("US warm-up bootstrap failed: %s", _e)
-try:
-    _start_multibagger_warmup_once()
-except Exception as _e:
-    logging.warning("multibagger warm-up bootstrap failed: %s", _e)
 
 # 검색 인덱스 사전 빌드 (백그라운드) — 첫 검색 요청 시 지연 제거
 def _warmup_search_index():

@@ -852,53 +852,6 @@ async function _loadPeersCard(ticker, market) {
   }
 }
 
-// ───────── SWOT 자동 분석 카드 ─────────
-function _renderSwotCard(payload) {
-  const card = document.getElementById('dp-swot-card');
-  if (!card) return;
-  if (!payload || !payload.ok || !payload.swot) {
-    card.style.display = 'none';
-    return;
-  }
-  const swot = payload.swot;
-  const fill = (id, items) => {
-    const ul = document.getElementById(id);
-    if (!ul) return;
-    ul.innerHTML = (items || []).map(it => `
-      <li>
-        <span class="dp-swot-text">${esc(it.text || '')}</span>
-        <span class="dp-swot-metric">${esc(it.metric || '')}</span>
-      </li>`).join('');
-  };
-  fill('dp-swot-s', swot.S);
-  fill('dp-swot-w', swot.W);
-  fill('dp-swot-o', swot.O);
-  fill('dp-swot-t', swot.T);
-
-  const meta = document.getElementById('dp-swot-meta');
-  if (meta) {
-    const sector = payload.sector || '—';
-    const moat = payload.moat ? ` · 해자: ${payload.moat}` : '';
-    const tag = payload.llm ? ' · AI 정성분석 + 정량지표' : ' · 정량지표 룰베이스';
-    meta.textContent = `${sector}${moat}${tag}`;
-  }
-  card.style.display = '';
-}
-
-async function _loadSwotCard(ticker, market) {
-  if (!ticker) return;
-  const card = document.getElementById('dp-swot-card');
-  if (card) card.style.display = 'none';
-  try {
-    const url = `/api/swot/${encodeURIComponent(ticker)}?market=${encodeURIComponent(market || 'US')}`;
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) return;
-    const payload = await res.json();
-    _renderSwotCard(payload);
-  } catch (e) {
-    console.error('swot card load failed:', e);
-  }
-}
 
 // ───────── 매출 세그먼트 파이 ─────────
 const _SEG_COLORS = [
@@ -2422,7 +2375,7 @@ function _populatePanelDetail(d, skipFourAxis) {
   if (aboutBox) aboutBox.style.display = aboutText ? '' : 'none';
   try { _renderMoatDetail(d); } catch (e) { console.error('moat render failed:', e); }
   try { _loadPeersCard(d.Ticker, (typeof currentMarket !== 'undefined' && currentMarket) || 'US'); } catch (e) { console.error('peers load failed:', e); }
-  try { _loadSwotCard(d.Ticker, (typeof currentMarket !== 'undefined' && currentMarket) || 'US'); } catch (e) { console.error('swot load failed:', e); }
+
   try { _loadSegmentsCard(d.Ticker); } catch (e) { console.error('segments load failed:', e); }
   try { _loadOwnershipCard(d.Ticker); } catch (e) { console.error('ownership load failed:', e); }
   try { _loadEventsCard(d.Ticker); } catch (e) { console.error('events load failed:', e); }

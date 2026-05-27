@@ -780,96 +780,6 @@ td.score-col {
   line-height: 1.5;
 }
 
-/* === SWOT 자동 분석 카드 === */
-.dp-swot-card {
-  margin-top: 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg-card);
-  overflow: hidden;
-}
-.dp-swot-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
-}
-.dp-swot-icon { font-size: 18px; }
-.dp-swot-titles { flex: 1; }
-.dp-swot-title { font-weight: 600; font-size: 14px; color: var(--text); }
-.dp-swot-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-.dp-swot-body { padding: 12px 14px; }
-.dp-swot-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.dp-swot-quad {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: var(--bg);
-}
-.dp-swot-quad-head {
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text);
-}
-.dp-swot-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-}
-.dp-swot-s .dp-swot-badge { background: #10b981; }
-.dp-swot-w .dp-swot-badge { background: #ef4444; }
-.dp-swot-o .dp-swot-badge { background: #3b82f6; }
-.dp-swot-t .dp-swot-badge { background: #f59e0b; }
-.dp-swot-s { border-left: 3px solid #10b981; }
-.dp-swot-w { border-left: 3px solid #ef4444; }
-.dp-swot-o { border-left: 3px solid #3b82f6; }
-.dp-swot-t { border-left: 3px solid #f59e0b; }
-.dp-swot-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.dp-swot-list li {
-  font-size: 12px;
-  line-height: 1.5;
-  padding: 4px 0;
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  border-top: 1px dashed var(--border);
-}
-.dp-swot-list li:first-child { border-top: none; }
-.dp-swot-list .dp-swot-text { color: var(--text); flex: 1; }
-.dp-swot-list .dp-swot-metric {
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  white-space: nowrap;
-}
-.dp-swot-footnote {
-  margin-top: 10px;
-  font-size: 11px;
-  color: var(--text-muted);
-  text-align: center;
-}
-@media (max-width: 640px) {
-  .dp-swot-grid { grid-template-columns: 1fr; }
-}
 
 /* === 경쟁사 비교 카드 === */
 .dp-peers-card {
@@ -3064,38 +2974,6 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         </div>
       </div>
 
-      <div id="dp-swot-card" class="dp-swot-card" style="display:none;">
-        <div class="dp-swot-head">
-          <span class="dp-swot-icon">🧭</span>
-          <div class="dp-swot-titles">
-            <div class="dp-swot-title">SWOT 자동 분석</div>
-            <div id="dp-swot-meta" class="dp-swot-meta">스캔 데이터 기반 룰베이스</div>
-          </div>
-        </div>
-        <div class="dp-swot-body">
-          <div class="dp-swot-grid">
-            <div class="dp-swot-quad dp-swot-s">
-              <div class="dp-swot-quad-head"><span class="dp-swot-badge">S</span>Strengths · 강점</div>
-              <ul id="dp-swot-s" class="dp-swot-list"></ul>
-            </div>
-            <div class="dp-swot-quad dp-swot-w">
-              <div class="dp-swot-quad-head"><span class="dp-swot-badge">W</span>Weaknesses · 약점</div>
-              <ul id="dp-swot-w" class="dp-swot-list"></ul>
-            </div>
-            <div class="dp-swot-quad dp-swot-o">
-              <div class="dp-swot-quad-head"><span class="dp-swot-badge">O</span>Opportunities · 기회</div>
-              <ul id="dp-swot-o" class="dp-swot-list"></ul>
-            </div>
-            <div class="dp-swot-quad dp-swot-t">
-              <div class="dp-swot-quad-head"><span class="dp-swot-badge">T</span>Threats · 위협</div>
-              <ul id="dp-swot-t" class="dp-swot-list"></ul>
-            </div>
-          </div>
-          <div class="dp-swot-footnote">
-            재무지표·해자·동종 비교·애널리스트 컨센서스 자동 결합 · 투자 권유 아님
-          </div>
-        </div>
-      </div>
 
       <div id="dp-segments-card" class="dp-segments-card" style="display:none;">
         <div class="dp-segments-head">

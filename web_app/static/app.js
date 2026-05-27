@@ -3778,9 +3778,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-scan')?.addEventListener('click', runScan);
     loadSectors();
     runScan();
-    loadMacro();
+    // H4: macro 호출은 첫 paint 이후로 지연 — DOMContentLoaded 동시 fetch 6개 한도 경합 회피
+    setTimeout(() => { loadMacro(); }, 800);
+    setTimeout(() => { if (typeof _loadMacroStrip === 'function') _loadMacroStrip(currentMarket); }, 1200);
     setInterval(loadMacro, 15 * 60 * 1000);
-    if (typeof _loadMacroStrip === 'function') _loadMacroStrip(currentMarket);
   }
 });
 

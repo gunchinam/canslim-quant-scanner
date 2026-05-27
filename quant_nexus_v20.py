@@ -4952,7 +4952,10 @@ class QuantNexusApp:
         except Exception as _e:
             logging.warning("alert-rules eval failed: %s", _e)
 
-    @rate_limit(max_per_second=4)
+    # H2: 4/s 전역 throttle은 모든 워커를 직렬화해 quota가 남아도 느리게 만들었다.
+    # 모듈-레벨 _yf_cooldown_wait()가 429를 만나면 진짜 stop을, 정상시엔 full
+    # 동시성을 허용한다. 20/s soft cap만 남겨 정상 운행시 throttling을 사실상 해제.
+    @rate_limit(max_per_second=20)
     def _analyze_ticker(self, ticker: str) -> dict | None:
         """
         (.)(.)스캐너 단일 티커 분석 진입점 (v20.1)

@@ -17,6 +17,8 @@ from collections import OrderedDict
 _VIX_CACHE: dict = {"value": None, "ts": 0.0}
 _VIX_CACHE_LOCK = threading.Lock()
 _VIX_TTL_SEC = 300.0
+_VIX_BG_INFLIGHT = {"on": False}
+_VIX_BG_LOCK = threading.Lock()
 
 # 프로젝트 경로 추가 (quant_nexus_v20.py가 있는 디렉토리)
 _BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -54,7 +56,9 @@ class ScanAdapter:
         # ── analyze_ticker가 사용하는 속성 (QuantNexusApp 인터페이스 호환) ──
         self.cache          = _qn.DataCache()
         self.engine         = _qn.WallStreetQuantStrategies()
-        self.vix_value      = self._fetch_vol_index(market)
+        # C1: VIX fetch는 cold start를 막지 않는다.
+        # 캐시가 비어 있으면 20.0으로 출발하고 백그라운드에서 채운다.
+        self.vix_value      = self._fetch_vol_index_nonblocking(market)
         self._scan_strategy = strategy
         self._scan_market   = market
         self._stats_lock    = threading.Lock()
@@ -91,6 +95,40 @@ class ScanAdapter:
 
     # ── 내부 초기화 ───────────────────────────────────────────────────────
 
+    @classmethod
+    def _fetch_vol_index_nonblocking(cls, market: str) -> float:
+        """캐시 hit이면 즉시 반환. 없으면 20.0 fallback + 백그라운드로 fetch.
+        cold start API 응답이 ^VIX 네트워크 5~25s에 묶이지 않게 한다.
+        """
+        now = time.time()
+        with _VIX_CACHE_LOCK:
+            cached = _VIX_CACHE["value"]
+            cached_ts = _VIX_CACHE["ts"]
+            if cached is not None and (now - cached_ts) < _VIX_TTL_SEC:
+                return float(cached)
+        # 중복 BG 호출 방지
+        with _VIX_BG_LOCK:
+            if not _VIX_BG_INFLIGHT["on"]:
+                _VIX_BG_INFLIGHT["on"] = True
+                threading.Thread(
+                    target=cls._vix_bg_worker,
+                    args=(market,),
+                    daemon=True,
+                    name="vix-bg-fetch",
+                ).start()
+        # stale 캐시라도 있으면 활용
+        if cached is not None:
+            return float(cached)
+        return 20.0
+
+    @classmethod
+    def _vix_bg_worker(cls, market: str) -> None:
+        try:
+            cls._fetch_vol_index(market)
+        finally:
+            with _VIX_BG_LOCK:
+                _VIX_BG_INFLIGHT["on"] = False
+
     @staticmethod
     def _fetch_vol_index(market: str) -> float:
         """VIX 종가. 실패 시 20.0 fallback.
@@ -110,6 +148,11 @@ class ScanAdapter:
                 return float(cached)
 
         import yfinance as _yf
+        # 모듈-레벨 yfinance cooldown 게이트 — _analyze_ticker와 동일 quota 공유.
+        try:
+            _qn._yf_cooldown_wait()
+        except Exception:
+            pass
         for attempt in range(3):
             if attempt == 1:
                 time.sleep(random.uniform(1.0, 2.0))
@@ -127,6 +170,10 @@ class ScanAdapter:
                 msg = str(e)
                 if "rate" in msg or "Too Many" in msg or "429" in msg:
                     logging.warning("[Adapter] vol index rate-limited (%s, attempt %d): %s", market, attempt, e)
+                    try:
+                        _qn._yf_mark_rate_limited(30.0)
+                    except Exception:
+                        pass
                 else:
                     logging.warning("[Adapter] vol index fetch failed (%s): %s", market, e)
         if cached is not None and (now - cached_ts) < 900.0:

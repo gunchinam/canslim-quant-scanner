@@ -1351,6 +1351,11 @@ def api_ticker(ticker: str):
         return jsonify({"error": str(e)}), 500
 
 
+_sentiment_cache: dict[str, dict] = {}
+_sentiment_cache_lock = threading.Lock()
+_SENTIMENT_TTL_SEC = 300  # 5분
+
+
 @app.route("/api/sentiment/<ticker>")
 def api_sentiment(ticker: str):
     """GET /api/sentiment/AAPL → yfinance + Finnhub 센티먼트 (lazy-load).
@@ -1364,6 +1369,13 @@ def api_sentiment(ticker: str):
     market = (request.args.get("market") or "US").upper()
     if market == "KR":
         return jsonify({"ok": False, "reason": "kr_not_supported"})
+
+    # ── 5분 TTL 메모리 캐시: 같은 종목 반복 호출시 yfinance/Finnhub 재호출 회피 ──
+    _now = time.time()
+    with _sentiment_cache_lock:
+        _cached = _sentiment_cache.get(ticker)
+        if _cached and (_now - _cached.get("_ts", 0)) < _SENTIMENT_TTL_SEC:
+            return jsonify(_cached["data"])
 
     out: dict = {"ok": True, "ticker": ticker}
     # yfinance 수급/센티먼트
@@ -1422,6 +1434,11 @@ def api_sentiment(ticker: str):
         logging.debug("Finnhub sentiment failed for %s: %s", ticker, fe)
         out["_FH_Available"] = False
 
+    # 캐시 저장
+    with _sentiment_cache_lock:
+        if len(_sentiment_cache) > 500:
+            _sentiment_cache.pop(next(iter(_sentiment_cache)), None)
+        _sentiment_cache[ticker] = {"_ts": int(time.time()), "data": out}
     return jsonify(out)
 
 
@@ -2680,9 +2697,36 @@ def _warmup_moat_cache():
 threading.Thread(target=_warmup_moat_cache, daemon=True, name="moat-cache-warmup").start()
 
 
+def _cold_start_live_scan(market: str) -> None:
+    """pickle이 없어 quick-warm으로도 캐시를 못 채울 때 BG에서 live scan_all 1회 수행.
+    UI는 그 사이 빈 화면을 보지만 30분 warm 루프를 기다리진 않게 된다."""
+    try:
+        adapter_cls = _get_scan_adapter_cls()
+        adapter = adapter_cls(market=market, strategy="BALANCED")
+        results = adapter.scan_all(prefer_cache=False, cache_only=False, max_workers=8)
+        if not results:
+            return
+        try:
+            results = _annotate_one_liners(results)
+        except Exception:
+            pass
+        results = _strip_heavy(results)
+        ts = int(time.time())
+        _store_scan_cache((market, "BALANCED", ""), ts, results)
+        _populate_sector_caches(market, "BALANCED", results, ts)
+        logging.info("cold-start live scan done: %s %d tickers", market, len(results))
+    except Exception as _e:
+        logging.warning("cold-start live scan %s failed: %s", market, _e)
+
+
 def _cold_start_fill():
     """서버 기동 직후 파일 잠금 없이 US/KR 캐시를 즉시 채운다.
-    파일 잠금 실패로 quick-warm이 건너뛰어질 때도 첫 요청이 캐시 히트하도록 보장."""
+    파일 잠금 실패로 quick-warm이 건너뛰어질 때도 첫 요청이 캐시 히트하도록 보장.
+
+    C2: quick-warm(prefer_cache=True, cache_only=True)으로도 캐시가 비어 있으면
+    (pickle 자체가 없는 첫 기동) 즉시 라이브 scan_all을 BG로 트리거해서
+    사용자가 30분 warmup 주기를 기다리지 않도록 한다.
+    """
     time.sleep(0.1)  # Flask/SocketIO 초기화 완료 대기
     for _m in ("US", "KR"):
         try:
@@ -2691,6 +2735,17 @@ def _cold_start_fill():
                 _already = _scan_results_cache.get((_m, "BALANCED", ""))
             if not _already:
                 _warmup_fill_cache(_m)
+            # quick-warm 후에도 캐시가 비었으면(=pickle 없음) live scan 트리거
+            with _scan_results_cache_lock:
+                _filled = _scan_results_cache.get((_m, "BALANCED", ""))
+            if not _filled:
+                logging.info("cold-start: %s pickle empty → live scan kicked", _m)
+                threading.Thread(
+                    target=_cold_start_live_scan,
+                    args=(_m,),
+                    daemon=True,
+                    name=f"cold-live-{_m}",
+                ).start()
         except Exception as _e:
             logging.warning("cold-start-fill %s failed: %s", _m, _e)
 

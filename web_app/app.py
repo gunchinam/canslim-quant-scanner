@@ -2309,6 +2309,92 @@ def _compute_four_axis_payload(ticker: str, market: str) -> tuple:
             "key_observation": rd.get("key_observation", ""),
             "structured_analysis": rd.get("structured_analysis", ""),
         }
+
+        # ── 과열/바닥 신호 ────────────────────────────────────────────
+        try:
+            from heat_signal import compute_heat_signal as _chs
+            payload["heat_signal"] = _chs(hist, market)
+        except Exception as _e:
+            logging.debug("heat_signal: %s", _e)
+
+        # ── 분할매수 가이드 + 포지션 리스크 데이터 ───────────────────
+        try:
+            _atr  = float(result.volatility.details.get("atr") or 0)
+            _atp  = float(result.volatility.details.get("atr_pct") or 0)
+            _curr = float((result.key_levels or {}).get("current") or 0)
+            _sl   = float((result.risk or {}).get("stop_loss") or 0)
+            _sp   = float((result.risk or {}).get("stop_pct") or 0)
+
+            _lvls = []
+            if _curr > 0 and _atr > 0:
+                for _m, _r, _l in [(0, 30, "1차"), (1, 30, "2차"), (2, 25, "3차"), (3, 15, "4차")]:
+                    _lvls.append({
+                        "step": _m + 1, "label": _l,
+                        "price": round(_curr - _m * _atr, 2),
+                        "ratio": _r,
+                        "from_pct": round(-_m * _atp, 1),
+                    })
+            payload["dca_plan"] = {
+                "levels": _lvls, "atr_pct": round(_atp, 2), "current": _curr,
+            }
+            payload["position_data"] = {
+                "current_price": _curr, "stop_loss": round(_sl, 2),
+                "stop_pct": round(_sp, 2), "atr_pct": round(_atp, 2),
+            }
+        except Exception as _e:
+            logging.debug("dca_plan/position_data: %s", _e)
+
+        # ── RS Rating (개별 계산 + 스캔 캐시 퍼센타일 오버라이드) ─────────────
+        try:
+            import numpy as _np
+            _c = hist["Close"]
+            _n = len(_c)
+            _r1  = (float(_c.iloc[-1]) / float(_c.iloc[-21])  - 1) if _n >= 21  else 0.0
+            _r3  = (float(_c.iloc[-1]) / float(_c.iloc[-63])  - 1) if _n >= 63  else _r1
+            _r6  = (float(_c.iloc[-1]) / float(_c.iloc[-126]) - 1) if _n >= 126 else _r3
+            _r12 = (float(_c.iloc[-1]) / float(_c.iloc[-252]) - 1) if _n >= 252 else _r6
+            _wret = _r1 * 0.25 + _r3 * 0.40 + _r6 * 0.20 + _r12 * 0.15
+            if   _wret > 0.90: _rsr_calc = 99
+            elif _wret > 0.60: _rsr_calc = 97
+            elif _wret > 0.38: _rsr_calc = 93
+            elif _wret > 0.25: _rsr_calc = 88
+            elif _wret > 0.15: _rsr_calc = 82
+            elif _wret > 0.09: _rsr_calc = 74
+            elif _wret > 0.03: _rsr_calc = 62
+            elif _wret > 0.00: _rsr_calc = 52
+            elif _wret > -0.07: _rsr_calc = 38
+            elif _wret > -0.18: _rsr_calc = 25
+            else:               _rsr_calc = 12
+            # 스캔 캐시에 퍼센타일 기반 RSRating이 있으면 우선 사용
+            with _scan_results_cache_lock:
+                _all_cached = list(_scan_results_cache.values())
+            for _entry in _all_cached:
+                for _row in (_entry.get("data") or []):
+                    if str(_row.get("Ticker", "")).upper() == ticker.upper():
+                        _v = _row.get("RSRating")
+                        if isinstance(_v, (int, float)) and 1 <= _v <= 99:
+                            _rsr_calc = int(_v)
+                        break
+            _rsr = _rsr_calc
+            payload["rs_rating_data"] = {
+                "rating": _rsr,
+                "is_leader": _rsr >= 80,
+                "label": (
+                    "주도주" if _rsr >= 80 else
+                    "준주도주" if _rsr >= 70 else
+                    "중립" if _rsr >= 50 else
+                    "약세" if _rsr >= 30 else
+                    "하위권"
+                ),
+                "ret_pct": round(_wret * 100, 1),
+                "r1_pct":  round(_r1  * 100, 1),
+                "r3_pct":  round(_r3  * 100, 1),
+                "r6_pct":  round(_r6  * 100, 1),
+                "r12_pct": round(_r12 * 100, 1),
+            }
+        except Exception as _e:
+            logging.debug("rs_rating_data: %s", _e)
+
         return payload, None
     except Exception as e:
         logging.debug("_compute_four_axis_payload %s/%s: %s", market, ticker, e)

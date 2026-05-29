@@ -2828,6 +2828,147 @@ function _fmtCap(v) {
   return String(v);
 }
 
+// ── RS Rating 카드 ───────────────────────────────────────────────────────
+function _renderRsRating(rs) {
+  const wrap = document.getElementById('rs-rating-wrap');
+  if (!wrap || !rs) return;
+  const r = rs.rating || 50;
+  // 등급별 색상
+  const color = r >= 80 ? '#22c55e' : r >= 70 ? '#84cc16' : r >= 50 ? '#94a3b8' : r >= 30 ? '#f97316' : '#ef4444';
+  const bg    = r >= 80 ? 'rgba(34,197,94,.08)' : r >= 70 ? 'rgba(132,204,22,.08)' : r >= 50 ? 'rgba(148,163,184,.08)' : r >= 30 ? 'rgba(249,115,22,.08)' : 'rgba(239,68,68,.08)';
+  const leaderBadge = rs.is_leader ? `<span style="font-size:10px;background:rgba(34,197,94,.15);color:#22c55e;padding:2px 7px;border-radius:10px;font-weight:700;margin-left:6px;">LEADER</span>` : '';
+  // 기간별 수익률 행
+  const retRow = (label, val) => `<div style="display:flex;justify-content:space-between;align-items:center;">
+    <span style="color:var(--text-tertiary);font-size:11px;">${label}</span>
+    <span style="font-size:12px;font-weight:600;color:${val >= 0 ? '#22c55e' : '#ef4444'};">${val >= 0 ? '+' : ''}${val}%</span>
+  </div>`;
+  wrap.innerHTML = `
+    <div style="background:${bg};border:1px solid ${color}33;border-radius:var(--radius);padding:12px 14px;margin-top:4px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:.05em;">RS RATING${leaderBadge}</div>
+        <div style="font-size:26px;font-weight:800;color:${color};line-height:1;">${r}<span style="font-size:13px;font-weight:500;color:var(--text-tertiary);margin-left:2px;">/99</span></div>
+      </div>
+      <!-- 게이지 바 -->
+      <div style="height:6px;border-radius:3px;background:var(--border);margin-bottom:10px;overflow:hidden;">
+        <div style="height:100%;width:${r}%;background:${color};border-radius:3px;transition:width .4s;"></div>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:${color};margin-bottom:8px;">${rs.label || ''}</div>
+      <div style="display:flex;flex-direction:column;gap:3px;">
+        ${retRow('1개월 수익률', rs.r1_pct ?? 0)}
+        ${retRow('3개월 수익률', rs.r3_pct ?? 0)}
+        ${retRow('6개월 수익률', rs.r6_pct ?? 0)}
+        ${retRow('12개월 수익률', rs.r12_pct ?? 0)}
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text-tertiary);">가중 수익률(1M×25%+3M×40%+6M×20%+12M×15%) 기준 상대강도 지수. 80 이상이면 시장 주도주.</div>
+    </div>`;
+  wrap.style.display = '';
+}
+
+// ── 과열·바닥 신호 카드 ───────────────────────────────────────────────────
+function _renderHeatSignal(hs) {
+  const wrap = document.getElementById('heat-signal-wrap');
+  if (!wrap || !hs) return;
+  const colorMap = { hot: '#ef4444', warm: '#f97316', neutral: '#94a3b8', cool: '#60a5fa', cold: '#3b82f6' };
+  const bgMap    = { hot: 'rgba(239,68,68,.08)', warm: 'rgba(249,115,22,.08)', neutral: 'rgba(148,163,184,.08)', cool: 'rgba(96,165,250,.08)', cold: 'rgba(59,130,246,.08)' };
+  const c = colorMap[hs.color] || '#94a3b8';
+  const bg = bgMap[hs.color] || 'rgba(148,163,184,.08)';
+  const abs = Math.abs(hs.score);
+  const barW = Math.min(100, abs) + '%';
+  const barDir = hs.score >= 0 ? 'left' : 'right';
+  const fmtComp = (v, lo, hi) => {
+    const col = v >= hi ? '#ef4444' : v <= lo ? '#3b82f6' : '#94a3b8';
+    return `<span style="color:${col};font-weight:600;">${v}</span>`;
+  };
+  wrap.innerHTML = `
+<div class="card" style="padding:14px 16px; border-left:3px solid ${c}; background:${bg};">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+    <span style="font-size:13px; font-weight:700; color:var(--text-primary);">온도계 신호</span>
+    <span style="font-size:12px; font-weight:700; color:${c}; padding:2px 10px; border-radius:100px; background:${bg}; border:1px solid ${c};">${esc(hs.label)}</span>
+  </div>
+  <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+    <span style="font-size:11px; color:var(--text-tertiary); width:32px;">냉각</span>
+    <div style="flex:1; height:6px; border-radius:3px; background:var(--surface-subtle); position:relative; overflow:hidden;">
+      <div style="position:absolute; top:0; ${barDir}:50%; width:${barW/2}; height:100%; background:${c}; border-radius:3px;"></div>
+      <div style="position:absolute; top:0; left:50%; width:1px; height:100%; background:var(--border);"></div>
+    </div>
+    <span style="font-size:11px; color:var(--text-tertiary); width:32px; text-align:right;">과열</span>
+  </div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 16px; font-size:11px; color:var(--text-secondary);">
+    <span>RSI ${fmtComp(hs.rsi, 30, 70)}</span>
+    <span>BB%B ${fmtComp(hs.bb_b, 20, 80)}</span>
+    <span>Stoch ${fmtComp(hs.stoch_k, 20, 80)}</span>
+    <span>MFI ${fmtComp(hs.mfi, 20, 80)}</span>
+  </div>
+  <div style="margin-top:8px; font-size:10px; color:var(--text-tertiary);">종합 점수 ${hs.score > 0 ? '+' : ''}${hs.score} / 100 · 참고용 보조지표</div>
+</div>`;
+  wrap.style.display = 'block';
+}
+
+// ── 분할매수 가이드 카드 ──────────────────────────────────────────────────
+function _renderDcaPlan(plan) {
+  const wrap = document.getElementById('dca-plan-wrap');
+  if (!wrap || !plan || !plan.levels || plan.levels.length === 0) return;
+  const fmtP = v => v >= 1000 ? v.toLocaleString('ko-KR') : v.toFixed(2);
+  const rows = plan.levels.map(lv => {
+    const fromTxt = lv.from_pct === 0 ? '현재가' : `현재 대비 ${lv.from_pct}%`;
+    return `
+<div style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border);">
+  <div style="width:24px; height:24px; border-radius:50%; background:var(--brand); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${lv.step}</div>
+  <div style="flex:1;">
+    <div style="font-size:12px; font-weight:600; color:var(--text-primary);">${esc(lv.label)} — ${fmtP(lv.price)}</div>
+    <div style="font-size:10px; color:var(--text-tertiary);">${fromTxt}</div>
+  </div>
+  <div style="text-align:right;">
+    <div style="font-size:13px; font-weight:700; color:var(--brand);">${lv.ratio}%</div>
+    <div style="font-size:10px; color:var(--text-tertiary);">비중</div>
+  </div>
+</div>`;
+  }).join('');
+  wrap.innerHTML = `
+<div class="card" style="padding:14px 16px;">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+    <span style="font-size:13px; font-weight:700; color:var(--text-primary);">분할매수 가이드</span>
+    <span style="font-size:11px; color:var(--text-tertiary);">ATR ${plan.atr_pct}% 기준</span>
+  </div>
+  ${rows}
+  <div style="margin-top:8px; font-size:10px; color:var(--text-tertiary); line-height:1.6;">ATR 1배당 하락 시마다 비중을 분할 매수하는 참고 가이드입니다. 투자 판단은 본인 책임입니다.</div>
+</div>`;
+  wrap.style.display = 'block';
+}
+
+// ── 포지션 리스크 테이블 ──────────────────────────────────────────────────
+function _renderPositionSizer(pd) {
+  const wrap = document.getElementById('position-sizer-wrap');
+  if (!wrap || !pd || !pd.stop_pct) return;
+  const sp = pd.stop_pct;  // 손절 폭 %
+  const weights = [5, 10, 15, 20, 25, 30];
+  const rows = weights.map(w => {
+    const loss = -(w * sp / 100);
+    const col = loss <= -5 ? '#ef4444' : loss <= -2 ? '#f97316' : '#94a3b8';
+    return `<tr>
+  <td style="padding:5px 8px; font-size:12px; font-weight:600; color:var(--text-primary);">${w}%</td>
+  <td style="padding:5px 8px; font-size:12px; color:${col}; font-weight:700; text-align:right;">${loss.toFixed(1)}%</td>
+</tr>`;
+  }).join('');
+  const fmtP = v => v >= 1000 ? v.toLocaleString('ko-KR') : v.toFixed(2);
+  wrap.innerHTML = `
+<div class="card" style="padding:14px 16px;">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+    <span style="font-size:13px; font-weight:700; color:var(--text-primary);">손절 시 포폴 영향</span>
+    <span style="font-size:11px; color:var(--text-tertiary);">현재가 ${fmtP(pd.current_price)} → 손절 ${fmtP(pd.stop_loss)} (-${sp}%)</span>
+  </div>
+  <table style="width:100%; border-collapse:collapse;">
+    <thead><tr style="border-bottom:1px solid var(--border);">
+      <th style="padding:4px 8px; font-size:11px; font-weight:600; color:var(--text-tertiary); text-align:left;">보유 비중</th>
+      <th style="padding:4px 8px; font-size:11px; font-weight:600; color:var(--text-tertiary); text-align:right;">손절 시 포폴 손실</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div style="margin-top:8px; font-size:10px; color:var(--text-tertiary);">ATR 기반 동적 손절가 기준. 투자 조언이 아닙니다.</div>
+</div>`;
+  wrap.style.display = 'block';
+}
+
 let _detailSeq = 0;           // openDetail / _loadAqSignal stale-guard
 let _lastDetailData = null;   // /api/sentiment lazy-merge용 현재 패널 데이터
 let _dpFourAxisLoadedFor = null;
@@ -3104,6 +3245,10 @@ async function loadFourAxis(ticker) {
     _clientCache.set(cacheKey, d);
     document.getElementById('fouraxis-chart').src = 'data:image/png;base64,' + d.chart;
     chartW.style.display = 'block';
+    _renderRsRating(d.rs_rating_data);
+    _renderHeatSignal(d.heat_signal);
+    _renderDcaPlan(d.dca_plan);
+    _renderPositionSizer(d.position_data);
   } catch (e) {
     if (reqSeq !== _detailFourAxisReqSeq) return;
     errDiv.textContent = '4축 차트 실패: ' + e.message;

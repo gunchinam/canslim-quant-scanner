@@ -74,8 +74,8 @@ rem -- Pre-flight: port check + healthz in ONE Python call --
 rem   exit 0 = port free      -> launch
 rem   exit 1 = occupied+gzip  -> connect to existing instance
 rem   exit 2 = occupied+nogzip -> warn and abort
-set "PORT_CHECK=5000"
-if defined PORT set "PORT_CHECK=%PORT%"
+if not defined PORT set "PORT=5001"
+set "PORT_CHECK=%PORT%"
 %PYEXE% -c "import socket,sys;s=socket.socket();s.settimeout(0.5);c=s.connect_ex(('127.0.0.1',%PORT_CHECK%));s.close();c!=0 and sys.exit(0);exec('import json,urllib.request\ntry:\n r=json.loads(urllib.request.urlopen(\'http://127.0.0.1:%PORT_CHECK%/healthz\',timeout=3).read())\n sys.exit(1 if r.get(\'gzip\') else 2)\nexcept:sys.exit(2)')" >nul 2>&1
 set "PORT_RC=%ERRORLEVEL%"
 

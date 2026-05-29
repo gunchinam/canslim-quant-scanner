@@ -70,13 +70,16 @@ if errorlevel 1 (
     )
 )
 
-rem -- Pre-flight: port check + healthz in ONE Python call --
-rem   exit 0 = port free      -> launch
-rem   exit 1 = occupied+gzip  -> connect to existing instance
-rem   exit 2 = occupied+nogzip -> warn and abort
+rem -- Pre-flight: port check (bind test + healthz) --
 if not defined PORT set "PORT=5001"
 set "PORT_CHECK=%PORT%"
-%PYEXE% -c "import socket,sys;s=socket.socket();s.settimeout(0.5);c=s.connect_ex(('127.0.0.1',%PORT_CHECK%));s.close();c!=0 and sys.exit(0);exec('import json,urllib.request\ntry:\n r=json.loads(urllib.request.urlopen(\'http://127.0.0.1:%PORT_CHECK%/healthz\',timeout=3).read())\n sys.exit(1 if r.get(\'gzip\') else 2)\nexcept:sys.exit(2)')" >nul 2>&1
+
+rem 바인딩 테스트: 포트가 비어있으면 성공(exit 0) → 즉시 서버 실행
+%PYEXE% -c "import socket,sys;s=socket.socket();s.bind(('127.0.0.1',%PORT_CHECK%));s.close()" >nul 2>&1
+if not errorlevel 1 goto :do_launch
+
+rem 포트 사용 중 — healthz 확인
+%PYEXE% -c "import urllib.request,json,sys;r=json.loads(urllib.request.urlopen('http://127.0.0.1:%PORT_CHECK%/healthz',timeout=3).read());sys.exit(1 if r.get('gzip') else 2)" >nul 2>&1
 set "PORT_RC=%ERRORLEVEL%"
 
 if "%PORT_RC%"=="2" (
@@ -90,7 +93,7 @@ if "%PORT_RC%"=="2" (
 )
 if "%PORT_RC%"=="1" (
     echo [run_quant_nexus] 포트 %PORT_CHECK%이 이미 사용 중입니다 - 기존 인스턴스에 연결합니다.
-    echo [run_quant_nexus] 다른 포트로 띄우려면 ^"set PORT=5001^" 후 재실행하세요.
+    echo [run_quant_nexus] 다른 포트로 띄우려면 ^"set PORT=XXXX^" 후 재실행하세요.
     start http://localhost:%PORT_CHECK%
     echo.
     echo Press any key to close this window...
@@ -99,7 +102,9 @@ if "%PORT_RC%"=="1" (
     endlocal
     exit /b 0
 )
+rem healthz 실패 → 포트가 사용 중이지만 우리 서버가 아님, 그냥 실행 시도
 
+:do_launch
 echo [run_quant_nexus] Launching Flask web app (http://localhost:%PORT_CHECK%) ...
 start /b cmd /c "timeout /t 2 >nul && start http://localhost:%PORT_CHECK%"
 %PYEXE% "%PROJ_DIR%web_app\app.py" %*

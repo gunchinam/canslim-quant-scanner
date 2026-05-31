@@ -3151,12 +3151,12 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           <a id="dp-news-bar-link" href="#" target="_blank" rel="noopener"
              style="color:var(--text-primary);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;">—</a>
         </div>
-        <!-- ① 온도계 신호  ② RS Rating  ③ 분할매수 가이드  ④ 포지션 리스크 -->
+        <!-- ① RSI 온도계  ② RS Rating  ③ ATR 가격대 분석  ④ ATR 변동성 분석 -->
         <div id="dp-new-features" style="padding:12px 16px 0;">
           <!-- 온도계 + RS Rating -->
           <div style="display:flex;gap:10px;margin-bottom:10px;">
             <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;">
-              <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;">🌡 온도계 신호</div>
+              <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;">🌡 RSI 온도계 <span style="font-weight:400;font-size:9px;opacity:.6;">투자 조언이 아닙니다</span></div>
               <div style="position:relative;height:8px;border-radius:4px;background:linear-gradient(to right,#2563EB,#06B6D4,#6B7280,#F59E0B,#DC2626);margin-bottom:8px;">
                 <div id="dp-thermo-marker" style="position:absolute;top:-4px;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid #6B7280;transform:translateX(-50%);left:50%;transition:left .3s;"></div>
               </div>
@@ -3174,14 +3174,14 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
               <div id="dp-rs-label" style="font-size:10px;font-weight:600;color:var(--text-tertiary);">/ 99</div>
             </div>
           </div>
-          <!-- 분할매수 가이드 (STRONG 신호일 때만 표시) -->
+          <!-- ATR 가격대 분석 (STRONG 신호일 때만 표시) -->
           <div id="dp-dca-card" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;">
-            <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;">📊 분할매수 가이드</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;">📊 ATR 가격대 분석 <span style="font-weight:400;font-size:9px;opacity:.6;">투자 조언이 아닙니다</span></div>
             <div id="dp-dca-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
           </div>
           <!-- 포지션 리스크 테이블 -->
           <div id="dp-risk-card" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:14px;">
-            <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;">⚖️ 포지션 리스크 <span style="font-weight:400;font-size:10px;color:var(--text-tertiary);">(ATR 기준 % · 통화 무관)</span></div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);margin-bottom:8px;">⚖️ ATR 변동성 분석 <span style="font-weight:400;font-size:10px;color:var(--text-tertiary);">(ATR 기준 % · 통화 무관)</span> <span style="font-weight:400;font-size:9px;opacity:.6;">투자 조언이 아닙니다</span></div>
             <div id="dp-risk-rows" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:12px;"></div>
             <div id="dp-risk-na" style="display:none;font-size:12px;color:var(--text-tertiary);padding:4px 0;">가격·ATR 데이터 로딩 중...</div>
           </div>

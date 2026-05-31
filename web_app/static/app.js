@@ -209,26 +209,26 @@ const _ENTRY_COLOR = { STRONG: 'green', NEUTRAL: 'yellow', AVOID: 'red',
                        GREEN: 'green', YELLOW: 'yellow', RED: 'red' };
 const _ENTRY_ICON  = { STRONG: '🟢', NEUTRAL: '🟡', AVOID: '🔴',
                        GREEN: '🟢', YELLOW: '🟡', RED: '🔴' };
-const _ENTRY_LABEL = { STRONG: '진입적기', NEUTRAL: '눌림대기', AVOID: '부적합',
-                       GREEN: '진입적기', YELLOW: '눌림대기', RED: '부적합' };
+const _ENTRY_LABEL = { STRONG: '저변동 구간', NEUTRAL: '눌림대기', AVOID: '부적합',
+                       GREEN: '저변동 구간', YELLOW: '눌림대기', RED: '부적합' };
 
 // STRONG/GREEN 라벨을 entry_discount(%) 와 atrPct(%) 에 따라 분기.
 // disc<0 → '풀백대기' (현재가가 entry 위, 추격),
-// atrPct 있으면 disc/atrPct 비율로 — <0.5 진입적기, <1.0 분할진입, 그 외 풀백대기.
+// atrPct 있으면 disc/atrPct 비율로 — <0.5 저변동 구간, <1.0 변동 확대 구간, 그 외 풀백대기.
 // atrPct null/0 이면 절대값 fallback (1.5%/5%).
 // asOfTs (epoch sec) 가 5분 초과 stale 면 라벨에 ' (stale)' 접미사 (EG-005).
 function _entryLabel(st, disc, atrPct, asOfTs) {
   let label;
   if (st === 'STRONG' || st === 'GREEN') {
     if (disc == null || isNaN(disc)) {
-      label = '진입적기';
+      label = '저변동 구간';
     } else if (disc < 0) {
       label = '풀백대기';
     } else if (atrPct != null && !isNaN(atrPct) && atrPct > 0) {
       const r = disc / atrPct;
-      label = (r < 0.5) ? '진입적기' : (r < 1.0) ? '분할진입' : '풀백대기';
+      label = (r < 0.5) ? '저변동 구간' : (r < 1.0) ? '변동 확대 구간' : '풀백대기';
     } else {
-      label = (disc < 1.5) ? '진입적기' : (disc < 5.0) ? '분할진입' : '풀백대기';
+      label = (disc < 1.5) ? '저변동 구간' : (disc < 5.0) ? '변동 확대 구간' : '풀백대기';
     }
   } else {
     label = _ENTRY_LABEL[st] || '';
@@ -2794,7 +2794,7 @@ function _renderTechTab(d) {
   el.innerHTML = rows.map(([l, v, s, c]) => _indicatorRowHtml(l, v, s, c)).join('');
 }
 
-// ── 온도계·RS·분할매수·리스크 4종 패널 ───────────────────────────────────
+// ── 온도계·RS·ATR분석·리스크 4종 패널 ────────────────────────────────────
 function _renderDetailFeatures(d) {
   // ── 온도계 신호 ──────────────────────────────────────────────
   const marker     = document.getElementById('dp-thermo-marker');
@@ -2805,11 +2805,11 @@ function _renderDetailFeatures(d) {
     const pct = Math.max(2, Math.min(98, rsi));
     marker.style.left = pct + '%';
     let lbl, act, col;
-    if      (rsi >= 70) { lbl = '극도탐욕'; act = 'SELL / Short 준비'; col = '#DC2626'; }
-    else if (rsi >= 55) { lbl = '탐욕';     act = '분할 매도';         col = '#F59E0B'; }
-    else if (rsi >= 45) { lbl = '중립';     act = '관망';             col = '#6B7280'; }
-    else if (rsi >= 30) { lbl = '공포';     act = '분할 매수';         col = '#06B6D4'; }
-    else                { lbl = '극도공포'; act = '적극 매수';         col = '#2563EB'; }
+    if      (rsi >= 70) { lbl = '극도탐욕'; act = '과열 구간';         col = '#DC2626'; }
+    else if (rsi >= 55) { lbl = '탐욕';     act = '탐욕 구간';         col = '#F59E0B'; }
+    else if (rsi >= 45) { lbl = '중립';     act = '중립 구간';         col = '#6B7280'; }
+    else if (rsi >= 30) { lbl = '공포';     act = '공포 구간';         col = '#06B6D4'; }
+    else                { lbl = '극도공포'; act = '과매도 구간';       col = '#2563EB'; }
     marker.style.borderColor = col;
     thermoLbl.textContent  = lbl;
     thermoLbl.style.color  = col;
@@ -2839,7 +2839,7 @@ function _renderDetailFeatures(d) {
     }
   }
 
-  // ── 분할매수 가이드 ────────────────────────────────────────────
+  // ── ATR 가격대 분석 ─────────────────────────────────────────────
   const dcaCard = document.getElementById('dp-dca-card');
   const dcaRows = document.getElementById('dp-dca-rows');
   const price   = d.Price != null ? Number(d.Price) : null;
@@ -2849,9 +2849,9 @@ function _renderDetailFeatures(d) {
   if (dcaCard && dcaRows && price != null && atrPct != null && atrPct > 0 && isStrong) {
     const atr = price * atrPct / 100;        // ATRPercent는 % 단위 (2.5 = 2.5%)
     const levels = [
-      { n: '1매 (즉시)',     p: price,           col: 'var(--success)' },
-      { n: '2매 (−0.5ATR)', p: price - atr*0.5, col: '#F59E0B'       },
-      { n: '3매 (−1ATR)',   p: price - atr*1.0, col: 'var(--destructive)' },
+      { n: '현재가',          p: price,           col: 'var(--success)' },
+      { n: '−0.5ATR 구간',  p: price - atr*0.5, col: '#F59E0B'       },
+      { n: '−1ATR 구간',    p: price - atr*1.0, col: 'var(--destructive)' },
     ];
     dcaRows.innerHTML = levels.map(lv => {
       const pct = ((lv.p - price) / price * 100).toFixed(1);
@@ -2891,10 +2891,10 @@ function _renderDetailFeatures(d) {
         ${sub ? `<div style="font-size:10px;color:var(--text-tertiary);margin-top:1px;">${sub}</div>` : ''}
       </div>`;
     riskRows.innerHTML =
-      cell('진입가',        fmtPrice(price),              null,                    null) +
-      cell('손절 −1.5ATR',  '−' + fmt(slPct,2)  + '%',   fmtPrice(slAbs),         'var(--destructive)') +
-      cell('TP1 +1.5ATR',   '+' + fmt(tp1Pct,2) + '%',   fmtPrice(tp1Abs),        'var(--success)') +
-      cell('TP2 +3ATR',     '+' + fmt(tp2Pct,2) + '%',   fmtPrice(tp2Abs),        'var(--success)') +
+      cell('현재가',          fmtPrice(price),              null,                    null) +
+      cell('하방 −1.5ATR',   '−' + fmt(slPct,2)  + '%',   fmtPrice(slAbs),         'var(--destructive)') +
+      cell('상방 +1.5ATR',   '+' + fmt(tp1Pct,2) + '%',   fmtPrice(tp1Abs),        'var(--success)') +
+      cell('상방 +3ATR',     '+' + fmt(tp2Pct,2) + '%',   fmtPrice(tp2Abs),        'var(--success)') +
       cell('ATR 변동폭',    fmt(atrPctDisp,2) + '%',      '일평균 가격 진폭',       null) +
       cell('R:R',           '1:' + fmt(rr1,1) + ' / 1:' + fmt(rr2,1), null,       '#F59E0B');
   } else if (riskRows && riskNa) {
@@ -3010,7 +3010,7 @@ function _renderHeatSignal(hs) {
   wrap.innerHTML = `
 <div class="card" style="padding:14px 16px; border-left:3px solid ${c}; background:${bg};">
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-    <span style="font-size:13px; font-weight:700; color:var(--text-primary);">온도계 신호</span>
+    <span style="font-size:13px; font-weight:700; color:var(--text-primary);">RSI 온도계</span>
     <span style="font-size:12px; font-weight:700; color:${c}; padding:2px 10px; border-radius:100px; background:${bg}; border:1px solid ${c};">${esc(hs.label)}</span>
   </div>
   <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
@@ -3032,7 +3032,7 @@ function _renderHeatSignal(hs) {
   wrap.style.display = 'block';
 }
 
-// ── 분할매수 가이드 카드 ──────────────────────────────────────────────────
+// ── ATR 가격대 분석 카드 ──────────────────────────────────────────────────
 function _renderDcaPlan(plan) {
   const wrap = document.getElementById('dca-plan-wrap');
   if (!wrap || !plan || !plan.levels || plan.levels.length === 0) return;
@@ -3055,11 +3055,11 @@ function _renderDcaPlan(plan) {
   wrap.innerHTML = `
 <div class="card" style="padding:14px 16px;">
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-    <span style="font-size:13px; font-weight:700; color:var(--text-primary);">분할매수 가이드</span>
+    <span style="font-size:13px; font-weight:700; color:var(--text-primary);">ATR 가격대 분석</span>
     <span style="font-size:11px; color:var(--text-tertiary);">ATR ${plan.atr_pct}% 기준</span>
   </div>
   ${rows}
-  <div style="margin-top:8px; font-size:10px; color:var(--text-tertiary); line-height:1.6;">ATR 1배당 하락 시마다 비중을 분할 매수하는 참고 가이드입니다. 투자 판단은 본인 책임입니다.</div>
+  <div style="margin-top:8px; font-size:10px; color:var(--text-tertiary); line-height:1.6;">ATR 기반 가격대별 변동 구간 분석입니다. 투자 조언이 아닙니다.</div>
 </div>`;
   wrap.style.display = 'block';
 }
@@ -3068,7 +3068,7 @@ function _renderDcaPlan(plan) {
 function _renderPositionSizer(pd) {
   const wrap = document.getElementById('position-sizer-wrap');
   if (!wrap || !pd || !pd.stop_pct) return;
-  const sp = pd.stop_pct;  // 손절 폭 %
+  const sp = pd.stop_pct;  // 하방 변동폭 %
   const weights = [5, 10, 15, 20, 25, 30];
   const rows = weights.map(w => {
     const loss = -(w * sp / 100);
@@ -3082,17 +3082,17 @@ function _renderPositionSizer(pd) {
   wrap.innerHTML = `
 <div class="card" style="padding:14px 16px;">
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-    <span style="font-size:13px; font-weight:700; color:var(--text-primary);">손절 시 포폴 영향</span>
-    <span style="font-size:11px; color:var(--text-tertiary);">현재가 ${fmtP(pd.current_price)} → 손절 ${fmtP(pd.stop_loss)} (-${sp}%)</span>
+    <span style="font-size:13px; font-weight:700; color:var(--text-primary);">하방 리스크 시뮬레이션</span>
+    <span style="font-size:11px; color:var(--text-tertiary);">현재가 ${fmtP(pd.current_price)} → 하방 ${fmtP(pd.stop_loss)} (-${sp}%)</span>
   </div>
   <table style="width:100%; border-collapse:collapse;">
     <thead><tr style="border-bottom:1px solid var(--border);">
       <th style="padding:4px 8px; font-size:11px; font-weight:600; color:var(--text-tertiary); text-align:left;">보유 비중</th>
-      <th style="padding:4px 8px; font-size:11px; font-weight:600; color:var(--text-tertiary); text-align:right;">손절 시 포폴 손실</th>
+      <th style="padding:4px 8px; font-size:11px; font-weight:600; color:var(--text-tertiary); text-align:right;">하방 도달 시 포폴 영향</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>
-  <div style="margin-top:8px; font-size:10px; color:var(--text-tertiary);">ATR 기반 동적 손절가 기준. 투자 조언이 아닙니다.</div>
+  <div style="margin-top:8px; font-size:10px; color:var(--text-tertiary);">ATR 기반 동적 하방가 기준. 투자 조언이 아닙니다.</div>
 </div>`;
   wrap.style.display = 'block';
 }

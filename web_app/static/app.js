@@ -585,7 +585,7 @@ async function runScan() {
   }
 }
 
-// 퀵필터 적용 (다중 선택 OR)
+// 퀵필터 적용 (다중 선택 AND)
 function _matchesFilter(s, f) {
   switch (f) {
     case 'watchlist':  return _watchlist.has(s.Ticker);
@@ -604,7 +604,7 @@ function _matchesFilter(s, f) {
 
 function _applyQuickFilter(stocks) {
   if (!_activeFilters.size) return stocks;
-  return stocks.filter(s => [..._activeFilters].some(f => _matchesFilter(s, f)));
+  return stocks.filter(s => [..._activeFilters].every(f => _matchesFilter(s, f)));
 }
 
 // 표가 실제로 보여주는 것과 동일한 필터 결과(검색 → 퀵필터 → 원라이너 버킷)
@@ -2839,68 +2839,6 @@ function _renderDetailFeatures(d) {
     }
   }
 
-  // ── ATR 가격대 분석 ─────────────────────────────────────────────
-  const dcaCard = document.getElementById('dp-dca-card');
-  const dcaRows = document.getElementById('dp-dca-rows');
-  const price   = d.Price != null ? Number(d.Price) : null;
-  const atrPct  = d.ATRPercent != null ? Number(d.ATRPercent) : null;
-  const es      = d.EntryStatus;
-  const isStrong = (es === 'STRONG' || es === 'GREEN');
-  if (dcaCard && dcaRows && price != null && atrPct != null && atrPct > 0 && isStrong) {
-    const atr = price * atrPct / 100;        // ATRPercent는 % 단위 (2.5 = 2.5%)
-    const levels = [
-      { n: '현재가',          p: price,           col: 'var(--success)' },
-      { n: '−0.5ATR 구간',  p: price - atr*0.5, col: '#F59E0B'       },
-      { n: '−1ATR 구간',    p: price - atr*1.0, col: 'var(--destructive)' },
-    ];
-    dcaRows.innerHTML = levels.map(lv => {
-      const pct = ((lv.p - price) / price * 100).toFixed(1);
-      const pctTxt = Number(pct) >= 0 ? '+' + pct + '%' : pct + '%';
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--surface-subtle);border-radius:8px;">
-        <span style="font-size:12px;color:var(--text-secondary);">${esc(lv.n)}</span>
-        <div>
-          <span style="font-size:13px;font-weight:700;color:${lv.col};">${fmtPrice(lv.p)}</span>
-          <span style="font-size:10px;color:var(--text-tertiary);margin-left:4px;">${pctTxt}</span>
-        </div>
-      </div>`;
-    }).join('');
-    dcaCard.style.display = '';
-  } else if (dcaCard) {
-    dcaCard.style.display = 'none';
-  }
-
-  // ── 포지션 리스크 테이블 (% 기반 — 통화 무관) ────────────────
-  const riskRows = document.getElementById('dp-risk-rows');
-  const riskNa   = document.getElementById('dp-risk-na');
-  if (riskRows && price != null && atrPct != null && atrPct > 0) {
-    if (riskNa) riskNa.style.display = 'none';
-    // ATRPercent는 이미 % 단위 (2.5 = 2.5%) — *100 불필요
-    const atrPctDisp = atrPct;                // e.g. 2.5
-    const slPct  = atrPctDisp * 1.5;          // e.g. 3.75%
-    const tp1Pct = atrPctDisp * 1.5;          // e.g. 3.75%
-    const tp2Pct = atrPctDisp * 3.0;          // e.g. 7.5%
-    const rr1    = 1.0;
-    const rr2    = 2.0;
-    const slAbs  = price  - price * (slPct  / 100);
-    const tp1Abs = price  + price * (tp1Pct / 100);
-    const tp2Abs = price  + price * (tp2Pct / 100);
-    const cell = (lbl, main, sub, col) =>
-      `<div style="background:var(--surface-subtle);padding:6px 8px;border-radius:8px;">
-        <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:1px;">${lbl}</div>
-        <div style="font-size:13px;font-weight:700;color:${col || 'var(--text-primary)'};">${main}</div>
-        ${sub ? `<div style="font-size:10px;color:var(--text-tertiary);margin-top:1px;">${sub}</div>` : ''}
-      </div>`;
-    riskRows.innerHTML =
-      cell('현재가',          fmtPrice(price),              null,                    null) +
-      cell('하방 −1.5ATR',   '−' + fmt(slPct,2)  + '%',   fmtPrice(slAbs),         'var(--destructive)') +
-      cell('상방 +1.5ATR',   '+' + fmt(tp1Pct,2) + '%',   fmtPrice(tp1Abs),        'var(--success)') +
-      cell('상방 +3ATR',     '+' + fmt(tp2Pct,2) + '%',   fmtPrice(tp2Abs),        'var(--success)') +
-      cell('ATR 변동폭',    fmt(atrPctDisp,2) + '%',      '일평균 가격 진폭',       null) +
-      cell('R:R',           '1:' + fmt(rr1,1) + ' / 1:' + fmt(rr2,1), null,       '#F59E0B');
-  } else if (riskRows && riskNa) {
-    riskRows.innerHTML = '';
-    riskNa.style.display = '';
-  }
 }
 
 function _renderFinanceTab(d) {
@@ -3028,71 +2966,6 @@ function _renderHeatSignal(hs) {
     <span>MFI ${fmtComp(hs.mfi, 20, 80)}</span>
   </div>
   <div style="margin-top:8px; font-size:10px; color:var(--text-tertiary);">종합 점수 ${hs.score > 0 ? '+' : ''}${hs.score} / 100 · 참고용 보조지표</div>
-</div>`;
-  wrap.style.display = 'block';
-}
-
-// ── ATR 가격대 분석 카드 ──────────────────────────────────────────────────
-function _renderDcaPlan(plan) {
-  const wrap = document.getElementById('dca-plan-wrap');
-  if (!wrap || !plan || !plan.levels || plan.levels.length === 0) return;
-  const fmtP = v => v >= 1000 ? v.toLocaleString('ko-KR') : v.toFixed(2);
-  const rows = plan.levels.map(lv => {
-    const fromTxt = lv.from_pct === 0 ? '현재가' : `현재 대비 ${lv.from_pct}%`;
-    return `
-<div style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border);">
-  <div style="width:24px; height:24px; border-radius:50%; background:var(--brand); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${lv.step}</div>
-  <div style="flex:1;">
-    <div style="font-size:12px; font-weight:600; color:var(--text-primary);">${esc(lv.label)} — ${fmtP(lv.price)}</div>
-    <div style="font-size:10px; color:var(--text-tertiary);">${fromTxt}</div>
-  </div>
-  <div style="text-align:right;">
-    <div style="font-size:13px; font-weight:700; color:var(--brand);">${lv.ratio}%</div>
-    <div style="font-size:10px; color:var(--text-tertiary);">비중</div>
-  </div>
-</div>`;
-  }).join('');
-  wrap.innerHTML = `
-<div class="card" style="padding:14px 16px;">
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-    <span style="font-size:13px; font-weight:700; color:var(--text-primary);">ATR 가격대 분석</span>
-    <span style="font-size:11px; color:var(--text-tertiary);">ATR ${plan.atr_pct}% 기준</span>
-  </div>
-  ${rows}
-  <div style="margin-top:8px; font-size:10px; color:var(--text-tertiary); line-height:1.6;">ATR 기반 가격대별 변동 구간 분석입니다. 투자 조언이 아닙니다.</div>
-</div>`;
-  wrap.style.display = 'block';
-}
-
-// ── 포지션 리스크 테이블 ──────────────────────────────────────────────────
-function _renderPositionSizer(pd) {
-  const wrap = document.getElementById('position-sizer-wrap');
-  if (!wrap || !pd || !pd.stop_pct) return;
-  const sp = pd.stop_pct;  // 하방 변동폭 %
-  const weights = [5, 10, 15, 20, 25, 30];
-  const rows = weights.map(w => {
-    const loss = -(w * sp / 100);
-    const col = loss <= -5 ? '#ef4444' : loss <= -2 ? '#f97316' : '#94a3b8';
-    return `<tr>
-  <td style="padding:5px 8px; font-size:12px; font-weight:600; color:var(--text-primary);">${w}%</td>
-  <td style="padding:5px 8px; font-size:12px; color:${col}; font-weight:700; text-align:right;">${loss.toFixed(1)}%</td>
-</tr>`;
-  }).join('');
-  const fmtP = v => v >= 1000 ? v.toLocaleString('ko-KR') : v.toFixed(2);
-  wrap.innerHTML = `
-<div class="card" style="padding:14px 16px;">
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-    <span style="font-size:13px; font-weight:700; color:var(--text-primary);">하방 리스크 시뮬레이션</span>
-    <span style="font-size:11px; color:var(--text-tertiary);">현재가 ${fmtP(pd.current_price)} → 하방 ${fmtP(pd.stop_loss)} (-${sp}%)</span>
-  </div>
-  <table style="width:100%; border-collapse:collapse;">
-    <thead><tr style="border-bottom:1px solid var(--border);">
-      <th style="padding:4px 8px; font-size:11px; font-weight:600; color:var(--text-tertiary); text-align:left;">보유 비중</th>
-      <th style="padding:4px 8px; font-size:11px; font-weight:600; color:var(--text-tertiary); text-align:right;">하방 도달 시 포폴 영향</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <div style="margin-top:8px; font-size:10px; color:var(--text-tertiary);">ATR 기반 동적 하방가 기준. 투자 조언이 아닙니다.</div>
 </div>`;
   wrap.style.display = 'block';
 }
@@ -3399,8 +3272,6 @@ async function loadFourAxis(ticker) {
     chartW.style.display = 'block';
     _renderRsRating(d.rs_rating_data);
     _renderHeatSignal(d.heat_signal);
-    _renderDcaPlan(d.dca_plan);
-    _renderPositionSizer(d.position_data);
   } catch (e) {
     if (reqSeq !== _detailFourAxisReqSeq) return;
     errDiv.textContent = '4축 차트 실패: ' + e.message;

@@ -5048,7 +5048,15 @@ class QuantNexusApp:
                         _yf_mark_rate_limited(30.0)
                     break
             if hist is None or hist.empty or len(hist) < 30:
+                # 오늘 날짜 키로 먼저 조회, 없으면 최대 7일 이전 키까지 lookback
                 stale = self.cache.get(strategy_key, max_age_minutes=60 * 24 * 30)
+                if not stale:
+                    for _days_back in range(1, 8):
+                        _prev = (datetime.now() - timedelta(days=_days_back)).strftime("%Y%m%d")
+                        _prev_key = f"{ticker}__{self._scan_strategy}__{_prev}"
+                        stale = self.cache.get(_prev_key, max_age_minutes=60 * 24 * (_days_back + 1))
+                        if stale:
+                            break
                 if stale:
                     stale = dict(stale)
                     stale.setdefault("DataSource", "cache")
@@ -5162,16 +5170,7 @@ class QuantNexusApp:
             avg_turnover = avg_vol_20 * cur  # KR: 원, US: 달러
             avg_dollar_vol = avg_turnover    # (호환용 alias — 기존 변수명 유지)
             _liq_cap_thr     = 20_000_000_000 if _is_kr else 20_000_000  # KR 200억 / US $20M
-            _liq_exclude_thr = 10_000_000_000 if _is_kr else 10_000_000  # KR 100억 / US $10M
             low_liquidity = avg_turnover < _liq_cap_thr
-            if avg_turnover < _liq_exclude_thr:
-                # 관심 없는 종목(거래대금 매우 낮음) — 스캔 결과에서 제외
-                _unit = "KRW" if _is_kr else "USD"
-                logging.info(
-                    f"[LiqGate] {ticker} excluded: avg_turnover={avg_turnover:,.0f} {_unit} "
-                    f"< thr={_liq_exclude_thr:,.0f} {_unit}"
-                )
-                return None
 
             # ── KR 밸류 팩터 보강 (단일 진실원천) ──────────────────────
             # yfinance 는 .KS/.KQ 의 priceToBook·trailingPE 를 거의 항상
@@ -12526,8 +12525,8 @@ class QuantNexusApp:
                 '드론·우주': ['047810.KS', '099320.KQ', '274090.KQ', '321370.KQ', '377330.KQ', '437730.KQ', '211270.KQ', '189300.KQ', '474170.KQ', '064350.KS', '272210.KS', '012450.KS', '079550.KS', '489790.KS', '214430.KQ', '003490.KS', '010170.KQ', '082920.KQ', '017960.KS', '010820.KS', '065450.KQ', '125490.KQ', '005870.KS'],
             },
             '⚓ 조선·해운': {
-                '대형 조선': ['009540.KS', '010140.KS', '042660.KS', '097230.KS', '329180.KS', '439260.KS', '077970.KS', '073010.KQ', '443060.KS', '071970.KS', '082740.KS', '460930.KQ', '282720.KQ', '033500.KQ', '017960.KS', '014620.KQ', '060370.KQ', '229640.KS', '005880.KS', '011200.KS', '028670.KS'],
-                '조선 기자재': ['009070.KS', '017960.KS', '071970.KS', '077970.KS', '082740.KS', '443060.KS', '073010.KQ', '460930.KQ', '382900.KQ', '097230.KS', '439260.KS', '014620.KQ', '033500.KQ', '060370.KQ', '282720.KQ', '229640.KS', '082920.KQ', '125490.KQ', '009540.KS', '042660.KS', '010140.KS', '329180.KS'],
+                '대형 조선': ['009540.KS', '010140.KS', '042660.KS', '097230.KS', '329180.KS', '439260.KS', '005880.KS', '011200.KS', '028670.KS'],
+                '조선 기자재': ['017960.KS', '071970.KS', '077970.KS', '082740.KS', '443060.KS', '073010.KQ', '460930.KQ', '382900.KQ', '014620.KQ', '033500.KQ', '060370.KQ', '282720.KQ', '229640.KS', '082920.KQ', '125490.KQ'],
                 '해운·물류': ['000120.KS', '005880.KS', '011200.KS', '014160.KS', '002320.KS', '004140.KS', '009180.KS', '086280.KS', '267250.KS', '120030.KS', '028670.KS', '180640.KS', '009070.KS', '073240.KS', '003490.KS', '020560.KS', '272450.KS', '089590.KS', '124560.KQ', '001120.KS', '001740.KS', '011760.KS'],
             },
             '🔋 이차전지·ESS': {

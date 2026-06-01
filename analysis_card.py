@@ -443,21 +443,21 @@ def build_four_axis_card(parent: tk.Widget, ticker: str, hist: pd.DataFrame,
         cmte = None
 
     if weak_trend and result.signal_stars >= 3:
-        entry_note = "  ⚠ 추세 약함. 진입 보류 권장"
+        entry_note = "  ⚠ 추세 약함 — 관망 구간"
         entry_color = C["GOLD"]
     elif cmte is not None:
         canslim_total = float(canslim.get("TotalScore", 50)) if canslim else 50
         if cmte.gate_pass and result.signal_stars >= 4:
-            entry_note = f"  · 진입 우호 (위원회 {cmte.buy_count}/7 ✓, CANSLIM {canslim_total:.0f}점)"
+            entry_note = f"  · 우호적 환경 (위원회 {cmte.buy_count}/7 ✓, CANSLIM {canslim_total:.0f}점)"
             entry_color = C["GREEN"]
         elif canslim_total < 40:
-            entry_note = f"  ⚠ CANSLIM {canslim_total:.0f}점 부족 — 펀더멘털 미달, 진입 불가"
+            entry_note = f"  ⚠ CANSLIM {canslim_total:.0f}점 부족 — 펀더멘털 미달"
             entry_color = C["RED"]
         elif canslim_total < 55:
-            entry_note = f"  ⚠ CANSLIM {canslim_total:.0f}점 미흡 — 진입 보류 (위원회 {cmte.buy_count}/7)"
+            entry_note = f"  ⚠ CANSLIM {canslim_total:.0f}점 미흡 — 관망 (위원회 {cmte.buy_count}/7)"
             entry_color = C["GOLD"]
         elif cmte.weak_trend_warning:
-            entry_note = f"  ⚠ 별점만 높음. 위원회 {cmte.buy_count}/7, 진입 보류"
+            entry_note = f"  ⚠ 별점만 높음 — 위원회 {cmte.buy_count}/7, 관망"
             entry_color = C["GOLD"]
         elif cmte.buy_count >= 5:
             entry_note = f"  · 위원회 통과 {cmte.buy_count}/7 (CANSLIM {canslim_total:.0f}점), 추가 트리거 대기"

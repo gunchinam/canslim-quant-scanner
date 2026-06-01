@@ -500,10 +500,10 @@ class FourAxisAnalyzer:
         if m.details.get("bear_div"):
             tips.append(
                 "하락 다이버전스 경고 — 모멘텀 약화 구간, "
-                "포지션 1/2 이하 축소 또는 신규 진입 보류 권장"
+                "모멘텀 약화 구간 — 포지션 축소 또는 관망 고려"
             )
         if not tips:
-            tips.append("현재 파라미터 유지 — 추가 튜닝 불필요. 기존 전략 그대로 운영 권장")
+            tips.append("현재 파라미터 유지 — 추가 튜닝 불필요")
         return tips[:3]
 
     # ---------- 지지/저항 플립 판단 --------------------------------

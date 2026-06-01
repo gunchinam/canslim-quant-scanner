@@ -2634,7 +2634,7 @@ function _renderInvestorCard(d) {
       items.push({ label: '기관 보유', value: `${instPct.toFixed(0)}%`, color: 'var(--text-secondary)' });
     }
     if (recKey) {
-      const recKr = {strong_buy:'적극매수', buy:'매수', hold:'보유', sell:'매도', strong_sell:'적극매도'};
+      const recKr = {strong_buy:'강한 관심', buy:'관심', hold:'보유', sell:'경계', strong_sell:'강한 경계'};
       const recCol = recKey.includes('buy') ? 'var(--success)' : recKey.includes('sell') ? 'var(--destructive)' : 'var(--text-secondary)';
       items.push({
         label: '컨센서스',
@@ -2679,18 +2679,18 @@ const _KO_MAP = {
   'BUY': '매수', 'NO SIGNAL': '신호 없음', 'PARTIAL': '부분',
   'OVERSOLD': '과매도', 'OVERBOUGHT': '과매수',
   'NR7 COMPRESSION': 'NR7 압축', 'SQUEEZE': '수축',
-  'BUY_TREND': '매수 추세', 'SELL_TREND': '하락 추세',
+  'BUY_TREND': '상승 추세', 'SELL_TREND': '하락 추세',
   'POSSIBLE_REVERSAL': '반전 가능', 'RANGE': '횡보',
   'CONFIRMED': '확인', 'FAILED': '실패',
   // Breakdown desc 번역 (compound terms first)
-  'STRONG_BUY': '강력 매수', 'STRONG_BULLISH': '강한 상승', 'STRONG_BEARISH': '강한 하락',
+  'STRONG_BUY': '강한 관심', 'STRONG_BULLISH': '강한 상승', 'STRONG_BEARISH': '강한 하락',
   'MILD_BULLISH': '약한 상승', 'MILD_BEARISH': '약한 하락',
   'STRONG_S_CONFIRMED': '강한 수급 확인', 'S_CONFIRMED': '수급 확인', 'S_WEAK': '수급 약함',
   'STRONG_DISTRIBUTION': '강한 분산', 'MILD_DISTRIBUTION': '약한 분산',
   'UNCONFIRMED_BREAKOUT': '미확인 돌파', 'NO_INTEREST': '관심 부족',
   'STRONG_TREND': '강한 추세', 'MEAN_REVERTING': '평균 회귀', 'RANDOM_WALK': '불규칙',
   'ORB_BREAKOUT': 'ORB 돌파', 'ORB_READY': 'ORB 관찰', 'ORB_WATCH': 'ORB 감시', 'ORB_WEAK': '약한 ORB', 'OVERHEATED': '과열',
-  'MODERATE_BUY': '적정 매수', 'SLIGHT_UPSIDE': '소폭 상승 여력',
+  'MODERATE_BUY': '적정 관심', 'SLIGHT_UPSIDE': '소폭 상승 여력',
   'SLIGHT_OVERVALUED': '소폭 고평가', 'AT_TARGET': 'DCF 적정가 도달',
   'ABOVE_STRONG': '강한 상회', 'BELOW_WEAK': '약한 하회',
   'BULLISH': '상승', 'BEARISH': '하락', 'MODERATE': '보통',

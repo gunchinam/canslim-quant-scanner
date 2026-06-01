@@ -4330,8 +4330,8 @@ class QuantNexusApp:
             s = float(score)
         except (TypeError, ValueError):
             return "sc_na"
-        if s >= 80: return "sc_A"   # 강력매수권
-        if s >= 60: return "sc_B"   # 매수관심
+        if s >= 80: return "sc_A"   # 최상위권
+        if s >= 60: return "sc_B"   # 관심권
         if s >= 40: return "sc_na"  # 중립 (기본 색 유지)
         if s >= 20: return "sc_C"   # 주의
         return "sc_D"               # 위험

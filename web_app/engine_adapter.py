@@ -78,12 +78,15 @@ class ScanAdapter:
         # ── 네이버 캐시 파일 경로 (원본 엔진과 동일 위치) ──
         self._naver_cache_path = os.path.join(_BASE, "naver_target_cache.pkl")
         self._naver_fund_cache_path = os.path.join(_BASE, "naver_fund_cache.pkl")
-        # 기존 캐시 로드
-        _qn.QuantNexusApp._load_naver_cache(self)
-        _qn.QuantNexusApp._load_naver_fund_cache(self)
 
-        # ── 섹터·종목 데이터 초기화 ──────────────────────────────────────────
-        _qn.QuantNexusApp._init_sector_data(self)
+        # ── 병렬 초기화: pickle 로드 2건 + 섹터 데이터는 독립적이므로 동시 실행 ──
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as _init_ex:
+            _f1 = _init_ex.submit(_qn.QuantNexusApp._load_naver_cache, self)
+            _f2 = _init_ex.submit(_qn.QuantNexusApp._load_naver_fund_cache, self)
+            _f3 = _init_ex.submit(_qn.QuantNexusApp._init_sector_data, self)
+            _f1.result()
+            _f2.result()
+            _f3.result()
         # 클래스 속성 인스턴스에 직접 복사 (_analyze_ticker에서 self.*로 접근)
         self.KR_NAMES = _qn.QuantNexusApp.KR_NAMES
         self.US_DESC  = _qn.QuantNexusApp.US_DESC

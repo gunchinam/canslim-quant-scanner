@@ -657,11 +657,14 @@ def _warmup_fill_cache(market: str) -> None:
         logging.warning("%s quick-warm failed: %s", market, e)
 
 
-def _kr_warmup_loop(interval_sec: int = 1800) -> None:
+def _kr_warmup_loop(interval_sec: int = 1800, initial_delay: float = 0.0) -> None:
     """KR 전체 스캔을 주기적으로 BG 실행. 파일잠금으로 multi-process duplication 방지.
 
     KRX 휴장 시간엔 호출 자체를 건너뛴다(yfinance/KRX 호출 0). 첫 실행은
     캐시 채우기 위해 항상 1회 수행.
+
+    initial_delay: quick-warm 즉시 실행 후, slow-refresh(yfinance API) 전 대기 시간.
+    US warmup과 동시 yfinance 429 회피용.
     """
     first_run = True
     while True:
@@ -673,10 +676,13 @@ def _kr_warmup_loop(interval_sec: int = 1800) -> None:
             logging.info("KR warm-up skipped: another worker holds lock")
         else:
             try:
-                # 첫 실행 시 quick-warm으로 캐시를 빠르게 채운 후 slow-refresh
+                # 첫 실행 시 quick-warm(pickle만)은 즉시, slow-refresh 전 지연
                 if first_run:
                     _warmup_fill_cache("KR")
                     first_run = False
+                    if initial_delay > 0:
+                        logging.info("KR slow-refresh delayed %.0fs (429 avoidance)", initial_delay)
+                        time.sleep(initial_delay)
                 logging.info("KR warm-up started (slow-refresh)")
                 try:
                     adapter_cls = _get_scan_adapter_cls()
@@ -709,12 +715,12 @@ def _start_kr_warmup_once() -> None:
     if os.environ.get("DISABLE_KR_WARMUP", "").strip() in ("1", "true", "yes"):
         logging.info("KR warm-up disabled by env DISABLE_KR_WARMUP")
         return
-    # KR warmup 을 60초 지연 — US warmup 과 동시에 yfinance 를 두드려
-    # 자가 rate-limit(429) 을 유발하던 문제 회피.
-    def _delayed_kr():
-        time.sleep(60.0)
-        _kr_warmup_loop()
-    threading.Thread(target=_delayed_kr, daemon=True, name="kr-warmup").start()
+    # KR quick-warm(pickle)은 즉시 시작, slow-refresh(yfinance)만 10초 지연
+    # — US와 동시에 yfinance를 두드려 429를 유발하던 문제 회피하면서
+    #   quick-warm 60초 공백을 제거.
+    def _fast_kr():
+        _kr_warmup_loop(initial_delay=10.0)
+    threading.Thread(target=_fast_kr, daemon=True, name="kr-warmup").start()
 
 
 # ── US 캐시 워밍 (서버 기동 시 + 30분 주기) ───────────────────────────────
@@ -2821,26 +2827,35 @@ def _cold_start_fill():
     사용자가 30분 warmup 주기를 기다리지 않도록 한다.
     """
     time.sleep(0.1)  # Flask/SocketIO 초기화 완료 대기
-    for _m in ("US", "KR"):
+
+    def _fill_market(market: str) -> None:
         try:
-            # 이미 채워진 캐시는 덮어쓰지 않음
             with _scan_results_cache_lock:
-                _already = _scan_results_cache.get((_m, "BALANCED", ""))
+                _already = _scan_results_cache.get((market, "BALANCED", ""))
             if not _already:
-                _warmup_fill_cache(_m)
-            # quick-warm 후에도 캐시가 비었으면(=pickle 없음) live scan 트리거
+                _warmup_fill_cache(market)
             with _scan_results_cache_lock:
-                _filled = _scan_results_cache.get((_m, "BALANCED", ""))
+                _filled = _scan_results_cache.get((market, "BALANCED", ""))
             if not _filled:
-                logging.info("cold-start: %s pickle empty → live scan kicked", _m)
+                logging.info("cold-start: %s pickle empty → live scan kicked", market)
                 threading.Thread(
                     target=_cold_start_live_scan,
-                    args=(_m,),
+                    args=(market,),
                     daemon=True,
-                    name=f"cold-live-{_m}",
+                    name=f"cold-live-{market}",
                 ).start()
         except Exception as _e:
-            logging.warning("cold-start-fill %s failed: %s", _m, _e)
+            logging.warning("cold-start-fill %s failed: %s", market, _e)
+
+    # US/KR 병렬 quick-warm — 순차 대비 ~50% 시간 단축
+    threads = [
+        threading.Thread(target=_fill_market, args=(m,), daemon=True, name=f"cold-fill-{m}")
+        for m in ("US", "KR")
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
 
 
 threading.Thread(target=_cold_start_fill, daemon=True, name="cold-start-fill").start()

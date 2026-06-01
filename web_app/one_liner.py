@@ -4620,56 +4620,16 @@ _FORBIDDEN_FINAL = (
 
 _SAFE_FALLBACK = "AI 코멘트 점검 중"
 
-# CTA 중립화 — 금융 데이터 용어 보존, 매매 지시 표현만 치환.
-# 순서 중요: 긴 복합어 → 짧은 일반어 순서로 적용.
-_CTA_NEUTRALIZE = [
-    # 금융 데이터 용어 (보존 — 임시 마커로 보호)
-    ("공매도", "\x01SHORT\x01"),
-    ("컨센서스 매수", "\x01CONS_BUY\x01"),
-    ("컨센서스 매도", "\x01CONS_SELL\x01"),
-    ("순매수", "순유입"),
-    ("순매도", "순유출"),
-    ("내부자 매수", "\x01INS_BUY\x01"),
-    ("내부자 매도", "\x01INS_SELL\x01"),
-    # 복합 CTA → 중립
-    ("적극매수", "강한 관심"),
-    ("적극매도", "강한 경계"),
-    ("뇌동매수", "충동 접근"),
-    ("추격매수", "추격 접근"),
-    ("추격 매수", "추격 접근"),
-    ("분할매수", "분할 접근"),
-    ("분할 매수", "분할 접근"),
-    ("분할매도", "분할 이탈"),
-    ("분할 매도", "분할 이탈"),
-    ("풀매수", "전량 접근"),
-    ("풀매도", "전량 이탈"),
-    # 일반 CTA → 중립
-    ("매수", "관심"),
-    ("매도", "이탈"),
-    ("손절", "정리"),
-    ("익절", "차익 실현"),
-]
-_CTA_RESTORE = [
-    ("\x01SHORT\x01", "공매도"),
-    ("\x01CONS_BUY\x01", "컨센서스 매수"),
-    ("\x01CONS_SELL\x01", "컨센서스 매도"),
-    ("\x01INS_BUY\x01", "내부자 매수"),
-    ("\x01INS_SELL\x01", "내부자 매도"),
-]
-
-
 def _scrub_oneliner(text: str) -> str:
-    """공개 사이트용 최종 안전망 — 권유/단정/보장 표현은 폴백, CTA는 중립 치환."""
+    """공개 사이트용 최종 안전망 — 직접적 권유/단정/보장 표현만 폴백 처리.
+    주갤 감성의 자연스러운 슬랭(손절/익절/매수 등)은 보존한다.
+    """
     if not text:
         return ""
     s = text.strip()
     if any(w in s for w in _FORBIDDEN_FINAL):
         _log.warning("OneLiner scrubbed (forbidden phrase): %r", s)
         return _SAFE_FALLBACK
-    for old, new in _CTA_NEUTRALIZE:
-        s = s.replace(old, new)
-    for old, new in _CTA_RESTORE:
-        s = s.replace(old, new)
     return s
 
 

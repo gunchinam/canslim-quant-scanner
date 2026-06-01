@@ -2253,6 +2253,21 @@ async function openDetail(ticker) {
   const _dpLink = document.getElementById('dp-detail-link');
   if (_dpLink) _dpLink.href = '/detail/' + encodeURIComponent(ticker) + '?market=' + currentMarket + '&strategy=' + currentStrategy;
 
+  // 외부 링크 (네이버증권 / 야후파이낸스)
+  const extLink = document.getElementById('dp-link-external');
+  if (extLink) {
+    const isKR = currentMarket === 'KR';
+    const code = ticker.replace(/\.(KS|KQ)$/, '');
+    if (isKR) {
+      extLink.href = 'https://finance.naver.com/item/main.naver?code=' + encodeURIComponent(code);
+      extLink.textContent = '📊 네이버증권';
+    } else {
+      extLink.href = 'https://finance.yahoo.com/quote/' + encodeURIComponent(ticker);
+      extLink.textContent = '📊 Yahoo Finance';
+    }
+    extLink.style.display = '';
+  }
+
   // 스캔 데이터가 이미 있으면 즉시 렌더링 (빈 드로어 방지)
   const cached = _stockMap[ticker];
   if (cached) _populatePanelDetail(cached, /* skipFourAxis */ true);

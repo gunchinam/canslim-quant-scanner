@@ -14,7 +14,8 @@ import time
 
 try:
     from flask_socketio import SocketIO, emit
-    socketio = SocketIO(cors_allowed_origins="*")
+    # Python 3.14 + gevent 조합에서 engineio 임포트가 무한 대기하는 문제 우회
+    socketio = SocketIO(cors_allowed_origins="*", async_mode="threading")
 except Exception as e:
     logging.warning("flask_socketio unavailable; chat disabled: %s", e)
 

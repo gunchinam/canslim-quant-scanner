@@ -326,18 +326,8 @@ function _renderSignalHtml(signal, stock) {
       ? `<span class="grade-badge grade-${g}" title="종합점수 ${Math.round(Number(stock.TotalScore))} 기준 등급">${g}</span>`
       : `<span class="signal-badge" style="color:${signalColor(base)};background:${signalBg(base)}">${esc(tr)}</span>`;
   }
-  let h = `<div class="signal-row">${_entryLight(stock)}${qualityHtml}</div>`;
-  if (tags.length) {
-    h += '<div class="signal-tags">';
-    for (const t of tags) {
-      const clean = t.replace(/[\u{1F525}\u{1F514}]/gu, '').trim();
-      const label = _TAG_KO[clean] || clean;
-      const cls = /BREAKOUT|EPS|VOL/.test(t) ? 'sig-tag-hot' : /LOW|LIQ/.test(t) ? 'sig-tag-warn' : 'sig-tag-info';
-      h += `<span class="sig-tag ${cls}">${esc(label)}</span>`;
-    }
-    h += '</div>';
-  }
-  return h;
+  // 태그([BREAKOUT],[VOL] 등)는 핵심 이유 컬럼과 중복 → 등급+진입만 표시
+  return `<div class="signal-row">${_entryLight(stock)}${qualityHtml}</div>`;
 }
 
 function fmt(v, digits = 0) {

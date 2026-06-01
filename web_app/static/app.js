@@ -583,11 +583,6 @@ function _matchesFilter(s, f) {
     case 'strong': { const g = _stockGrade(s.TotalScore); return g === 'S' || g === 'A'; }
     case 'near_high':  return !!s.NearHighPass;
     case 'oversold':   return s.RSI != null && s.RSI < 30;
-    case 'intraday':   return (
-      (s.ORBSignal && s.ORBSignal !== 'NEUTRAL' && s.ORBSignal !== '-') ||
-      (s.NR7Signal && s.NR7Signal !== 'NEUTRAL' && s.NR7Signal !== '-') ||
-      (s.BBSignal  && s.BBSignal  !== 'NEUTRAL' && s.BBSignal  !== '-')
-    );
     default: return true;
   }
 }

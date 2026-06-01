@@ -554,7 +554,7 @@ async function runScan() {
         setTimeout(() => { if (!document.hidden) runScan(); }, 15000);
       } else {
         // 캡 도달 — 명시적 실패 안내, 카운터 리셋(사용자가 직접 다시 시도하면 재개).
-        setStockListMsg('서버 준비가 지연되고 있습니다. 잠시 후 새로고침해 주세요.');
+        setStockListMsg('서버 준비 지연 중임. 잠시 후 새로고침 ㄱㄱ');
         _warmingRetries = 0;
       }
       return;
@@ -569,11 +569,11 @@ async function runScan() {
       const delay = _RUN_SCAN_BACKOFF_MS[_runScanAttempt] || 12000;
       _runScanAttempt += 1;
       const secs = Math.round(delay / 1000);
-      setStockListMsg(`서버 준비 중… ${secs}초 후 자동으로 다시 시도합니다 (${_runScanAttempt}/${_RUN_SCAN_MAX_RETRY})`);
+      setStockListMsg(`서버 준비 중… ${secs}초 후 자동 재시도 (${_runScanAttempt}/${_RUN_SCAN_MAX_RETRY})`);
       setTimeout(() => { if (!document.hidden) runScan(); }, delay);
     } else {
       // 재시도 다 소진 — 그제야 명시적 실패 안내.
-      setStockListMsg('서버에 연결하지 못했습니다. 새로고침하거나 서버 상태를 확인하세요.');
+      setStockListMsg('서버 연결 실패함. 새로고침하거나 서버 상태 확인 ㄱㄱ');
       _runScanAttempt = 0;
     }
   } finally {
@@ -802,7 +802,7 @@ function _renderPeersCard(payload) {
   all.sort((a, b) => (Number(b.MarketCap) || 0) - (Number(a.MarketCap) || 0));
 
   if (!all.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="dp-peers-empty">비교 가능한 동종업체가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="dp-peers-empty">비교 가능한 동종업체 없음.</td></tr>';
     card.style.display = '';
     return;
   }
@@ -888,7 +888,7 @@ function _renderSegmentsCard(payload) {
 
   if (!pie.length) {
     svg.innerHTML = '';
-    legend.innerHTML = '<div class="dp-segments-empty">세그먼트 비중을 표시할 데이터가 없습니다.</div>';
+    legend.innerHTML = '<div class="dp-segments-empty">세그먼트 비중 데이터 없음.</div>';
     card.style.display = '';
     return;
   }
@@ -1017,7 +1017,7 @@ function _renderInsiderCard(payload) {
   }
 
   if (!txs.length) {
-    body.innerHTML = '<div class="dp-insider-empty">최근 거래 데이터가 없습니다.</div>';
+    body.innerHTML = '<div class="dp-insider-empty">최근 거래 데이터 없음.</div>';
     card.style.display = '';
     return;
   }
@@ -1074,7 +1074,7 @@ function _renderEventsCard(payload) {
 
   const evs = (payload && Array.isArray(payload.events)) ? payload.events : [];
   if (!payload || !payload.ok || !evs.length) {
-    body.innerHTML = '<div class="dp-events-empty">예정된 이벤트가 없습니다.</div>';
+    body.innerHTML = '<div class="dp-events-empty">예정된 이벤트 없음.</div>';
     cnt.textContent = '0';
     // 매크로 단독으로도 카드를 보여줄 가치는 있지만, 텅 비면 숨김
     card.style.display = 'none';
@@ -1145,7 +1145,7 @@ function _renderOwnershipCard(payload) {
 
   if (!bd.length) {
     barEl.innerHTML = '';
-    legEl.innerHTML = '<div class="dp-ownership-empty">지분 데이터를 표시할 수 없습니다.</div>';
+    legEl.innerHTML = '<div class="dp-ownership-empty">지분 데이터 없음.</div>';
     if (topWrap) topWrap.style.display = 'none';
     card.style.display = '';
     return;
@@ -1242,8 +1242,8 @@ function renderStockTable(stocks) {
 
   if (filtered.length === 0) {
     const emptyMsg = (_activeFilters.size === 1 && _activeFilters.has('watchlist'))
-      ? '워치리스트가 비어있습니다. 표의 ☆ 버튼으로 추가하세요.'
-      : _activeFilters.size > 0 ? '필터 조건에 맞는 종목이 없습니다.' : '결과 없음';
+      ? '워치리스트 비어있음. 표의 ☆ 버튼으로 추가 ㄱㄱ'
+      : _activeFilters.size > 0 ? '필터 조건에 맞는 종목 없음.' : '결과 없음';
     tbody.innerHTML = `<tr><td colspan="${_colCount()}" class="state-msg">${esc(emptyMsg)}</td></tr>`;
     _updateMobileList([], emptyMsg, renderToken);
     return;
@@ -1633,18 +1633,18 @@ async function _lookupTicker(ticker) {
     const p = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
     const res = await fetch(`/api/ticker/${encodeURIComponent(ticker)}?${p}`);
     if (!res.ok) {
-      setStockListMsg(`'${esc(ticker)}' 종목을 찾을 수 없습니다.`);
+      setStockListMsg(`'${esc(ticker)}' 종목 못 찾음.`);
       return;
     }
     const data = await res.json();
     if (!data || data.error || !data.Ticker) {
-      setStockListMsg(`'${esc(ticker)}' 종목을 찾을 수 없습니다.`);
+      setStockListMsg(`'${esc(ticker)}' 종목 못 찾음.`);
       return;
     }
     openDetail(data.Ticker);
   } catch (err) {
     console.error('search lookup failed:', err);
-    setStockListMsg('검색 실패. 서버 상태를 확인하세요.');
+    setStockListMsg('검색 실패. 서버 상태 확인 ㄱㄱ');
   }
 }
 
@@ -2076,18 +2076,18 @@ const _LABEL_KO = {
 };
 
 const _CS_WHAT = {
-  'C':         '분기 순이익 증가율 — 최근 분기 EPS가 전년 동기 대비 얼마나 성장했는지 측정합니다. 오닐 기준 25% 이상이 목표입니다.',
-  'A':         '연간 ROE 기준 — 자기자본으로 얼마나 많은 이익을 내는지 측정합니다. 오닐 기준 17% 이상이 합격선입니다.',
-  'N':         '신고가·피벗 돌파 — 52주 최고가 근접 여부와 컵앤핸들 패턴의 피벗 돌파를 측정합니다.',
-  'S':         '거래량 수반 돌파 — 기관의 매수를 동반한 거래량 급증으로 진짜 돌파인지 확인합니다.',
-  'L':         '시장 주도주 여부 — 시장 대비 상대강도(RS Rating)를 측정합니다. 80점 이상이 주도주 기준입니다.',
-  'I':         '기관 자금 수급 — 스마트머니(기관·세력)의 매수/매도 압력을 자금 흐름 지표로 측정합니다.',
-  'M':         '시장 방향 — 현재 전체 시장이 상승장(Bull)인지 하락장(Bear)인지 추세와 ADX로 측정합니다.',
-  'Quant':     '퀀트 보조 전략 — Fama-French 팩터, 모멘텀, 평균회귀 등 통계 기반 전략 점수입니다.',
-  'Math':      '수학적 시계열 분석 — 허스트 지수(추세 지속성), 칼만 필터(노이즈 제거), Z-Score(통계적 위치)를 활용합니다.',
-  'Adj':       '변동성 조정 — DE Shaw 방식으로 변동성 대비 수익률 효율성을 평가해 최종 점수를 미세 조정합니다.',
-  'Sentiment': '시장 심리 추정 — 뉴스 없이 가격·거래량만으로 투자 심리를 간접 측정합니다.',
-  'Scalp':     '단타 시그널 — ORB 돌파, NR7 변동성 압축, 볼린저밴드 반등 등 단기 트레이딩 신호입니다.',
+  'C':         '분기 순이익 증가율 — 최근 분기 EPS가 전년 동기 대비 얼마나 성장했는지 봄. 오닐 기준 25% 이상이 목표임.',
+  'A':         '연간 ROE 기준 — 자기자본으로 얼마나 벌어들이는지 봄. 오닐 기준 17% 이상이 합격선임.',
+  'N':         '신고가·피벗 돌파 — 52주 최고가 근접 여부 + 컵앤핸들 피벗 돌파 측정함.',
+  'S':         '거래량 수반 돌파 — 기관 매수 동반한 거래량 급증으로 진짜 돌파인지 확인함.',
+  'L':         '시장 주도주 여부 — 시장 대비 상대강도(RS Rating) 측정함. 80점 이상이 주도주 기준임.',
+  'I':         '기관 자금 수급 — 스마트머니(기관·세력)의 매수/매도 압력을 자금 흐름 지표로 측정함.',
+  'M':         '시장 방향 — 지금 시장이 상승장(Bull)인지 하락장(Bear)인지 추세와 ADX로 봄.',
+  'Quant':     '퀀트 보조 전략 — Fama-French 팩터, 모멘텀, 평균회귀 등 통계 기반 전략 점수임.',
+  'Math':      '수학적 시계열 분석 — 허스트 지수(추세 지속성), 칼만 필터(노이즈 제거), Z-Score(통계적 위치) 활용함.',
+  'Adj':       '변동성 조정 — DE Shaw 방식으로 변동성 대비 수익률 효율성 평가해 최종 점수 미세 조정함.',
+  'Sentiment': '시장 심리 추정 — 뉴스 없이 가격·거래량만으로 투자 심리 간접 측정함.',
+  'Scalp':     '단타 시그널 — ORB 돌파, NR7 변동성 압축, 볼린저밴드 반등 등 단기 트레이딩 신호임.',
 };
 
 function _breakdownItemHtml(item) {
@@ -4333,7 +4333,7 @@ function generateShareCard() {
       ${rowsHtml}
     </div>
     <div style="padding:12px 16px;background:#F5F6F8;border-top:1px solid #EAEBEE;">
-      <div style="font-size:10px;color:#8B95A1;text-align:center;">본 자료는 투자 참고용이며 투자 판단의 책임은 본인에게 있습니다.</div>
+      <div style="font-size:10px;color:#8B95A1;text-align:center;">알고리즘 스크리닝 결과일 뿐임. 판단과 손익은 본인 책임임.</div>
     </div>
   </div>`;
 
@@ -4430,7 +4430,7 @@ async function captureStockList() {
 
     const footer = document.createElement('div');
     footer.style.cssText = 'padding:10px 16px;background:#F5F6F8;border-top:1px solid #EAEBEE;font-size:10px;color:#8B95A1;text-align:center;';
-    footer.textContent = '본 자료는 투자 참고용이며 투자 판단의 책임은 본인에게 있습니다.';
+    footer.textContent = '알고리즘 스크리닝 결과일 뿐임. 판단과 손익은 본인 책임임.';
     wrap.appendChild(footer);
 
     stage.appendChild(wrap);

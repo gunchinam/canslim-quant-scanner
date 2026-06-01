@@ -3003,7 +3003,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
       </nav>
 
     <!-- 풀폭 차트 섹션 (헤더 바로 아래에 우선 노출) -->
-    <section class="dp-chart-section">
+    <section class="dp-chart-section" id="dp-chart-section">
       <!-- 1008-풀 한줄평 포스터 (4축 카드보다 먼저 표시) -->
       <div id="dp-fa-haiku" class="dp-oneliner-poster" style="display:none;"></div>
       <div id="dp-fouraxis-loading" style="text-align:center;padding:40px;color:var(--text-tertiary);display:none;">차트 생성 중...</div>
@@ -3202,7 +3202,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
     </section>
 
-    <div class="dp-body">
+    <div class="dp-body" id="dp-body">
       <!-- Left: Hero + Metrics -->
       <div class="dp-left">
         <div class="dp-hero-card" style="position:relative;overflow:hidden;">

@@ -1615,6 +1615,107 @@ td.score-col {
   background: var(--card);
 }
 
+/* ── Section Navigation (드로워 내 빠른 이동) ─────────────── */
+.dp-section-nav {
+  display: flex;
+  gap: 0;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+.dp-section-nav::-webkit-scrollbar { display: none; }
+.dp-section-btn {
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--duration-fast), border-color var(--duration-fast);
+}
+.dp-section-btn:hover { color: var(--text-primary); }
+.dp-section-btn.active { color: var(--brand); border-bottom-color: var(--brand); }
+
+/* ── Collapsible Card Groups ────────────────────────────────── */
+.dp-card-group { border-top: 1px solid var(--border); }
+.dp-card-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 20px;
+  background: var(--surface-subtle);
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  transition: background var(--duration-fast);
+}
+.dp-card-group-toggle:hover { background: var(--border); }
+.dp-cg-chevron {
+  color: var(--text-tertiary);
+  transition: transform 0.2s var(--ease-default);
+  flex-shrink: 0;
+}
+.dp-cg-chevron.open { transform: rotate(180deg); }
+.dp-card-group-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s var(--ease-default);
+}
+.dp-card-group-body.open { max-height: 4000px; }
+
+/* ── Header Actions (inline style → CSS) ────────────────────── */
+.dp-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.dp-action-btn {
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.dp-action-link { background: var(--primary); color: #fff; }
+.dp-action-capture { background: #00C073; color: #fff; }
+
+/* ── About Bar ──────────────────────────────────────────────── */
+.dp-about-bar {
+  padding: 6px 20px 8px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.dp-about-text {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* 1008-풀 한줄평 포스터 (스캐너 슬라이드 패널용) */
 .dp-oneliner-poster {
   position: relative;
@@ -2872,25 +2973,34 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           <span id="dp-sector" class="dp-sector-tag">—</span>
         </div>
       </div>
-      <div id="dp-about-box" style="display:none;flex:1;min-width:0;padding:0 16px;">
-        <p id="dp-about" style="font-size:12px;color:var(--text-tertiary);line-height:1.5;margin:0;
-           display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;"></p>
+      <div class="dp-header-actions">
+        <a id="dp-link-external" class="dp-action-btn dp-action-link" href="#" target="_blank" rel="noopener" style="display:none;">📊 상세</a>
+        <button class="dp-action-btn dp-action-capture" data-action="captureDetail" title="이미지 캡쳐">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+          </svg>
+          캡쳐
+        </button>
+        <button class="dp-close-btn" data-action="closeDetailBtn" aria-label="닫기">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
-      <a id="dp-link-external" href="#" target="_blank" rel="noopener" style="display:none;height:32px;padding:0 12px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;align-items:center;gap:4px;margin-right:4px;white-space:nowrap;">📊 상세</a>
-      <button data-action="captureDetail" title="이 종목 분석을 이미지로 캡쳐" style="height:32px;padding:0 12px;background:#00C073;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px;margin-right:8px;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-        </svg>
-        캡쳐
-      </button>
-      <button class="dp-close-btn" data-action="closeDetailBtn" aria-label="닫기">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
+    </div>
+    <div id="dp-about-box" class="dp-about-bar" style="display:none;">
+      <p id="dp-about" class="dp-about-text"></p>
     </div>
 
     <div class="dp-scroll">
+
+      <!-- 섹션 빠른 이동 -->
+      <nav class="dp-section-nav" id="dp-section-nav">
+        <button class="dp-section-btn active" onclick="dpScrollTo('dp-chart-section')">📊 차트</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-body')">💰 지표</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-group-company')">🏢 기업</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-group-ref')">📋 참고</button>
+      </nav>
 
     <!-- 풀폭 차트 섹션 (헤더 바로 아래에 우선 노출) -->
     <section class="dp-chart-section">
@@ -2919,6 +3029,14 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         <div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:6px;">핵심 관찰</div>
         <div id="dp-fa-observation" style="font-size:13px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap;"></div>
       </div>
+
+      <!-- ── 기업 정보 그룹 (접기 가능) ──────────────────────── -->
+      <div class="dp-card-group" id="dp-group-company">
+        <button class="dp-card-group-toggle" onclick="toggleCardGroup(this)">
+          <span>🏢 기업 정보</span>
+          <svg class="dp-cg-chevron open" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="dp-card-group-body open">
 
       <!-- 핵심 경제적 해자 (Economic Moat) -->
       <div id="dp-moat-card" class="dp-moat-card" style="display:none;">
@@ -3002,6 +3120,17 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
         </div>
       </div>
 
+        </div><!-- /기업 정보 body -->
+      </div><!-- /기업 정보 group -->
+
+      <!-- ── 참고 정보 그룹 (기본 접힘) ─────────────────────── -->
+      <div class="dp-card-group" id="dp-group-ref">
+        <button class="dp-card-group-toggle" onclick="toggleCardGroup(this)">
+          <span>📋 참고 정보</span>
+          <svg class="dp-cg-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="dp-card-group-body">
+
       <div id="dp-insider-card" class="dp-insider-card" style="display:none;">
         <div class="dp-insider-head">
           <span class="dp-insider-icon">🕵️</span>
@@ -3067,6 +3196,10 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
           </div>
         </div>
       </div>
+
+        </div><!-- /참고 정보 body -->
+      </div><!-- /참고 정보 group -->
+
     </section>
 
     <div class="dp-body">
@@ -3344,6 +3477,37 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="/static/app.js?v={{ v_app_js }}" defer></script>
 <script>
+/* ── Card Group Toggle + Section Nav ─────────────────────── */
+function toggleCardGroup(btn) {
+  var body = btn.nextElementSibling;
+  var chev = btn.querySelector('.dp-cg-chevron');
+  var isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  if (chev) chev.classList.toggle('open', !isOpen);
+}
+
+function dpScrollTo(id) {
+  var el = document.getElementById(id);
+  var scroll = document.querySelector('.dp-scroll');
+  if (!el || !scroll) return;
+  // 섹션 네비 높이 보정
+  var navH = (document.getElementById('dp-section-nav') || {}).offsetHeight || 0;
+  var top = el.offsetTop - scroll.offsetTop - navH;
+  scroll.scrollTo({ top: top, behavior: 'smooth' });
+  // 네비 버튼 active 동기화
+  document.querySelectorAll('.dp-section-btn').forEach(function(b) { b.classList.remove('active'); });
+  event.target.classList.add('active');
+  // 접힌 그룹이면 펼치기
+  if (el.classList.contains('dp-card-group')) {
+    var body = el.querySelector('.dp-card-group-body');
+    var chev = el.querySelector('.dp-cg-chevron');
+    if (body && !body.classList.contains('open')) {
+      body.classList.add('open');
+      if (chev) chev.classList.add('open');
+    }
+  }
+}
+
 /* ── Mobile Sidebar Toggle ─────────────────────────────────── */
 
 /* ── Swipe left/right on detail panel to switch tabs ───────── */

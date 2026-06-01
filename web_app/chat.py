@@ -12,12 +12,33 @@ import sqlite3
 import threading
 import time
 
-try:
-    from flask_socketio import SocketIO, emit
-    # Python 3.14 + gevent 조합에서 engineio 임포트가 무한 대기하는 문제 우회
-    socketio = SocketIO(cors_allowed_origins="*", async_mode="threading")
-except Exception as e:
-    logging.warning("flask_socketio unavailable; chat disabled: %s", e)
+def _try_import_socketio(timeout=5):
+    """flask_socketio를 timeout 초 내에 import 시도. Python 3.14에서 hang 방지."""
+    result = {}
+    def _do():
+        try:
+            from flask_socketio import SocketIO as _SIO, emit as _emit
+            result["SocketIO"] = _SIO
+            result["emit"] = _emit
+        except Exception as exc:
+            result["error"] = exc
+    t = threading.Thread(target=_do, daemon=True)
+    t.start()
+    t.join(timeout)
+    if t.is_alive():
+        logging.warning("flask_socketio import timed out (%ds); chat disabled", timeout)
+        return None, None
+    if "error" in result:
+        logging.warning("flask_socketio unavailable; chat disabled: %s", result["error"])
+        return None, None
+    return result["SocketIO"], result["emit"]
+
+_SIO, _emit_fn = _try_import_socketio()
+
+if _SIO is not None:
+    emit = _emit_fn
+    socketio = _SIO(cors_allowed_origins="*", async_mode="threading")
+else:
 
     def emit(*_args, **_kwargs):
         return None

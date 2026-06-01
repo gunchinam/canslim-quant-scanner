@@ -2250,7 +2250,7 @@ async function openDetail(ticker) {
       extLink.href = 'https://finance.yahoo.com/quote/' + encodeURIComponent(ticker);
       extLink.textContent = '📊 Yahoo Finance';
     }
-    extLink.style.display = '';
+    extLink.style.display = 'flex';
   }
 
   // 스캔 데이터가 이미 있으면 즉시 렌더링 (빈 드로어 방지)
@@ -2348,6 +2348,8 @@ function _clearPanelDetail() {
   if (_ic) _ic.style.display = 'none';
   const _lb = document.getElementById('dp-leader-badge');
   if (_lb) _lb.style.display = 'none';
+  const _el = document.getElementById('dp-link-external');
+  if (_el) _el.style.display = 'none';
   const _nb = document.getElementById('dp-news-bar');
   if (_nb) _nb.style.display = 'none';
   ['dp-name','dp-ticker','dp-sector','dp-about','dp-score','dp-signal',

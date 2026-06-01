@@ -6184,7 +6184,7 @@ class QuantNexusApp:
                 entry_phrase = f"{status_label} · 신호 혼조"
 
             # ── 진입가 결정 (현재가 추격 금지 · V5.1) ───────────────────
-            # 원칙: 현재가에서 풀백/지지를 받은 뒤 진입. 추격 매수는 R:R 무너짐.
+            # 원칙: 현재가에서 풀백/지지 확인 후 접근. 추격은 R:R 무너짐.
             # 후보:
             #   - VWAP (기관 평균단가)
             #   - SMA20 (1차 풀백 지지)
@@ -6256,29 +6256,29 @@ class QuantNexusApp:
                 _disc = entry_discount  # 0~1
                 _ph_joined = " ".join(_phrases)
                 if entry_status == "STRONG":
-                    headline_action = "지금 매수 가능" if _disc < 0.015 else "풀백 오면 매수"
+                    headline_action = "조건 충족" if _disc < 0.015 else "풀백 대기"
                 elif entry_status == "NEUTRAL":
                     if any(k in _ph_joined for k in ("과열", "RSI", "과매수")):
-                        headline_action = "눌림 기다린 후 진입"
+                        headline_action = "눌림 대기"
                     elif any(k in _ph_joined for k in ("추세", "이평", "골든", "데드")):
-                        headline_action = "추세 확인 후 진입"
+                        headline_action = "추세 확인 필요"
                     elif any(k in _ph_joined for k in ("거래량", "볼륨", "OBV")):
-                        headline_action = "거래량 터질 때 진입"
+                        headline_action = "거래량 확인 필요"
                     elif any(k in _ph_joined for k in ("변동", "ATR", "VIX")):
-                        headline_action = "변동성 잡히면 진입"
+                        headline_action = "변동성 안정 대기"
                     elif any(k in _ph_joined for k in ("VWAP", "지지", "지지선")):
-                        headline_action = "지지 확인 후 진입"
+                        headline_action = "지지 확인 필요"
                     else:
                         headline_action = "신호 혼조 — 다음 기회 대기"
                 else:  # AVOID
                     if any(k in _ph_joined for k in ("하락", "데드크로스", "약세")):
-                        headline_action = "하락 추세 — 지금은 아님"
+                        headline_action = "하락 추세 — 관망"
                     elif any(k in _ph_joined for k in ("변동", "VIX", "ATR")):
-                        headline_action = "변동성 과다 — 지금은 아님"
+                        headline_action = "변동성 과다 — 관망"
                     elif any(k in _ph_joined for k in ("공매도", "숏")):
                         headline_action = "공매도 압력 — 관망"
                     else:
-                        headline_action = "지금 말고 다음 기회 노려라"
+                        headline_action = "관망 — 다음 기회 대기"
 
                 _low_wr = _wr > 0 and _wr < 40
                 _low_rr = (_rr_now_v > 0 and _rr_now_v < 1.5) or (_rr_v > 0 and _rr_v < 1.5)

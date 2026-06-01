@@ -2017,7 +2017,7 @@ function setText(id, text) {
 }
 
 /* 보조지표 영문→한글 번역 */
-const _KALMAN_KO = {'BUY_TREND':'매수 추세','SELL_TREND':'하락 추세 — 진입 회피','POSSIBLE_REVERSAL':'반전 가능','NEUTRAL':'관망','OVERHEATED':'과열 — 진입 주의','OVERSOLD':'과매도 — 매수 후보','STRONG_BUY':'강한 매수','STRONG_SELL':'강한 회피'};
+const _KALMAN_KO = {'BUY_TREND':'상승 추세','SELL_TREND':'하락 추세','POSSIBLE_REVERSAL':'반전 가능','NEUTRAL':'관망','OVERHEATED':'과열 구간','OVERSOLD':'과매도 구간','STRONG_BUY':'강한 상승','STRONG_SELL':'강한 하락'};
 const _MARKET_KO = {'STRONG_BULL':'강한 상승장','BULL':'상승장','SIDEWAYS (Leaning Bull)':'횡보(상승 우위)','SIDEWAYS':'횡보','BEAR':'하락장','STRONG_BEAR':'강한 하락장'};
 function _auxTextKo(badge, text, st) {
   if (badge === 'MATH') {
@@ -2773,7 +2773,7 @@ function _renderTechTab(d) {
   const sectorRankCol = d.SectorRank === 'Top 10%' ? 'var(--success)' : d.SectorRank === 'Bottom' ? 'var(--destructive)' : null;
 
   const rows = [
-    ['RSI (14)',    rsiVal,  '70↑ 과매수(조정 주의) · 30↓ 과매도(매수 기회)', rsiCol],
+    ['RSI (14)',    rsiVal,  '70↑ 과매수(조정 주의) · 30↓ 과매도(반등 주목)', rsiCol],
     ['ADX',        adxRaw,  '25↑ 추세 존재 · 40↑ 강한 추세 · 25↓ 횡보',     adxCol],
     ['ATR%',       d.ATRPercent != null ? fmt(d.ATRPercent,2)+'%' : '—', '높을수록 변동성 큼 — 위험과 기회 동시', null],
     ['VWAP 거리',  vwapRaw, '양수=평균가 위(강세) · 음수=아래(약세)',         d.VWAPDistance > 0 ? 'var(--success)' : 'var(--destructive)'],
@@ -2786,7 +2786,7 @@ function _renderTechTab(d) {
     ['MACD 방향',  macdRaw, '히스토그램 양수=상승 모멘텀 · 음수=하락 모멘텀', macdCol],
     ['ORB 신호',   _orbNr7Label(d.ORBSignal), '시초가 범위 돌파 시 매수 신호',     _orbNr7Color(d.ORBSignal)],
     ['NR7 압축',   _orbNr7Label(d.NR7Signal), '변동폭 수축 후 큰 움직임 대비',     _orbNr7Color(d.NR7Signal)],
-    ['볼린저밴드', _trKo(d.BBSignal   || '—'), '하단 반등=매수 기회 · 상단=과열 주의', null],
+    ['볼린저밴드', _trKo(d.BBSignal   || '—'), '하단 반등=반등 주목 · 상단=과열 주의', null],
     ['확신도',     _trKo(d.Conviction || '—'), '높음=팩터 방향 일치 · 낮음=신호 혼재', null],
     ['섹터 순위',  sectorRankRaw, '스캔 결과 기준 섹터 내 상대 위치 (목록 스캔 후 표시)', sectorRankCol],
   ];
@@ -2802,7 +2802,15 @@ function _renderDetailFeatures(d) {
   const thermoAct  = document.getElementById('dp-thermo-action');
   const rsi = d.RSI != null ? Number(d.RSI) : null;
   if (marker && thermoLbl && thermoAct && rsi != null) {
-    const pct = Math.max(2, Math.min(98, rsi));
+    // RSI → 바 위치 정규화: 각 존이 균등 20% 폭을 차지하도록 매핑
+    // 라벨(극도공포~극도탐욕)이 space-between 균등 배치이므로 위치를 맞춤
+    let pct;
+    if      (rsi < 30) pct = (rsi / 30) * 20;
+    else if (rsi < 45) pct = 20 + ((rsi - 30) / 15) * 20;
+    else if (rsi < 55) pct = 40 + ((rsi - 45) / 10) * 20;
+    else if (rsi < 70) pct = 60 + ((rsi - 55) / 15) * 20;
+    else               pct = 80 + Math.min((rsi - 70) / 30, 1) * 20;
+    pct = Math.max(2, Math.min(98, pct));
     marker.style.left = pct + '%';
     let lbl, act, col;
     if      (rsi >= 70) { lbl = '극도탐욕'; act = '과열 구간';         col = '#DC2626'; }

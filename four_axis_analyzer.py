@@ -516,7 +516,7 @@ class FourAxisAnalyzer:
 
         if c > hi * 0.98:
             return (f"52주 신고가권 돌파 — {r1:,.2f} 이전 저항이 지지로 전환 확인, "
-                    f"신고가 유지 중에는 풀백 매수 유효")
+                    f"신고가 유지 중에는 풀백 구간 주목")
         if c > r1:
             return (f"저항 {r1:,.2f} 상향 돌파 — 지지 전환 확인 구간. "
                     f"해당 레벨 위에서 종가 마감 시 추세 지속 신호")
@@ -629,7 +629,7 @@ class FourAxisAnalyzer:
         elif vt.details.get("expand"):
             bb_txt = f"BB 확장 중 — 변동성 {bb_q:.0%} 분위, 추세 가속"
         else:
-            bb_txt = f"BB 관망 — 변동성 {bb_q:.0%} 분위, 진입 신호 미형성"
+            bb_txt = f"BB 관망 — 변동성 {bb_q:.0%} 분위, 방향성 미형성"
         notes.append(Annotation(N-4, _c(3), bb_txt, "note"))
 
         # ── 거래량 주석 ──────────────────────────────────────────────

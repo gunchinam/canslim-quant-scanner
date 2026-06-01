@@ -109,7 +109,7 @@ def _v_momentum(four: Any) -> PersonaVerdict:
             f"BB 스퀴즈 + 모멘텀 {m}/5 — 브레이크아웃 임박")
     if bear >= 3 or t <= 2:
         return PersonaVerdict("Momentum", "매도",
-            f"4축 약세 {bear}/4 · 추세 {t}/5 — 진입 불가")
+            f"4축 약세 {bear}/4 · 추세 {t}/5 — 관망")
     return PersonaVerdict("Momentum", "보유",
         f"4축 혼조 (정렬 {bull}, 약세 {bear}) — 트리거 대기")
 

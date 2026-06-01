@@ -54,7 +54,7 @@ class ScanAdapter:
         self._strategy = strategy
 
         # ── analyze_ticker가 사용하는 속성 (QuantNexusApp 인터페이스 호환) ──
-        self.cache          = _qn.DataCache()
+        self.cache          = _qn.DataCache(os.path.join(_BASE, "cache_v19"))
         self.engine         = _qn.WallStreetQuantStrategies()
         # C1: VIX fetch는 cold start를 막지 않는다.
         # 캐시가 비어 있으면 20.0으로 출발하고 백그라운드에서 채운다.
@@ -286,11 +286,14 @@ class ScanAdapter:
             # _analyze_ticker(quant_nexus_v20.py:4684)와 동일한 dated 키 포맷.
             # 키 포맷 불일치 시 cache_only 분기에서 종목이 대량 누락되어
             # /api/scan 이 일부 universe만 반환하던 버그를 잡는다.
-            _today = time.strftime("%Y%m%d")
-            strategy_key = f"{ticker}__{self._scan_strategy}__{_today}"
-            cached = self.cache.get(strategy_key, max_age_minutes=60 * 24)
-            if cached:
-                return apply_to_row(cached)
+            # 오늘 캐시가 없으면 최대 7일 이전까지 fallback — 주말·공휴일 대응.
+            from datetime import datetime as _dt, timedelta as _td
+            for _days_back in range(8):
+                _date = (_dt.now() - _td(days=_days_back)).strftime("%Y%m%d")
+                strategy_key = f"{ticker}__{self._scan_strategy}__{_date}"
+                cached = self.cache.get(strategy_key, max_age_minutes=60 * 24 * (_days_back + 1))
+                if cached:
+                    return apply_to_row(cached)
             if cache_only:
                 return None
         result = _qn.QuantNexusApp._analyze_ticker(self, ticker)

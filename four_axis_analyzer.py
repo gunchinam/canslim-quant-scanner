@@ -259,7 +259,7 @@ class FourAxisAnalyzer:
             zone, verdict = "약세", "모멘텀 부진"
             score = 2
         else:
-            zone, verdict = "관망", "모멘텀 약함 — 진입 보류"
+            zone, verdict = "관망", "모멘텀 중립 — 방향성 부족"
             score = 3
 
         if macd_cross_up: score = min(5, score+1); verdict += " · MACD 골든크로스"

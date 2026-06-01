@@ -2996,10 +2996,10 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
       <!-- 섹션 빠른 이동 -->
       <nav class="dp-section-nav" id="dp-section-nav">
-        <button class="dp-section-btn active" onclick="dpScrollTo('dp-chart-section')">📊 차트</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-body')">💰 지표</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-group-company')">🏢 기업</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-group-ref')">📋 참고</button>
+        <button class="dp-section-btn active" onclick="dpScrollTo('dp-chart-section',this)">📊 차트</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-body',this)">💰 지표</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-group-company',this)">🏢 기업</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-group-ref',this)">📋 참고</button>
       </nav>
 
     <!-- 풀폭 차트 섹션 (헤더 바로 아래에 우선 노출) -->
@@ -3486,26 +3486,28 @@ function toggleCardGroup(btn) {
   if (chev) chev.classList.toggle('open', !isOpen);
 }
 
-function dpScrollTo(id) {
+function dpScrollTo(id, btn) {
   var el = document.getElementById(id);
   var scroll = document.querySelector('.dp-scroll');
   if (!el || !scroll) return;
-  // 섹션 네비 높이 보정
+  // 접힌 그룹이면 먼저 펼치기 (위치 계산 전에)
+  if (el.classList.contains('dp-card-group')) {
+    var grpBody = el.querySelector('.dp-card-group-body');
+    var grpChev = el.querySelector('.dp-cg-chevron');
+    if (grpBody && !grpBody.classList.contains('open')) {
+      grpBody.classList.add('open');
+      if (grpChev) grpChev.classList.add('open');
+    }
+  }
+  // 섹션 네비 높이 보정 + 정확한 오프셋 계산
   var navH = (document.getElementById('dp-section-nav') || {}).offsetHeight || 0;
-  var top = el.offsetTop - scroll.offsetTop - navH;
+  var rect = el.getBoundingClientRect();
+  var scrollRect = scroll.getBoundingClientRect();
+  var top = scroll.scrollTop + (rect.top - scrollRect.top) - navH;
   scroll.scrollTo({ top: top, behavior: 'smooth' });
   // 네비 버튼 active 동기화
   document.querySelectorAll('.dp-section-btn').forEach(function(b) { b.classList.remove('active'); });
-  event.target.classList.add('active');
-  // 접힌 그룹이면 펼치기
-  if (el.classList.contains('dp-card-group')) {
-    var body = el.querySelector('.dp-card-group-body');
-    var chev = el.querySelector('.dp-cg-chevron');
-    if (body && !body.classList.contains('open')) {
-      body.classList.add('open');
-      if (chev) chev.classList.add('open');
-    }
-  }
+  if (btn) btn.classList.add('active');
 }
 
 /* ── Mobile Sidebar Toggle ─────────────────────────────────── */

@@ -1327,14 +1327,26 @@ function renderStockRow(stock, rank) {
   // TopReason 태그 HTML
   const reasonHtml = _renderReasonTags(stock.TopReason);
 
+  // 증권사 컨센서스 목표가 HTML (IIFE 제거 — 500+ 종목 렌더 시 함수 생성 오버헤드 제거)
+  let brokerHtml;
+  if (stock.BrokerTarget) {
+    const bUp = stock.Price ? ((stock.BrokerTarget - stock.Price) / stock.Price) * 100 : null;
+    const bColor = bUp != null && bUp >= 0 ? 'var(--success)' : 'var(--destructive)';
+    const bPct = bUp != null ? (bUp >= 0 ? '+' : '') + fmt(bUp, 1) + '%' : '';
+    brokerHtml = `<div class="target-price">${fmtPrice(stock.BrokerTarget)}</div><div class="target-upside" style="color:${bColor}">${bPct}</div>`;
+  } else {
+    brokerHtml = '<div class="target-empty">컨센서스 없음</div>';
+  }
+
   const checked = _selectedStocks.has(stock.Ticker);
+  const t = esc(stock.Ticker);
   return `
-<tr onclick="openDetail('${esc(stock.Ticker)}')" data-ticker="${esc(stock.Ticker)}" style="cursor:pointer;">
-  <td class="center"><input type="checkbox" ${checked ? 'checked' : ''} onclick="toggleSelectStock('${esc(stock.Ticker)}', event)" style="cursor:pointer;width:16px;height:16px;accent-color:#3182F6;"></td>
+<tr onclick="openDetail('${t}')" data-ticker="${t}" style="cursor:pointer;">
+  <td class="center"><input type="checkbox" ${checked ? 'checked' : ''} onclick="toggleSelectStock('${t}', event)" style="cursor:pointer;width:16px;height:16px;accent-color:#3182F6;"></td>
   <td class="center"><span class="rank-cell ${rankClass}">${rank}</span></td>
-  <td class="name-cell" onmouseenter="showStockPopup('${esc(stock.Ticker)}', event)" onmouseleave="hideStockPopup()">
+  <td class="name-cell" onmouseenter="showStockPopup('${t}', event)" onmouseleave="hideStockPopup()">
     <span class="stock-name">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}${stock.GreedZone ? ` <span class="greed-badge" title="GreedZone 진입${stock.GreedZoneDays ? ' (' + stock.GreedZoneDays + '일)' : ''}${stock.GreedZoneEntry ? ' — 오늘 신규 진입!' : ''}">🟡 탐욕</span>` : ''}</span>
-    <span class="stock-code">${esc(stock.Ticker)}</span>
+    <span class="stock-code">${t}</span>
   </td>
   <td class="desc-cell">${esc(stock.Desc || '')}</td>
   <td><span class="sector-tag">${esc(stock.Sector || '—')}</span></td>
@@ -1351,7 +1363,7 @@ function renderStockRow(stock, rank) {
   <td class="right">${rsi}</td>
   <td class="right">${avgVol}</td>
   <td class="right">${marketCap}</td>
-  <td class="right" title="${stock.BrokerTargetSource ? esc(stock.BrokerTargetSource) : '증권사 컨센서스 없음'}">${stock.BrokerTarget ? (() => { const bUp = stock.Price ? ((stock.BrokerTarget - stock.Price) / stock.Price) * 100 : null; return `<div class="target-price">${fmtPrice(stock.BrokerTarget)}</div><div class="target-upside" style="color:${bUp != null && bUp >= 0 ? 'var(--success)' : 'var(--destructive)'}">${bUp != null ? (bUp >= 0 ? '+' : '') + fmt(bUp, 1) + '%' : ''}</div>`; })() : '<div class="target-empty">컨센서스 없음</div>'}</td>
+  <td class="right" title="${stock.BrokerTargetSource ? esc(stock.BrokerTargetSource) : '증권사 컨센서스 없음'}">${brokerHtml}</td>
   <td class="reason-cell">${reasonHtml}</td>
 </tr>`;
 }

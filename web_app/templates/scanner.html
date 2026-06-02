@@ -575,7 +575,7 @@
   </div>
 </div>
 
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" defer></script>
+<!-- socket.io: lazy-loaded on first chat open (45KB 초기 로드 제거) -->
 <!-- html2canvas: lazy-loaded on first capture (430KB 초기 로드 제거) -->
 <script src="/static/app.js?v={{ v_app_js }}" defer></script>
 <script>
@@ -686,19 +686,20 @@ document.addEventListener('click', function(e) {
   const announceBtn = document.getElementById('admin-announce-btn');
   const clearBtn = document.getElementById('admin-clear-btn');
   let myNick = '', isOpen = false, unread = 0, isAdmin = false;
+  let socket = null, _socketLoading = null;
 
-  // 토글은 socket과 무관하게 우선 등록 (socket.io 로드 실패해도 패널은 열림)
-  toggle.addEventListener('click', () => {
-    isOpen = !isOpen;
-    panel.classList.toggle('open', isOpen);
-    if (isOpen) { unread = 0; badge.style.display = 'none'; try { input.focus(); } catch(e){} try { scrollBottom(); } catch(e){} }
-  });
-
-  if (typeof io === 'undefined') {
-    console.warn('[chat] socket.io 로드 실패 — 패널은 열리지만 메시지 전송 불가');
-    return;
+  function _loadSocketIO() {
+    if (window.io) return Promise.resolve();
+    if (_socketLoading) return _socketLoading;
+    _socketLoading = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
+      s.onload = () => resolve();
+      s.onerror = () => { _socketLoading = null; reject(new Error('socket.io load failed')); };
+      document.head.appendChild(s);
+    });
+    return _socketLoading;
   }
-  const socket = io({ transports: ['websocket','polling'] });
 
   function fmtTime(ts) {
     const d = new Date(ts * 1000);
@@ -719,8 +720,8 @@ document.addEventListener('click', function(e) {
     let html = `<span class="nick${isMe?' me':''}">${escHtml(nick)}</span>${escHtml(msg)}<span class="time">${fmtTime(ts)}</span>`;
     html += `<span class="admin-actions"><button class="del-btn" title="삭제">&times;</button><button class="ban-btn" title="차단">🚫</button></span>`;
     el.innerHTML = html;
-    el.querySelector('.del-btn').onclick = () => socket.emit('admin_delete', { id: Number(el.dataset.id) });
-    el.querySelector('.ban-btn').onclick = () => socket.emit('admin_ban', { nick: el.dataset.nick });
+    el.querySelector('.del-btn').onclick = () => { if (socket) socket.emit('admin_delete', { id: Number(el.dataset.id) }); };
+    el.querySelector('.ban-btn').onclick = () => { if (socket) socket.emit('admin_ban', { nick: el.dataset.nick }); };
     msgs.appendChild(el);
     scrollBottom();
     if (!isOpen) { unread++; badge.textContent = unread > 99 ? '99+' : unread; badge.style.display = 'flex'; }
@@ -740,67 +741,63 @@ document.addEventListener('click', function(e) {
     scrollBottom();
   }
 
-  socket.on('init', (data) => {
-    myNick = data.nick;
-    onlineEl.textContent = data.online + '명 접속';
-    data.history.forEach(m => {
-      if (m.nick === '공지') addAnnounce(m.msg, m.ts);
-      else addMsg(m.nick, m.msg, m.ts, m.id);
-    });
-  });
-  socket.on('chat', (data) => { addMsg(data.nick, data.msg, data.ts, data.id); });
-  // 입장/퇴장 알림은 실제 대화를 덮어버리므로 메시지로 띄우지 않고 접속 수만 갱신.
-  // (차단/공지 등 다른 시스템 메시지는 그대로 표시)
-  socket.on('system', (data) => {
-    if (typeof data.online === 'number') onlineEl.textContent = data.online + '명 접속';
-    if (!/(입장|퇴장)$/.test(String(data.msg || ''))) addSys(data.msg);
-  });
-  socket.on('announce', (data) => { addAnnounce(data.msg, data.ts); });
-  socket.on('msg_deleted', (data) => {
-    const el = msgs.querySelector('.msg[data-id="' + data.id + '"]');
-    if (el) el.remove();
-  });
-  socket.on('chat_cleared', () => { msgs.innerHTML = ''; addSys('채팅이 초기화되었습니다.'); });
-  socket.on('banned', () => { addSys('관리자에 의해 채팅이 차단되었습니다.'); input.disabled = true; sendBtn.disabled = true; });
-  socket.on('unbanned', () => { addSys('채팅 차단이 해제되었습니다.'); input.disabled = false; sendBtn.disabled = false; });
-  socket.on('system_private', (data) => { addSys(data.msg); });
-  socket.on('admin_ok', (data) => {
-    if (data.ok) {
-      isAdmin = true;
-      adminBtn.textContent = '🔓';
-      adminBar.classList.add('open');
-      msgs.classList.add('admin-mode');
-      addSys('관리자 모드 활성화');
-    } else {
-      addSys('비밀번호가 틀립니다.');
-    }
-  });
-
-  adminBtn.addEventListener('click', () => {
-    if (isAdmin) {
-      isAdmin = false;
-      adminBtn.textContent = '🔒';
-      adminBar.classList.remove('open');
-      msgs.classList.remove('admin-mode');
+  function _initSocket() {
+    if (socket) return;
+    if (typeof io === 'undefined') {
+      console.warn('[chat] socket.io 로드 실패 — 패널은 열리지만 메시지 전송 불가');
       return;
     }
-    const pw = prompt('관리자 비밀번호:');
-    if (pw) socket.emit('admin_login', { pw });
-  });
-  announceBtn.addEventListener('click', () => {
-    const v = announceInput.value.trim();
-    if (!v) return;
-    socket.emit('admin_announce', { msg: v });
-    announceInput.value = '';
-  });
-  announceInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); announceBtn.click(); }
-  });
-  clearBtn.addEventListener('click', () => {
-    if (confirm('모든 채팅 기록을 삭제하시겠습니까?')) socket.emit('admin_clear', {});
+    socket = io({ transports: ['websocket','polling'] });
+
+    socket.on('init', (data) => {
+      myNick = data.nick;
+      onlineEl.textContent = data.online + '명 접속';
+      data.history.forEach(m => {
+        if (m.nick === '공지') addAnnounce(m.msg, m.ts);
+        else addMsg(m.nick, m.msg, m.ts, m.id);
+      });
+    });
+    socket.on('chat', (data) => { addMsg(data.nick, data.msg, data.ts, data.id); });
+    socket.on('system', (data) => {
+      if (typeof data.online === 'number') onlineEl.textContent = data.online + '명 접속';
+      if (!/(입장|퇴장)$/.test(String(data.msg || ''))) addSys(data.msg);
+    });
+    socket.on('announce', (data) => { addAnnounce(data.msg, data.ts); });
+    socket.on('msg_deleted', (data) => {
+      const el = msgs.querySelector('.msg[data-id="' + data.id + '"]');
+      if (el) el.remove();
+    });
+    socket.on('chat_cleared', () => { msgs.innerHTML = ''; addSys('채팅이 초기화되었습니다.'); });
+    socket.on('banned', () => { addSys('관리자에 의해 채팅이 차단되었습니다.'); input.disabled = true; sendBtn.disabled = true; });
+    socket.on('unbanned', () => { addSys('채팅 차단이 해제되었습니다.'); input.disabled = false; sendBtn.disabled = false; });
+    socket.on('system_private', (data) => { addSys(data.msg); });
+    socket.on('admin_ok', (data) => {
+      if (data.ok) {
+        isAdmin = true;
+        adminBtn.textContent = '🔓';
+        adminBar.classList.add('open');
+        msgs.classList.add('admin-mode');
+        addSys('관리자 모드 활성화');
+      } else {
+        addSys('비밀번호가 틀립니다.');
+      }
+    });
+  }
+
+  // 토글은 socket과 무관하게 우선 등록 (패널 열기/닫기는 항상 동작)
+  toggle.addEventListener('click', () => {
+    isOpen = !isOpen;
+    panel.classList.toggle('open', isOpen);
+    if (isOpen) {
+      unread = 0; badge.style.display = 'none';
+      try { input.focus(); } catch(e){}
+      try { scrollBottom(); } catch(e){}
+      if (!socket) _loadSocketIO().then(_initSocket).catch(e => console.warn('[chat]', e));
+    }
   });
 
   function send() {
+    if (!socket) return;
     const v = input.value.trim();
     if (!v) return;
     socket.emit('chat', { msg: v });
@@ -810,6 +807,32 @@ document.addEventListener('click', function(e) {
   sendBtn.addEventListener('click', send);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
 
+  adminBtn.addEventListener('click', () => {
+    if (isAdmin) {
+      isAdmin = false;
+      adminBtn.textContent = '🔒';
+      adminBar.classList.remove('open');
+      msgs.classList.remove('admin-mode');
+      return;
+    }
+    if (!socket) return;
+    const pw = prompt('관리자 비밀번호:');
+    if (pw) socket.emit('admin_login', { pw });
+  });
+  announceBtn.addEventListener('click', () => {
+    if (!socket) return;
+    const v = announceInput.value.trim();
+    if (!v) return;
+    socket.emit('admin_announce', { msg: v });
+    announceInput.value = '';
+  });
+  announceInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); announceBtn.click(); }
+  });
+  clearBtn.addEventListener('click', () => {
+    if (!socket) return;
+    if (confirm('모든 채팅 기록을 삭제하시겠습니까?')) socket.emit('admin_clear', {});
+  });
 })();
 </script>
 

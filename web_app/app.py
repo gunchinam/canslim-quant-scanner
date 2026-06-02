@@ -659,6 +659,11 @@ def _enrich_greedzone_batch(results: list) -> list:
     from greedzone import calc_greedzone
     import yfinance as yf
 
+    # 기존 캐시에 GreedZone은 있지만 Score가 없는 경우 → days 기반 간이 점수 보조
+    for r in results:
+        if r.get("GreedZone") and "GreedZoneScore" not in r:
+            r["GreedZoneScore"] = max(1, min(99, r.get("GreedZoneDays", 1) * 5 + 10))
+
     missing = [r for r in results if "GreedZone" not in r]
     if not missing:
         return results
@@ -694,10 +699,12 @@ def _enrich_greedzone_batch(results: list) -> list:
                 r["GreedZone"] = gz["in_zone"]
                 r["GreedZoneEntry"] = gz["new_entry"]
                 r["GreedZoneDays"] = gz["days_in_zone"]
+                r["GreedZoneScore"] = gz.get("greed_score", 0)
             else:
                 r["GreedZone"] = False
                 r["GreedZoneEntry"] = False
                 r["GreedZoneDays"] = 0
+                r["GreedZoneScore"] = 0
 
     logging.info("GreedZone batch done: %d enriched, %d in zone",
                  len(ticker_gz), sum(1 for g in ticker_gz.values() if g.get("in_zone")))

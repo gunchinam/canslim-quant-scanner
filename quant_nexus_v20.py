@@ -6428,10 +6428,12 @@ class QuantNexusApp:
                 result["GreedZone"]      = _gz["in_zone"]
                 result["GreedZoneEntry"] = _gz["new_entry"]
                 result["GreedZoneDays"]  = _gz["days_in_zone"]
+                result["GreedZoneScore"] = _gz.get("greed_score", 0)
             except Exception:
                 result["GreedZone"]      = False
                 result["GreedZoneEntry"] = False
                 result["GreedZoneDays"]  = 0
+                result["GreedZoneScore"] = 0
 
             # 한국 종목: 네이버 증권 재무 데이터로 보강
             if _is_kr:

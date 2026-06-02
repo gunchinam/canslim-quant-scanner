@@ -583,6 +583,7 @@ function _matchesFilter(s, f) {
     case 'strong': { const g = _stockGrade(s.TotalScore); return g === 'S' || g === 'A'; }
     case 'near_high':  return !!s.NearHighPass;
     case 'oversold':   return s.RSI != null && s.RSI < 30;
+    case 'greedzone':  return !!s.GreedZone;
     default: return true;
   }
 }
@@ -1323,7 +1324,7 @@ function renderStockRow(stock, rank) {
   <td class="center"><input type="checkbox" ${checked ? 'checked' : ''} onclick="toggleSelectStock('${esc(stock.Ticker)}', event)" style="cursor:pointer;width:16px;height:16px;accent-color:#3182F6;"></td>
   <td class="center"><span class="rank-cell ${rankClass}">${rank}</span></td>
   <td class="name-cell" onmouseenter="showStockPopup('${esc(stock.Ticker)}', event)" onmouseleave="hideStockPopup()">
-    <span class="stock-name">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}</span>
+    <span class="stock-name">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}${stock.GreedZone ? ` <span class="greed-badge" title="GreedZone 진입${stock.GreedZoneDays ? ' (' + stock.GreedZoneDays + '일)' : ''}${stock.GreedZoneEntry ? ' — 오늘 신규 진입!' : ''}">🟡 탐욕</span>` : ''}</span>
     <span class="stock-code">${esc(stock.Ticker)}</span>
   </td>
   <td class="desc-cell">${esc(stock.Desc || '')}</td>

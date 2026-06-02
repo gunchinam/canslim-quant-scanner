@@ -465,6 +465,11 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
             # Phase-3: moat 주입 후 투기주 졸업 재평가
             from speculative_themes import apply_speculative_correction as _spec_reeval_batch
             _spec_reeval_batch(results)
+            # GreedZone batch enrichment
+            try:
+                results = _enrich_greedzone_batch(results)
+            except Exception as _e:
+                logging.warning("background GreedZone enrichment failed: %s", _e)
             # 스캔 결과 전체 캐시 갱신 (Breakdown 제거 + 사전 압축)
             if results:
                 _cached_results = _strip_heavy(results)
@@ -623,6 +628,56 @@ def _populate_sector_caches(market: str, strategy: str, results: list, ts: int) 
     logging.info("%s sector-cache populated: %d sectors", market, len(by_sector))
 
 
+def _enrich_greedzone_batch(results: list) -> list:
+    """GreedZone 필드가 없는 결과에 batch yf.download()로 GreedZone을 주입한다."""
+    from greedzone import calc_greedzone
+    import yfinance as yf
+
+    missing = [r for r in results if "GreedZone" not in r]
+    if not missing:
+        return results
+
+    tickers = [r["Ticker"] for r in missing]
+    logging.info("GreedZone batch enrichment: %d tickers", len(tickers))
+
+    # 200개씩 배치로 다운로드 (rate-limit 완화)
+    BATCH = 200
+    ticker_gz: dict[str, dict] = {}
+    for i in range(0, len(tickers), BATCH):
+        batch = tickers[i:i + BATCH]
+        try:
+            data = yf.download(batch, period="1y", group_by="ticker",
+                               progress=False, threads=True, auto_adjust=True)
+            for t in batch:
+                try:
+                    hist = data[t].dropna() if len(batch) > 1 else data.dropna()
+                    if len(hist) >= 182:
+                        gz = calc_greedzone(hist, low_period=112, stdev_period=50)
+                        ticker_gz[t] = gz
+                except Exception:
+                    pass
+        except Exception as e:
+            logging.warning("GreedZone batch download failed (batch %d): %s", i, e)
+
+    # 결과에 주입
+    for r in results:
+        t = r.get("Ticker", "")
+        if "GreedZone" not in r:
+            gz = ticker_gz.get(t)
+            if gz:
+                r["GreedZone"] = gz["in_zone"]
+                r["GreedZoneEntry"] = gz["new_entry"]
+                r["GreedZoneDays"] = gz["days_in_zone"]
+            else:
+                r["GreedZone"] = False
+                r["GreedZoneEntry"] = False
+                r["GreedZoneDays"] = 0
+
+    logging.info("GreedZone batch done: %d enriched, %d in zone",
+                 len(ticker_gz), sum(1 for g in ticker_gz.values() if g.get("in_zone")))
+    return results
+
+
 def _warmup_fill_cache(market: str) -> None:
     """prefer_cache=True로 pickle에서 in-memory cache를 빠르게 채운다 (quick-warm pass)."""
     try:
@@ -648,6 +703,11 @@ def _warmup_fill_cache(market: str) -> None:
                     logging.info("KR quick-warm: naver realtime overlay applied")
                 except Exception as _e:
                     logging.warning("KR quick-warm naver overlay failed: %s", _e)
+            # GreedZone batch enrichment — pickle 캐시에 없는 필드를 yf.download() 일괄 주입
+            try:
+                results = _enrich_greedzone_batch(results)
+            except Exception as _e:
+                logging.warning("%s GreedZone enrichment failed: %s", market, _e)
             results = _strip_heavy(results)
             ts = int(time.time())
             _store_scan_cache((market, "BALANCED", ""), ts, results)
@@ -712,6 +772,10 @@ def _kr_warmup_loop(interval_sec: int = 1800, initial_delay: float = 0.0) -> Non
                                 results = _override_kr_day_chg(results)
                             except Exception as _e:
                                 logging.warning("KR slow-refresh naver overlay failed: %s", _e)
+                        try:
+                            results = _enrich_greedzone_batch(results)
+                        except Exception as _e:
+                            logging.warning("KR slow-refresh GreedZone enrichment failed: %s", _e)
                         results = _strip_heavy(results)
                         ts = int(time.time())
                         _store_scan_cache(("KR", "BALANCED", ""), ts, results)
@@ -845,6 +909,10 @@ def _us_warmup_loop(interval_sec: int = 1800) -> None:
                             results = _annotate_one_liners(results)
                         except Exception as _e:
                             logging.debug("silent except (app.py): %s", _e)
+                        try:
+                            results = _enrich_greedzone_batch(results)
+                        except Exception as _e:
+                            logging.warning("US slow-refresh GreedZone enrichment failed: %s", _e)
                         results = _strip_heavy(results)
                         ts = int(time.time())
                         _store_scan_cache(("US", "BALANCED", ""), ts, results)

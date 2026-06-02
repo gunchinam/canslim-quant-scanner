@@ -112,6 +112,7 @@ import valuation_engine
 from entry_pricing import strong_entry_floor as _strong_entry_floor
 from us_company_info import US_COMPANY_INFO as _US_COMPANY_INFO
 from kr_company_info import KR_COMPANY_INFO as _KR_COMPANY_INFO
+from greedzone import calc_greedzone as _calc_greedzone
 
 # ─── 투자지주사 보유지분 테이블 (NAV-할인율 평가용) ──────────────────────
 # 투자지주사는 실적/DCF가 아니라 보유 상장지분 시가총액(NAV)에 지주사
@@ -6417,6 +6418,17 @@ class QuantNexusApp:
                 "_DivYield":        _normalize_div_yield(info.get("dividendYield")),
                 "_AvgVol20":        float(hist["Volume"].tail(20).mean()) if len(hist) >= 20 else 0.0,
                 "_AvgDollarVol20":  float((hist["Close"] * hist["Volume"]).tail(20).mean()) if len(hist) >= 20 else 0.0}
+
+            # ── GreedZone 계산 (Zeiierman Pine Script 서버측 재구현) ──
+            try:
+                _gz = _calc_greedzone(hist, low_period=112, stdev_period=50)
+                result["GreedZone"]      = _gz["in_zone"]
+                result["GreedZoneEntry"] = _gz["new_entry"]
+                result["GreedZoneDays"]  = _gz["days_in_zone"]
+            except Exception:
+                result["GreedZone"]      = False
+                result["GreedZoneEntry"] = False
+                result["GreedZoneDays"]  = 0
 
             # 한국 종목: 네이버 증권 재무 데이터로 보강
             if _is_kr:

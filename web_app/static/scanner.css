@@ -1446,6 +1446,16 @@ td.score-col {
   font-size: 14px;
 }
 
+.load-more-btn { text-align: center; padding: 12px; }
+.load-more-btn button, .load-more-btn-inner {
+  background: var(--surface-subtle); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 24px; font-size: 13px; color: var(--text-secondary);
+  cursor: pointer; transition: background .15s;
+}
+.load-more-btn button:hover, .load-more-btn-inner:hover {
+  background: var(--primary); color: #fff; border-color: var(--primary);
+}
+
 /* ── Game-style Loading Screen ────────────────────────────── */
 .scan-loading {
   padding: 60px 24px 48px;

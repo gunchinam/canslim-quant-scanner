@@ -1271,8 +1271,63 @@ function renderStockTable(stocks) {
       })
       .map(x => x.s);
   }
-  _renderHtmlInBatches(tbody, view, renderStockRow, 30, 200, renderToken);
-  _updateMobileList(view, null, renderToken);
+  // 보이는 뷰만 렌더링 — 데스크톱/모바일 중복 렌더링 제거 (1400종목 × 2 → × 1)
+  // 초기 100개만 렌더링 → "더 보기" 버튼으로 나머지 로드 (DOM 부하 93% 절감)
+  const _INITIAL_CAP = 100;
+  const capped = view.length > _INITIAL_CAP ? view.slice(0, _INITIAL_CAP) : view;
+  const remaining = view.length - capped.length;
+
+  if (window.innerWidth <= 768) {
+    tbody.innerHTML = '';
+    _updateMobileList(capped, null, renderToken);
+    if (remaining > 0) {
+      const mEl = document.getElementById('mobile-stock-list');
+      if (mEl) {
+        const btn = document.createElement('div');
+        btn.className = 'load-more-btn';
+        btn.innerHTML = `<button onclick="this.parentElement.remove(); _renderAllStocks()">나머지 ${remaining}개 더 보기</button>`;
+        mEl.appendChild(btn);
+      }
+    }
+  } else {
+    _renderHtmlInBatches(tbody, view.slice(0, _INITIAL_CAP), renderStockRow, 30, 50, renderToken);
+    if (remaining > 0) {
+      _scheduleDeferredRender(() => {
+        if (renderToken !== _renderToken) return;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="${_colCount()}" class="center" style="padding:12px;">
+          <button class="load-more-btn-inner" onclick="this.closest('tr').remove(); _renderAllStocks()">나머지 ${remaining}개 더 보기</button>
+        </td>`;
+        tbody.appendChild(tr);
+      });
+    }
+  }
+  // 전체 뷰 저장 (더 보기 클릭 시 사용)
+  window._pendingFullView = remaining > 0 ? view : null;
+  window._pendingRenderToken = renderToken;
+}
+
+// "더 보기" 클릭 시 나머지 종목 렌더링
+function _renderAllStocks() {
+  const view = window._pendingFullView;
+  const token = window._pendingRenderToken;
+  if (!view || token !== _renderToken) return;
+  window._pendingFullView = null;
+  const _CAP = 100;
+  const rest = view.slice(_CAP);
+  if (window.innerWidth <= 768) {
+    const mEl = document.getElementById('mobile-stock-list');
+    if (mEl) _renderHtmlInBatches(mEl, rest, renderMobileCard, 15, 30, token);
+  } else {
+    const tbody = document.getElementById('stock-list');
+    if (tbody) {
+      const html = rest.map((item, i) => renderStockRow(item, _CAP + i + 1)).join('');
+      // 배치로 분할 삽입
+      const frag = document.createElement('tbody');
+      frag.innerHTML = html;
+      while (frag.firstChild) tbody.appendChild(frag.firstChild);
+    }
+  }
 }
 
 function _deltaBadge(stock) {
@@ -1376,7 +1431,7 @@ function _updateMobileList(view, emptyMsg, renderToken) {
     el.innerHTML = `<div class="mobile-stock-list-msg">${emptyMsg || '결과 없음'}</div>`;
     return;
   }
-  _renderHtmlInBatches(el, view, renderMobileCard, 20, 100, token);
+  _renderHtmlInBatches(el, view, renderMobileCard, 15, 30, token);
 }
 
 // Mobile override: clearer hierarchy and lighter information density on small screens.

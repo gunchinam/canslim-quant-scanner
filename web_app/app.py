@@ -706,6 +706,12 @@ def _kr_warmup_loop(interval_sec: int = 1800, initial_delay: float = 0.0) -> Non
                             results = _annotate_one_liners(results)
                         except Exception as _e:
                             logging.debug("silent except (app.py): %s", _e)
+                        # yfinance KR은 장중 전일 종가로 고착 → 네이버 실시간으로 교정
+                        if _is_kr_market_open_window():
+                            try:
+                                results = _override_kr_day_chg(results)
+                            except Exception as _e:
+                                logging.warning("KR slow-refresh naver overlay failed: %s", _e)
                         results = _strip_heavy(results)
                         ts = int(time.time())
                         _store_scan_cache(("KR", "BALANCED", ""), ts, results)

@@ -701,33 +701,36 @@ def _warmup_fill_cache(market: str) -> None:
                 results = _annotate_one_liners(results)
             except Exception as _e:
                 logging.debug("silent except (app.py): %s", _e)
-            # KR 장중이면 네이버 실시간 시세로 Price/DayChg 즉시 교체
-            if market == "KR" and _is_kr_market_open_window():
-                try:
-                    results = _override_kr_day_chg(results)
-                    logging.info("KR quick-warm: naver realtime overlay applied")
-                except Exception as _e:
-                    logging.warning("KR quick-warm naver overlay failed: %s", _e)
-            # 캐시 즉시 저장 — GreedZone 없이도 첫 API 응답 즉시 가능
-            _full_results = results  # GreedZone BG용 원본 보존
+            # 캐시 즉시 저장 — 네이버 오버레이/GreedZone 없이도 첫 API 응답 즉시 가능
             results = _strip_heavy(results)
             ts = int(time.time())
             _store_scan_cache((market, "BALANCED", ""), ts, results)
             _populate_sector_caches(market, "BALANCED", results, ts)
             logging.info("%s quick-warm done: %d tickers (from pickle)", market, len(results))
-            # GreedZone batch enrichment — BG에서 yf.download() 후 캐시 갱신
-            def _bg_greedzone(_res=_full_results, _mkt=market):
+            # 네이버 실시간 + GreedZone — BG에서 순차 실행 후 캐시 갱신
+            def _bg_enrich(_res=list(results), _mkt=market):
                 try:
-                    enriched = _enrich_greedzone_batch(_res)
-                    if enriched:
-                        _s = _strip_heavy(enriched)
+                    # KR 장중이면 네이버 실시간 시세로 Price/DayChg 교체
+                    if _mkt == "KR" and _is_kr_market_open_window():
+                        try:
+                            _override_kr_day_chg(_res)
+                            logging.info("KR quick-warm: naver realtime overlay applied (bg)")
+                        except Exception as _e:
+                            logging.warning("KR quick-warm naver overlay failed: %s", _e)
+                    # GreedZone batch enrichment
+                    try:
+                        _res = _enrich_greedzone_batch(_res)
+                    except Exception as _e:
+                        logging.warning("%s GreedZone bg failed: %s", _mkt, _e)
+                    if _res:
+                        _s = _strip_heavy(_res)
                         _t = int(time.time())
                         _store_scan_cache((_mkt, "BALANCED", ""), _t, _s)
                         _populate_sector_caches(_mkt, "BALANCED", _s, _t)
-                        logging.info("%s GreedZone bg done", _mkt)
+                        logging.info("%s bg enrich done", _mkt)
                 except Exception as _e:
-                    logging.warning("%s GreedZone bg failed: %s", _mkt, _e)
-            threading.Thread(target=_bg_greedzone, daemon=True, name=f"gz-warm-{market}").start()
+                    logging.warning("%s bg enrich failed: %s", _mkt, _e)
+            threading.Thread(target=_bg_enrich, daemon=True, name=f"enrich-{market}").start()
             # 상위 20개 4축 차트 선제 생성 — 첫 클릭 즉시 표시 (matplotlib 직렬화로 단일 스레드)
             _top20 = sorted(results, key=lambda r: r.get("TotalScore") or 0, reverse=True)[:20]
             def _bg_4ax_warm(_tickers=_top20, _mkt=market):

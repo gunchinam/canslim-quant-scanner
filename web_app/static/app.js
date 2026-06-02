@@ -4262,7 +4262,7 @@ function _shareCardScoreColor(score) {
   return '#F04452';
 }
 
-function generateShareCard() {
+async function generateShareCard() {
   if (_selectedStocks.size === 0) {
     alert('공유할 종목을 체크박스로 선택해주세요.');
     return;
@@ -4340,6 +4340,7 @@ function generateShareCard() {
   const renderArea = document.getElementById('share-card-render');
   renderArea.innerHTML = cardHtml;
 
+  await _ensureHtml2Canvas();
   html2canvas(renderArea.firstElementChild, {
     scale: 2,
     backgroundColor: '#ffffff',
@@ -4371,8 +4372,8 @@ function downloadShareCard() {
 
 // ── 종목 목록 캡쳐 ─────────────────────────────────────────────
 async function captureStockList() {
+  try { await _ensureHtml2Canvas(); } catch { alert('html2canvas 라이브러리 로드 실패'); return; }
   if (typeof html2canvas !== 'function') {
-    alert('html2canvas 라이브러리 로드 실패');
     return;
   }
   // 모바일이면 카드 리스트, 데스크탑이면 테이블 캡쳐
@@ -4492,6 +4493,7 @@ function closeShareModal() {
 // ── 디테일 패널 캡쳐 ───────────────────────────────────────────────────────
 
 async function captureDetail() {
+  try { await _ensureHtml2Canvas(); } catch { alert('html2canvas 로드 실패'); return; }
   const panel = document.getElementById('detail-panel');
   if (!panel) return;
 

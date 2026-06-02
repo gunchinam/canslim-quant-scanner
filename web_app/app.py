@@ -631,7 +631,7 @@ def _warmup_fill_cache(market: str) -> None:
             pass
         adapter_cls = _get_scan_adapter_cls()
         adapter = adapter_cls(market=market, strategy="BALANCED")
-        results = adapter.scan_all(prefer_cache=True, cache_only=True, max_workers=8)
+        results = adapter.scan_all(prefer_cache=True, cache_only=True, max_workers=20)
         if results:
             try:
                 results = _annotate_one_liners(results)
@@ -2802,7 +2802,7 @@ def _cold_start_live_scan(market: str) -> None:
     try:
         adapter_cls = _get_scan_adapter_cls()
         adapter = adapter_cls(market=market, strategy="BALANCED")
-        results = adapter.scan_all(prefer_cache=False, cache_only=False, max_workers=8)
+        results = adapter.scan_all(prefer_cache=False, cache_only=False, max_workers=16)
         if not results:
             return
         try:

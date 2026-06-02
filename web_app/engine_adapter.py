@@ -199,7 +199,7 @@ class ScanAdapter:
     def _log(self, msg: str) -> None:
         logging.debug("[ScanAdapter] %s", msg)
 
-    def _pre_build_scan_caches(self, tickers: list[str]) -> None:
+    def _pre_build_scan_caches(self, tickers: list[str], *, cache_only: bool = False) -> None:
         """스캔 루프 전 1회 실행 — F5(종목명 dict) + F2b(KR 재무 병렬 사전 로드)."""
         # F5: 종목명 사전 구축
         _kr_names_d = getattr(self, "KR_NAMES", {})
@@ -223,7 +223,8 @@ class ScanAdapter:
                 _name_pre[_nt] = _nn
         self._ticker_name_cache = _name_pre
         # F2b: KR 재무 데이터 사전 병렬 로드
-        if self._market == "KR":
+        # F2b: cache_only 모드에서는 네트워크 I/O 스킵 — quick-warm 속도 향상
+        if self._market == "KR" and not cache_only:
             _fetch_fund = _qn.QuantNexusApp._fetch_naver_fundamentals
             _kr_uncached = [
                 t for t in tickers
@@ -305,7 +306,7 @@ class ScanAdapter:
     def scan_sector(self, sector: str, *, max_workers: int = int(os.environ.get("SCAN_WORKERS", "8")), prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
         """특정 섹터 종목을 병렬 분석 후 TotalScore 내림차순 반환."""
         tickers = self._sectors.get(sector, [])
-        self._pre_build_scan_caches(tickers)
+        self._pre_build_scan_caches(tickers, cache_only=cache_only)
         results: list[dict] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
             futures = {
@@ -335,7 +336,7 @@ class ScanAdapter:
                     ticker_sector[t] = sector
 
         all_tickers = list(ticker_sector.keys())
-        self._pre_build_scan_caches(all_tickers)
+        self._pre_build_scan_caches(all_tickers, cache_only=cache_only)
         results: list[dict] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
             futures = {

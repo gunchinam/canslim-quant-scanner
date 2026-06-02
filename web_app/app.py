@@ -378,6 +378,10 @@ def _override_kr_day_chg(results: list) -> list:
             pct = q.get("change_pct")
             if pct is not None:
                 r["DayChg"] = float(pct) / 100.0
+            # 현재가도 실시간 반영 — pickle 캐시의 어제 종가를 오늘 시세로 교체
+            _p = q.get("price")
+            if _p is not None and _p > 0:
+                r["Price"] = float(_p)
         except Exception as _e:
             logging.debug("silent except (app.py): %s", _e)
         return r
@@ -433,7 +437,7 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
         try:
             adapter_cls = _get_scan_adapter_cls()
             adapter = adapter_cls(market=market, strategy=strategy)
-            results = adapter.scan_sector(sector, prefer_cache=True, cache_only=True) if sector else adapter.scan_all(prefer_cache=True, cache_only=True, max_workers=8)
+            results = adapter.scan_sector(sector, prefer_cache=True, cache_only=True) if sector else adapter.scan_all(prefer_cache=True, cache_only=True, max_workers=20)
             try:
                 import history
                 results = history.annotate_deltas(results, market)

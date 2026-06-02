@@ -3993,6 +3993,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => { loadMacro(); }, 800);
     setTimeout(() => { if (typeof _loadMacroStrip === 'function') _loadMacroStrip(currentMarket); }, 1200);
     setInterval(loadMacro, 15 * 60 * 1000);
+    // H5: 3분마다 스캔 자동 갱신 — 장중 주가 변동 반영
+    setInterval(() => { if (!document.hidden) runScan(); }, 3 * 60 * 1000);
   }
 });
 

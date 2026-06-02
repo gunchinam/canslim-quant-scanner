@@ -1387,14 +1387,15 @@ function renderMobileCard(stock, rank) {
   const chgPct   = (dayChg * 100).toFixed(2);
   const chgClass = dayChg > 0 ? 'chg-up' : dayChg < 0 ? 'chg-down' : 'chg-flat';
   const chgSign  = dayChg > 0 ? '+' : '';
+  const t = esc(stock.Ticker);
   return `
-<div class="stock-card" data-ticker="${esc(stock.Ticker)}" onclick="openDetail('${esc(stock.Ticker)}')">
+<div class="stock-card" data-ticker="${t}" onclick="openDetail('${t}')">
   <div class="stock-card-row1">
     <div class="stock-card-main">
       <span class="stock-card-rank">${rank}</span>
       <div class="stock-card-name">
         <span class="stock-card-name-main">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬</span>` : ''}</span>
-        <span class="stock-card-ticker">${esc(stock.Ticker)}${stock.Sector ? ` · ${esc(stock.Sector)}` : ''}</span>
+        <span class="stock-card-ticker">${t}${stock.Sector ? ` · ${esc(stock.Sector)}` : ''}</span>
       </div>
     </div>
     <div class="stock-card-meta">

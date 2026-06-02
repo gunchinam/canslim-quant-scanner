@@ -70,6 +70,21 @@ function _renderHtmlInBatches(container, items, renderItem, initialBatch, batchS
   _scheduleDeferredRender(appendBatch);
 }
 
+// html2canvas lazy-loader — 캡쳐/공유 카드 클릭 시에만 430KB 로드
+let _html2canvasLoading = null;
+function _ensureHtml2Canvas() {
+  if (window.html2canvas) return Promise.resolve();
+  if (_html2canvasLoading) return _html2canvasLoading;
+  _html2canvasLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = () => resolve();
+    s.onerror = () => { _html2canvasLoading = null; reject(new Error('html2canvas load failed')); };
+    document.head.appendChild(s);
+  });
+  return _html2canvasLoading;
+}
+
 function _wlKey(market) { return `scanner_watchlist_${market || currentMarket}`; }
 
 // 서버 영속화 워치리스트 + localStorage 폴백/마이그레이션
@@ -382,16 +397,12 @@ function onMarketChange(val) {
   currentMarket = val;
   currentSector = '';
   allStocks     = [];
-  loadWatchlist();
   _setSegActive('market-btn-group', val);
   loadSectors();
-  if (typeof _loadMacroStrip === 'function') _loadMacroStrip(val);
-  runScan();
-  return;
-  setStockListMsg('섹터를 선택하거나 스캔 버튼을 눌러주세요.');
-  setStatHTML('stat-total',  '—<span class="unit">개</span>');
-  setStatHTML('stat-strong', '—<span class="unit">개</span>');
-  setText('stat-sector', '전체');
+  runScan().then(() => {
+    loadWatchlist();
+    if (typeof _loadMacroStrip === 'function') _loadMacroStrip(val);
+  });
 }
 
 // 중첩 키 접근 ("Scores.BALANCED" → obj.Scores?.BALANCED)

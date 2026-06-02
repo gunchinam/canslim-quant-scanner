@@ -521,7 +521,8 @@ def _scan_cache_meta(market: str) -> tuple[int | None, str | None]:
         oldest_age_sec = 0.0
         newest_mtime = 0.0
         count = 0
-        for fn in os.listdir(cache_dir):
+        for entry in os.scandir(cache_dir):
+            fn = entry.name
             if not fn.endswith(".pkl"):
                 continue
             if market == "KR":
@@ -531,7 +532,7 @@ def _scan_cache_meta(market: str) -> tuple[int | None, str | None]:
                 if any(p in fn for p in ("_KS__", "_KQ__")):
                     continue
             try:
-                mt = os.path.getmtime(os.path.join(cache_dir, fn))
+                mt = entry.stat().st_mtime
             except OSError:
                 continue
             age = now - mt
@@ -557,12 +558,13 @@ _kr_warmup_started = False
 _kr_warmup_lock = threading.Lock()
 
 
-def _acquire_warmer_file_lock():
+def _acquire_warmer_file_lock(lock_path=None):
     """non-blocking 파일 잠금 획득. 성공 시 (file_handle, 'win'|'posix'), 실패 시 None.
     반환된 핸들은 워밍 종료까지 open 상태 유지 필요 (finally에서 release+close)."""
+    lock_path = lock_path or _KR_WARMUP_LOCK_PATH
     try:
-        os.makedirs(os.path.dirname(_KR_WARMUP_LOCK_PATH), exist_ok=True)
-        fh = open(_KR_WARMUP_LOCK_PATH, "a+b")
+        os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+        fh = open(lock_path, "a+b")
     except OSError as e:
         logging.warning("warmer lock open failed: %s", e)
         return None
@@ -706,16 +708,26 @@ def _warmup_fill_cache(market: str) -> None:
                     logging.info("KR quick-warm: naver realtime overlay applied")
                 except Exception as _e:
                     logging.warning("KR quick-warm naver overlay failed: %s", _e)
-            # GreedZone batch enrichment — pickle 캐시에 없는 필드를 yf.download() 일괄 주입
-            try:
-                results = _enrich_greedzone_batch(results)
-            except Exception as _e:
-                logging.warning("%s GreedZone enrichment failed: %s", market, _e)
+            # 캐시 즉시 저장 — GreedZone 없이도 첫 API 응답 즉시 가능
+            _full_results = results  # GreedZone BG용 원본 보존
             results = _strip_heavy(results)
             ts = int(time.time())
             _store_scan_cache((market, "BALANCED", ""), ts, results)
             _populate_sector_caches(market, "BALANCED", results, ts)
             logging.info("%s quick-warm done: %d tickers (from pickle)", market, len(results))
+            # GreedZone batch enrichment — BG에서 yf.download() 후 캐시 갱신
+            def _bg_greedzone(_res=_full_results, _mkt=market):
+                try:
+                    enriched = _enrich_greedzone_batch(_res)
+                    if enriched:
+                        _s = _strip_heavy(enriched)
+                        _t = int(time.time())
+                        _store_scan_cache((_mkt, "BALANCED", ""), _t, _s)
+                        _populate_sector_caches(_mkt, "BALANCED", _s, _t)
+                        logging.info("%s GreedZone bg done", _mkt)
+                except Exception as _e:
+                    logging.warning("%s GreedZone bg failed: %s", _mkt, _e)
+            threading.Thread(target=_bg_greedzone, daemon=True, name=f"gz-warm-{market}").start()
             # 상위 20개 4축 차트 선제 생성 — 첫 클릭 즉시 표시 (matplotlib 직렬화로 단일 스레드)
             _top20 = sorted(results, key=lambda r: r.get("TotalScore") or 0, reverse=True)[:20]
             def _bg_4ax_warm(_tickers=_top20, _mkt=market):
@@ -854,78 +866,43 @@ def _is_us_market_open_window() -> bool:
 
 
 def _us_warmup_loop(interval_sec: int = 1800) -> None:
-    """US 전체 스캔을 주기적으로 BG 실행. 파일잠금으로 multi-process duplication 방지.
-
-    장 닫혀 있을 땐 어차피 시세가 안 움직이니 외부 호출을 건너뛴다
-    (yfinance 호출 절감 + 라이브 로그 깔끔). 첫 실행만 캐시 채우기.
-    """
+    """US 전체 스캔을 주기적으로 BG 실행. 파일잠금으로 multi-process duplication 방지."""
     first_run = True
     while True:
-        handle = None
-        # 장 외 시간엔 스캔 자체를 스킵 (yfinance 호출 0).
-        # 단, 캐시가 아직 비어있는 첫 실행은 한 번 채워둔다.
         if not first_run and not _is_us_market_open_window():
             time.sleep(interval_sec)
             continue
-        try:
-            os.makedirs(os.path.dirname(_US_WARMUP_LOCK_PATH), exist_ok=True)
-            fh = open(_US_WARMUP_LOCK_PATH, "a+b")
-            locked = False
+        handle = _acquire_warmer_file_lock(_US_WARMUP_LOCK_PATH)
+        if handle is None:
+            logging.info("US warm-up skipped: another worker holds lock")
+        else:
             try:
-                if os.name == "nt":
-                    import msvcrt
+                if first_run:
+                    _warmup_fill_cache("US")
+                    first_run = False
+                logging.info("US warm-up started (slow-refresh)")
+                adapter_cls = _get_scan_adapter_cls()
+                adapter = adapter_cls(market="US", strategy="BALANCED")
+                _wm_workers = _get_config_int("WARMUP_WORKERS", 8, minimum=1, maximum=16)
+                results = adapter.scan_all(max_workers=_wm_workers)
+                logging.info("US warm-up done: %d tickers", len(results) if results else 0)
+                if results:
                     try:
-                        msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
-                        handle = (fh, "win")
-                        locked = True
-                    except OSError:
-                        fh.close()
-                else:
-                    import fcntl
+                        results = _annotate_one_liners(results)
+                    except Exception as _e:
+                        logging.debug("silent except (app.py): %s", _e)
                     try:
-                        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                        handle = (fh, "posix")
-                        locked = True
-                    except OSError:
-                        fh.close()
-            except Exception:
-                try:
-                    fh.close()
-                except Exception as _e:
-                    logging.debug("silent except (app.py): %s", _e)
-            if not locked:
-                logging.info("US warm-up skipped: another worker holds lock")
-            else:
-                try:
-                    # 첫 실행 시 quick-warm으로 캐시를 빠르게 채운 후 slow-refresh
-                    if first_run:
-                        _warmup_fill_cache("US")
-                        first_run = False
-                    logging.info("US warm-up started (slow-refresh)")
-                    adapter_cls = _get_scan_adapter_cls()
-                    adapter = adapter_cls(market="US", strategy="BALANCED")
-                    _wm_workers = _get_config_int("WARMUP_WORKERS", 8, minimum=1, maximum=16)
-                    results = adapter.scan_all(max_workers=_wm_workers)
-                    logging.info("US warm-up done: %d tickers", len(results) if results else 0)
-                    if results:
-                        try:
-                            results = _annotate_one_liners(results)
-                        except Exception as _e:
-                            logging.debug("silent except (app.py): %s", _e)
-                        try:
-                            results = _enrich_greedzone_batch(results)
-                        except Exception as _e:
-                            logging.warning("US slow-refresh GreedZone enrichment failed: %s", _e)
-                        results = _strip_heavy(results)
-                        ts = int(time.time())
-                        _store_scan_cache(("US", "BALANCED", ""), ts, results)
-                        _populate_sector_caches("US", "BALANCED", results, ts)
-                except Exception as e:
-                    logging.warning("US warm-up failed: %s", e)
-                finally:
-                    _release_warmer_file_lock(handle)
-        except Exception as e:
-            logging.warning("US warm-up loop error: %s", e)
+                        results = _enrich_greedzone_batch(results)
+                    except Exception as _e:
+                        logging.warning("US slow-refresh GreedZone enrichment failed: %s", _e)
+                    results = _strip_heavy(results)
+                    ts = int(time.time())
+                    _store_scan_cache(("US", "BALANCED", ""), ts, results)
+                    _populate_sector_caches("US", "BALANCED", results, ts)
+            except Exception as e:
+                logging.warning("US warm-up failed: %s", e)
+            finally:
+                _release_warmer_file_lock(handle)
         time.sleep(interval_sec)
 
 

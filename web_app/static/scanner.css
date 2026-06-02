@@ -207,7 +207,7 @@ html, body {
 .search-input {
   width: 100%;
   height: 34px;
-  padding: 0 12px 0 34px;
+  padding: 0 30px 0 34px;
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
   background: var(--input-background);
@@ -217,6 +217,28 @@ html, body {
   transition: border-color var(--duration-normal) var(--ease-default);
 }
 .search-input:focus { border-color: var(--brand); background: var(--card); }
+.search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.08);
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--duration-fast), transform var(--duration-fast);
+  padding: 0;
+}
+.search-clear:hover { background: rgba(0,0,0,0.16); transform: translateY(-50%) scale(1.1); }
+.search-clear[hidden] { display: none; }
 
 .btn-scan {
   height: 34px;

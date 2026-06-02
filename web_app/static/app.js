@@ -1679,9 +1679,31 @@ function initSearch() {
 
   inp.setAttribute('placeholder', '종목명 또는 티커 검색 (예: RF, 삼성, AAPL)');
   const box = _createSuggestBox(inp);
+  const clearBtn = document.getElementById('search-clear');
+
+  // X 버튼 가시성 토글
+  function _toggleClearBtn() {
+    if (clearBtn) clearBtn.hidden = !inp.value.trim();
+  }
+
+  // X 버튼 클릭 — 검색어만 초기화
+  if (clearBtn) {
+    clearBtn.addEventListener('mousedown', (e) => e.preventDefault()); // blur 방지
+    clearBtn.addEventListener('click', () => {
+      if (!inp.value) return;
+      inp.value = '';
+      clearTimeout(_searchTimer);
+      _hideSuggest();
+      _searchSelectedIdx = -1;
+      _toggleClearBtn();
+      inp.focus();
+      if (_searchBaseStocks().length) _refreshFilteredView();
+    });
+  }
 
   // 입력 중에는 자동완성만 — 스캐너 필터는 Enter/선택 시에만 적용 (속도 개선)
   inp.addEventListener('input', () => {
+    _toggleClearBtn();
     const q = inp.value.trim();
     // 입력이 비면 기존 필터도 해제
     if (q.length < 1) {

@@ -494,9 +494,10 @@ const _RUN_SCAN_MAX_RETRY = 4;            // 총 시도 5회 (초기 + 재시도
 const _RUN_SCAN_BACKOFF_MS = [2000, 4000, 8000, 12000];
 // 워밍업 응답(X-Warming-In-Progress)을 받을 때마다 재시도 — 무한 폴링을 막기 위해 캡.
 let _warmingRetries = 0;
-const _WARMING_MAX_RETRY = 6;             // 6회 × 15초 = 약 90초
+const _WARMING_MAX_RETRY = 12;            // 12회 × 5초 = 약 60초
 // 섹터 변경 race condition 가드: 늦게 도착한 stale 요청이 최신 요청 덮어쓰지 않게.
 let _scanToken = 0;
+let _lastAutoScanTs = 0;
 
 async function runScan() {
   const btn = document.getElementById('btn-scan');
@@ -541,7 +542,7 @@ async function runScan() {
       if (_warmingRetries < _WARMING_MAX_RETRY) {
         _warmingRetries += 1;
         setStockListMsg(`데이터 준비 중… 자동으로 불러옵니다 (${_warmingRetries}/${_WARMING_MAX_RETRY})`);
-        setTimeout(() => { if (!document.hidden) runScan(); }, 15000);
+        setTimeout(() => { if (!document.hidden) runScan(); }, 5000);
       } else {
         // 캡 도달 — 명시적 실패 안내, 카운터 리셋(사용자가 직접 다시 시도하면 재개).
         setStockListMsg('서버 준비 지연 중임. 잠시 후 새로고침 ㄱㄱ');
@@ -1262,7 +1263,7 @@ function renderStockTable(stocks) {
       })
       .map(x => x.s);
   }
-  _renderHtmlInBatches(tbody, view, renderStockRow, 100, 200, renderToken);
+  _renderHtmlInBatches(tbody, view, renderStockRow, 30, 200, renderToken);
   _updateMobileList(view, null, renderToken);
 }
 
@@ -1355,7 +1356,7 @@ function _updateMobileList(view, emptyMsg, renderToken) {
     el.innerHTML = `<div class="mobile-stock-list-msg">${emptyMsg || '결과 없음'}</div>`;
     return;
   }
-  _renderHtmlInBatches(el, view, renderMobileCard, 50, 100, token);
+  _renderHtmlInBatches(el, view, renderMobileCard, 20, 100, token);
 }
 
 // Mobile override: clearer hierarchy and lighter information density on small screens.
@@ -3981,21 +3982,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   } else {
     // ── 스캐너 페이지
-    loadWatchlist();
     initFilterChips();
     initSearch();
     initOneLinerFilter();
     initSort();
-      updateCompareActions();
+    updateCompareActions();
     document.getElementById('btn-scan')?.addEventListener('click', runScan);
+    // 핵심 fetch를 최우선 실행: runScan → scan 완료 후 나머지 로드
     loadSectors();
-    runScan();
-    // H4: macro 호출은 첫 paint 이후로 지연 — DOMContentLoaded 동시 fetch 6개 한도 경합 회피
-    setTimeout(() => { loadMacro(); }, 800);
-    setTimeout(() => { if (typeof _loadMacroStrip === 'function') _loadMacroStrip(currentMarket); }, 1200);
+    runScan().then(() => {
+      loadWatchlist();
+      loadMacro();
+      if (typeof _loadMacroStrip === 'function') _loadMacroStrip(currentMarket);
+    });
     setInterval(loadMacro, 15 * 60 * 1000);
-    // H5: 3분마다 스캔 자동 갱신 — 장중 주가 변동 반영
-    setInterval(() => { if (!document.hidden) runScan(); }, 3 * 60 * 1000);
+    // 장중에만 3분 갱신, 장 외에는 30분 간격 — 불필요한 네트워크/서버 부하 방지
+    setInterval(() => {
+      if (document.hidden) return;
+      const h = new Date().getHours();
+      const isKrOpen = (h >= 9 && h < 16);       // KST 09:00-15:30
+      const isUsOpen = (h >= 22 || h < 7);        // KST 22:00-07:00
+      const interval = (isKrOpen || isUsOpen) ? 3 : 30;
+      if ((Date.now() - (_lastAutoScanTs || 0)) >= interval * 60 * 1000) {
+        _lastAutoScanTs = Date.now();
+        runScan();
+      }
+    }, 60 * 1000);  // 1분마다 체크, 실제 갱신은 조건부
   }
 });
 

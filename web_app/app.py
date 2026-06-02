@@ -12,12 +12,10 @@ import base64
 import json
 import html
 import logging
-import subprocess
 import threading
 import queue
 import time
 import urllib.request
-import urllib.parse
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -86,6 +84,7 @@ def _inject_asset_versions():
     return {
         "v_app_js": _asset_mtime("app.js"),
         "v_theme_css": _asset_mtime("theme.css"),
+        "v_scanner_css": _asset_mtime("scanner.css"),
     }
 
 
@@ -400,6 +399,7 @@ def _render_static_template(name: str, replacements: dict[str, str] | None = Non
         content
         .replace("{{ v_app_js }}", _asset_mtime("app.js"))
         .replace("{{ v_theme_css }}", _asset_mtime("theme.css"))
+        .replace("{{ v_scanner_css }}", _asset_mtime("scanner.css"))
     )
     for src, dst in (replacements or {}).items():
         content = content.replace(src, dst)
@@ -2861,7 +2861,6 @@ def _warmup_search_index():
     except Exception as _e:
         logging.warning("search index warmup failed: %s", _e)
 
-threading.Thread(target=_warmup_search_index, daemon=True, name="search-idx-warmup").start()
 
 
 def _warmup_moat_cache():
@@ -2877,8 +2876,7 @@ def _warmup_moat_cache():
     except Exception:
         pass
 
-
-threading.Thread(target=_warmup_moat_cache, daemon=True, name="moat-cache-warmup").start()
+# search-idx + moat-cache는 _cold_start_fill 완료 후 단계적으로 실행됨
 
 
 def _cold_start_live_scan(market: str) -> None:
@@ -2941,6 +2939,10 @@ def _cold_start_fill():
         t.start()
     for t in threads:
         t.join()
+
+    # 캐시 채움 완료 후 2차 초기화 — 서버 응답 가능 시점을 앞당김
+    _warmup_search_index()
+    _warmup_moat_cache()
 
 
 threading.Thread(target=_cold_start_fill, daemon=True, name="cold-start-fill").start()

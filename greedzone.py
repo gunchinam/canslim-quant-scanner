@@ -45,7 +45,8 @@ def calc_greedzone(
     low_period: int = 112,
     stdev_period: int = 50,
     matype: str = "WMA",
-) -> dict:
+    _return_series: bool = False,
+) -> "dict | pd.Series":
     """GreedZone 지표를 계산한다.
 
     Parameters
@@ -96,6 +97,9 @@ def calc_greedzone(
 
     # ── Greed Zone 조건 ──
     zone = (gz1 < gz1_limit) & (gz2 > gz2_limit)
+
+    if _return_series:
+        return zone
 
     # 현재 상태
     in_zone = bool(zone.iloc[-1]) if not zone.empty else False

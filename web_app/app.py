@@ -175,14 +175,35 @@ _scan_results_cache_lock = threading.Lock()
 
 # 스캔 JSON 응답에서 제거할 무거운 필드 (상세 패널은 /api/ticker 에서 별도 제공)
 # Breakdown: 점수 분해 배열 (detail에서 /api/ticker로 재취득)
-# Scores: 멀티 전략 점수 dict (Tkinter 전용, web frontend 미사용 — _sortKey='TotalScore' 직접 사용)
-# Reason: 한줄 사유 문자열 (web frontend 미사용 — 한줄평은 OneLiner/OneLinerData 사용)
-_SCAN_STRIP_FIELDS: frozenset = frozenset({"Breakdown", "Scores", "Reason"})
+# Scores: 멀티 전략 점수 dict (Tkinter 전용, web frontend 미사용)
+# Reason: 한줄 사유 문자열 (web frontend 미사용)
+# About: 기업 설명 (~300자/종목, 상세 패널에서만 사용)
+_SCAN_STRIP_FIELDS: frozenset = frozenset({"Breakdown", "Scores", "Reason", "About"})
+# EntryPlan 서브필드 중 리스트 뷰에서 사용되는 것만 보존 (나머지는 /api/ticker에서 제공)
+_ENTRY_PLAN_KEEP: frozenset = frozenset({
+    "entry", "entry_discount", "atr_pct", "as_of_ts", "headline_action",
+    "current", "stop", "t1", "t2", "rr", "rr_now",
+})
+# MoatData 서브필드 중 리스트 뷰 미사용 (scores=111B/종목, 상세 패널에서만 사용)
+_MOAT_DATA_STRIP: frozenset = frozenset({"scores", "evidence_source", "story_risk"})
 
 def _strip_heavy(rows: list) -> list:
-    if not _SCAN_STRIP_FIELDS or not rows:
+    if not rows:
         return rows
-    return [{k: v for k, v in r.items() if k not in _SCAN_STRIP_FIELDS} if isinstance(r, dict) else r for r in rows]
+    out = []
+    for r in rows:
+        if not isinstance(r, dict):
+            out.append(r)
+            continue
+        d = {k: v for k, v in r.items() if k not in _SCAN_STRIP_FIELDS}
+        ep = d.get("EntryPlan")
+        if isinstance(ep, dict):
+            d["EntryPlan"] = {k: v for k, v in ep.items() if k in _ENTRY_PLAN_KEEP}
+        md = d.get("MoatData")
+        if isinstance(md, dict):
+            d["MoatData"] = {k: v for k, v in md.items() if k not in _MOAT_DATA_STRIP}
+        out.append(d)
+    return out
 
 # ── 스캔 응답 사전 압축 캐시 — cache hit 시 재직렬화/재압축 제거 ──
 # jsonify+flask_compress(brotli/gzip) 는 5.5MB 응답에 2~4s 소요 → 1회만 실행, 이후 bytes 직접 서빙

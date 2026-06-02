@@ -641,6 +641,13 @@ def _warmup_fill_cache(market: str) -> None:
                 results = _annotate_one_liners(results)
             except Exception as _e:
                 logging.debug("silent except (app.py): %s", _e)
+            # KR 장중이면 네이버 실시간 시세로 Price/DayChg 즉시 교체
+            if market == "KR" and _is_kr_market_open_window():
+                try:
+                    results = _override_kr_day_chg(results)
+                    logging.info("KR quick-warm: naver realtime overlay applied")
+                except Exception as _e:
+                    logging.warning("KR quick-warm naver overlay failed: %s", _e)
             results = _strip_heavy(results)
             ts = int(time.time())
             _store_scan_cache((market, "BALANCED", ""), ts, results)

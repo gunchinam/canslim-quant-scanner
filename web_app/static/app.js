@@ -394,9 +394,6 @@ function onMarketChange(val) {
   setText('stat-sector', '전체');
 }
 
-// 전략 토글 제거됨 — 5개 전략 점수를 한 번에 표시하고 컬럼 헤더 클릭으로 정렬
-function onStrategyChange(_val) { /* deprecated */ }
-
 // 중첩 키 접근 ("Scores.BALANCED" → obj.Scores?.BALANCED)
 function _getByPath(obj, path) {
   if (!obj || !path) return undefined;
@@ -3646,53 +3643,6 @@ function _renderUSInsight(container, data) {
   container.innerHTML = html;
 }
 
-// ── AgentQuant 레짐/진입 신호 ────────────────────────────────────────
-
-async function loadAgentQuant(ticker) {
-  const wrap = document.getElementById('aq-wrap');
-  if (!wrap) return;
-  const p = new URLSearchParams({ market: currentMarket });
-  try {
-    const res = await fetch(`/api/regime/${encodeURIComponent(ticker)}?${p}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    const stock = data.stock || {};
-    const market = data.market || {};
-    if (!stock.score && !market.label) return;
-    wrap.style.display = '';
-
-    setText('aq-score', stock.score != null ? stock.score.toFixed(0) : '—');
-    setText('aq-icon', stock.icon || '⚪');
-
-    const badge = document.getElementById('aq-verdict-badge');
-    if (badge && stock.verdict_kr) {
-      badge.textContent = stock.verdict_kr;
-      const color = stock.verdict === 'BUY' ? '#16A34A'
-                  : stock.verdict === 'ACCUMULATE' ? '#F59E0B'
-                  : stock.verdict === 'AVOID' ? '#DC2626'
-                  : 'var(--text-secondary)';
-      badge.style.color = color;
-      badge.style.background = color === 'var(--text-secondary)' ? 'var(--bg-tertiary)' : (color + '22');
-    }
-
-    setText('aq-market-label', market.label || '—');
-    setText('aq-vix-pct', market.vix_percentile_252d != null
-      ? `${market.vix_percentile_252d.toFixed(0)}%ile (${(market.vix_level||0).toFixed(1)})`
-      : '—');
-    setText('aq-rsi-macd', stock.rsi != null
-      ? `RSI ${stock.rsi.toFixed(0)} · MACDh ${(stock.macd_hist||0).toFixed(3)}`
-      : '—');
-
-    const rwrap = document.getElementById('aq-reasons');
-    if (rwrap && Array.isArray(stock.reasons)) {
-      rwrap.innerHTML = stock.reasons.map(r =>
-        `<span style="padding:2px 8px;border:1px solid var(--border);border-radius:100px;background:var(--bg-tertiary);">${esc(r)}</span>`
-      ).join('');
-    }
-  } catch (e) {
-    console.debug('loadAgentQuant:', e);
-  }
-}
 
 
 // ── 증권사 컨센서스 상세 로딩 ─────────────────────────────────────────

@@ -36,7 +36,10 @@ warnings.filterwarnings("ignore", message=".*parseString.*")
 warnings.filterwarnings("ignore", message=".*resetCache.*")
 warnings.filterwarnings("ignore", message=".*enablePackrat.*")
 
+_HEADLESS = __import__("os").environ.get("QN_HEADLESS", "").strip().lower() in ("1", "true", "yes")
 try:
+    if _HEADLESS:
+        raise ImportError("headless mode — skip tkinter")
     import tkinter as tk
     from tkinter import messagebox, ttk
     _TK_AVAILABLE = True

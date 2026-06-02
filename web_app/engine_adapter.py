@@ -237,17 +237,9 @@ class ScanAdapter:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=12) as _nex:
                     list(_nex.map(lambda t: _fetch_fund(self, t), _kr_uncached))
 
-    def _fetch_naver_target(self, ticker: str):
-        """(DEPRECATED) DCF 목표가로 대체됨 — 호환성 유지용."""
-        return _qn.QuantNexusApp._fetch_naver_target(self, ticker)
-
     def _fetch_naver_fundamentals(self, ticker: str):
         """네이버 재무 데이터 — 원본 엔진 메서드 위임."""
         return _qn.QuantNexusApp._fetch_naver_fundamentals(self, ticker)
-
-    def _save_naver_cache(self):
-        """(DEPRECATED) DCF 목표가로 대체됨 — 호환성 유지용."""
-        _qn.QuantNexusApp._save_naver_cache(self)
 
     def _save_naver_fund_cache(self):
         """네이버 재무 캐시 저장 — 원본 엔진 메서드 위임."""

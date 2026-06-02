@@ -19,6 +19,9 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+# 웹앱 모드: tkinter GUI 스킵 — quant_nexus_v20 import 0.3~1초 단축
+os.environ.setdefault("QN_HEADLESS", "1")
+
 # 프로젝트 루트 경로 (four_axis_analyzer, handdrawn_renderer 접근용)
 _BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _BASE not in sys.path:

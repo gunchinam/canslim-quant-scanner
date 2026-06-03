@@ -182,7 +182,7 @@ _SCAN_STRIP_FIELDS: frozenset = frozenset({"Breakdown", "Scores", "Reason", "Abo
 # EntryPlan 서브필드 중 리스트 뷰에서 사용되는 것만 보존 (나머지는 /api/ticker에서 제공)
 _ENTRY_PLAN_KEEP: frozenset = frozenset({
     "entry", "entry_discount", "atr_pct", "as_of_ts", "headline_action",
-    "current", "stop", "t1", "t2", "rr", "rr_now", "vol_regime",
+    "current", "stop", "t1", "t2", "rr", "rr_now", "vol_regime", "drawdown_pct",
 })
 # MoatData 서브필드 중 리스트 뷰 미사용 (scores=111B/종목, 상세 패널에서만 사용)
 _MOAT_DATA_STRIP: frozenset = frozenset({"scores", "evidence_source", "story_risk"})

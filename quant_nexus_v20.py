@@ -6326,7 +6326,8 @@ class QuantNexusApp:
                 "headline_action": headline_action,
                 "confidence_band": confidence_band,
                 "one_reason": one_reason,
-                "vol_regime": atr.get("vol_regime", "NORMAL")}
+                "vol_regime": atr.get("vol_regime", "NORMAL"),
+                "drawdown_pct": round(-float(atr.get("dist_from_52w_high", 0.0) or 0.0) * 100, 1)}
 
             result = {
                 "Ticker":           ticker,

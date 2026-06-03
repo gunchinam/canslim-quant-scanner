@@ -232,7 +232,7 @@ const _ENTRY_LABEL = { STRONG: '근접 구간', NEUTRAL: '눌림대기', AVOID: 
 // atrPct 있으면 disc/atrPct 비율로 — <0.5 근접 구간, <1.0 이격 구간, 그 외 풀백대기.
 // atrPct null/0 이면 절대값 fallback (1.5%/5%).
 // asOfTs (epoch sec) 가 5분 초과 stale 면 라벨에 ' (stale)' 접미사 (EG-005).
-function _entryLabel(st, disc, atrPct, asOfTs) {
+function _entryLabel(st, disc, atrPct, asOfTs, ddPct) {
   let label;
   if (st === 'STRONG' || st === 'GREEN') {
     if (disc == null || isNaN(disc)) {
@@ -244,6 +244,12 @@ function _entryLabel(st, disc, atrPct, asOfTs) {
       label = (r < 0.5) ? '근접 구간' : (r < 1.0) ? '이격 구간' : '풀백대기';
     } else {
       label = (disc < 1.5) ? '근접 구간' : (disc < 5.0) ? '이격 구간' : '풀백대기';
+    }
+    // 드로다운 경고 오버레이: 52주 고점 대비 하락률 기반
+    if (ddPct != null && !isNaN(ddPct) && label !== '데이터 부족') {
+      if (ddPct <= -30)      label += ' [고위험]';
+      else if (ddPct <= -20) label += ' [경고]';
+      else if (ddPct <= -15) label += ' [주의]';
     }
   } else {
     label = _ENTRY_LABEL[st] || '';
@@ -323,7 +329,8 @@ function _entryLight(stock) {
   const _disc = (stock.EntryPlan && stock.EntryPlan.entry_discount != null) ? stock.EntryPlan.entry_discount : null;
   const _atrPct = (stock.EntryPlan && stock.EntryPlan.atr_pct != null) ? stock.EntryPlan.atr_pct : null;
   const _asOf = (stock.EntryPlan && stock.EntryPlan.as_of_ts != null) ? stock.EntryPlan.as_of_ts : null;
-  const lbl = _entryLabel(st, _disc, _atrPct, _asOf);
+  const _ddPct = (stock.EntryPlan && stock.EntryPlan.drawdown_pct != null) ? stock.EntryPlan.drawdown_pct : null;
+  const lbl = _entryLabel(st, _disc, _atrPct, _asOf, _ddPct);
   const cls = _ENTRY_COLOR[st] || 'neutral';
   const phr = stock.EntryPhrase || '';
   const sc  = stock.EntryScore != null ? `진입 타이밍 ${stock.EntryScore}/100` : '';

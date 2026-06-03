@@ -6325,7 +6325,8 @@ class QuantNexusApp:
                 # 파생 표시 필드 (프론트는 그대로 표시만)
                 "headline_action": headline_action,
                 "confidence_band": confidence_band,
-                "one_reason": one_reason}
+                "one_reason": one_reason,
+                "vol_regime": atr.get("vol_regime", "NORMAL")}
 
             result = {
                 "Ticker":           ticker,

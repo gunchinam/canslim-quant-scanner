@@ -303,6 +303,19 @@ function _renderQuadrant(d) {
 }
 
 
+// 변동성 체제 독립 배지 (진입 라벨과 분리)
+function _volRegimeBadge(stock) {
+  const vr = stock.EntryPlan && stock.EntryPlan.vol_regime;
+  if (!vr || vr === 'NORMAL') return '';
+  const atrPct = (stock.EntryPlan && stock.EntryPlan.atr_pct != null) ? stock.EntryPlan.atr_pct : null;
+  const atrTip = atrPct != null ? `일평균 변동폭 ${atrPct.toFixed(1)}%` : '';
+  if (vr === 'HIGH')
+    return `<span class="vol-regime-badge vol-high" title="${esc(atrTip)}">고변동</span>`;
+  if (vr === 'LOW')
+    return `<span class="vol-regime-badge vol-low" title="${esc(atrTip)}">저변동</span>`;
+  return '';
+}
+
 function _entryLight(stock) {
   if (!stock || !stock.EntryStatus) return '';
   const st = stock.EntryStatus;
@@ -324,7 +337,8 @@ function _entryLight(stock) {
     tip += ` | AgentQuant: ${stock.AQ_Verdict || '—'}${reg}${aqSc}`;
     aqBadge = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-left:2px;vertical-align:middle;" title="${esc(stock.AQ_Verdict||'')}"></span>`;
   }
-  return `<span class="entry-badge entry-${cls}" title="${esc(tip)}">${ico}${lbl ? `<span class="entry-badge-label">${esc(lbl)}</span>` : ''}${aqBadge}</span>`;
+  const volBadge = _volRegimeBadge(stock);
+  return `<span class="entry-badge entry-${cls}" title="${esc(tip)}">${ico}${lbl ? `<span class="entry-badge-label">${esc(lbl)}</span>` : ''}${aqBadge}</span>${volBadge}`;
 }
 
 function _renderSignalHtml(signal, stock) {

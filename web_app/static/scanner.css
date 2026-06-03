@@ -1982,6 +1982,14 @@ td.score-col {
 .entry-badge.entry-red     { color: #DC2626; background: rgba(220,38,38,0.12); }
 .entry-badge.entry-neutral { color: var(--text-tertiary); background: var(--surface-page); }
 
+/* Volatility regime badge (진입 라벨과 독립) */
+.vol-regime-badge {
+  display: inline-block; font-size: 10px; font-weight: 600;
+  padding: 1px 5px; border-radius: 4px; margin-left: 4px; vertical-align: middle;
+}
+.vol-regime-badge.vol-high { color: #DC2626; background: rgba(220,38,38,0.10); }
+.vol-regime-badge.vol-low  { color: #2563EB; background: rgba(37,99,235,0.10); }
+
 /* Stock quality grade badge (S/A/B/C) */
 .grade-badge {
   display: inline-flex;
@@ -2034,6 +2042,7 @@ td.score-col {
 @media (max-width: 640px) {
   .entry-badge-label { display: none; }
   .entry-badge { padding: 0 5px; }
+  .vol-regime-badge { display: none; }
 }
 .dp-axis-item {
   background: var(--surface-page);

@@ -224,26 +224,26 @@ const _ENTRY_COLOR = { STRONG: 'green', NEUTRAL: 'yellow', AVOID: 'red',
                        GREEN: 'green', YELLOW: 'yellow', RED: 'red' };
 const _ENTRY_ICON  = { STRONG: '🟢', NEUTRAL: '🟡', AVOID: '🔴',
                        GREEN: '🟢', YELLOW: '🟡', RED: '🔴' };
-const _ENTRY_LABEL = { STRONG: '저변동 구간', NEUTRAL: '눌림대기', AVOID: '부적합',
-                       GREEN: '저변동 구간', YELLOW: '눌림대기', RED: '부적합' };
+const _ENTRY_LABEL = { STRONG: '근접 구간', NEUTRAL: '눌림대기', AVOID: '부적합',
+                       GREEN: '근접 구간', YELLOW: '눌림대기', RED: '부적합' };
 
 // STRONG/GREEN 라벨을 entry_discount(%) 와 atrPct(%) 에 따라 분기.
 // disc<0 → '풀백대기' (현재가가 entry 위, 추격),
-// atrPct 있으면 disc/atrPct 비율로 — <0.5 저변동 구간, <1.0 변동 확대 구간, 그 외 풀백대기.
+// atrPct 있으면 disc/atrPct 비율로 — <0.5 근접 구간, <1.0 이격 구간, 그 외 풀백대기.
 // atrPct null/0 이면 절대값 fallback (1.5%/5%).
 // asOfTs (epoch sec) 가 5분 초과 stale 면 라벨에 ' (stale)' 접미사 (EG-005).
 function _entryLabel(st, disc, atrPct, asOfTs) {
   let label;
   if (st === 'STRONG' || st === 'GREEN') {
     if (disc == null || isNaN(disc)) {
-      label = '저변동 구간';
+      label = '데이터 부족';
     } else if (disc < 0) {
       label = '풀백대기';
     } else if (atrPct != null && !isNaN(atrPct) && atrPct > 0) {
       const r = disc / atrPct;
-      label = (r < 0.5) ? '저변동 구간' : (r < 1.0) ? '변동 확대 구간' : '풀백대기';
+      label = (r < 0.5) ? '근접 구간' : (r < 1.0) ? '이격 구간' : '풀백대기';
     } else {
-      label = (disc < 1.5) ? '저변동 구간' : (disc < 5.0) ? '변동 확대 구간' : '풀백대기';
+      label = (disc < 1.5) ? '근접 구간' : (disc < 5.0) ? '이격 구간' : '풀백대기';
     }
   } else {
     label = _ENTRY_LABEL[st] || '';

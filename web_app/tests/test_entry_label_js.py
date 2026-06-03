@@ -73,9 +73,9 @@ def _run_in_node(disc, atr_pct=None) -> str:
     [
         (-5, "풀백대기"),     # 현재가가 entry 5% 위 → 추격
         (-0.1, "풀백대기"),   # 살짝 위라도 음수면 추격으로 분류
-        (0, "진입적기"),       # 정확히 entry — '진입적기'
-        (0.8, "진입적기"),     # 1.5% 미만 — '진입적기'
-        (3, "분할진입"),       # 1.5~5% — '분할진입'
+        (0, "근접 구간"),       # 정확히 entry — '근접 구간'
+        (0.8, "근접 구간"),     # 1.5% 미만 — '근접 구간'
+        (3, "이격 구간"),       # 1.5~5% — '이격 구간'
         (7, "풀백대기"),       # 5% 이상 — '풀백대기'
     ],
 )
@@ -84,28 +84,28 @@ def test_entry_label_disc_branch(disc, expected):
 
 
 def test_entry_label_null_fallback():
-    # 역호환: disc 가 null/undefined 면 '진입적기' fallback
-    assert _run_in_node(None) == "진입적기"
+    # disc 가 null/undefined → '데이터 부족' (MNAR 결측 → 긍정 라벨 대치 방지)
+    assert _run_in_node(None) == "데이터 부족"
 
 
 # EG-003: ATR-정규화 임계값 — disc/atrPct 비율로 라벨 결정
 @pytest.mark.parametrize(
     "disc,atr_pct,expected",
     [
-        # ATR 4% 인 종목: 갭 1% (=0.25 ATR) → 진입적기
-        (1.0, 4.0, "진입적기"),
-        # ATR 4% 인 종목: 갭 2% (=0.5 ATR) → 분할진입
-        (2.0, 4.0, "분할진입"),
+        # ATR 4% 인 종목: 갭 1% (=0.25 ATR) → 근접 구간
+        (1.0, 4.0, "근접 구간"),
+        # ATR 4% 인 종목: 갭 2% (=0.5 ATR) → 이격 구간
+        (2.0, 4.0, "이격 구간"),
         # ATR 4% 인 종목: 갭 4% (=1.0 ATR) → 풀백대기
         (4.0, 4.0, "풀백대기"),
         # 저변동성 ATR 0.5% 종목: 갭 1% (=2 ATR) → 풀백대기
         (1.0, 0.5, "풀백대기"),
-        # 저변동성 ATR 0.5% 종목: 갭 0.2% (=0.4 ATR) → 진입적기
-        (0.2, 0.5, "진입적기"),
-        # 고변동성 ATR 8% 종목: 갭 3% (=0.375 ATR) → 진입적기
-        (3.0, 8.0, "진입적기"),
-        # 고변동성 ATR 8% 종목: 갭 6% (=0.75 ATR) → 분할진입
-        (6.0, 8.0, "분할진입"),
+        # 저변동성 ATR 0.5% 종목: 갭 0.2% (=0.4 ATR) → 근접 구간
+        (0.2, 0.5, "근접 구간"),
+        # 고변동성 ATR 8% 종목: 갭 3% (=0.375 ATR) → 근접 구간
+        (3.0, 8.0, "근접 구간"),
+        # 고변동성 ATR 8% 종목: 갭 6% (=0.75 ATR) → 이격 구간
+        (6.0, 8.0, "이격 구간"),
     ],
 )
 def test_entry_label_atr_normalized(disc, atr_pct, expected):
@@ -113,13 +113,13 @@ def test_entry_label_atr_normalized(disc, atr_pct, expected):
 
 
 def test_atr_pct_zero_falls_back_to_absolute():
-    # atrPct=0 → 절대값 fallback (disc 0.8 → '진입적기')
-    assert _run_in_node(0.8, 0) == "진입적기"
+    # atrPct=0 → 절대값 fallback (disc 0.8 → '근접 구간')
+    assert _run_in_node(0.8, 0) == "근접 구간"
 
 
 def test_atr_pct_null_falls_back_to_absolute():
-    # atrPct=null → 절대값 fallback (disc 3 → '분할진입')
-    assert _run_in_node(3.0, None) == "분할진입"
+    # atrPct=null → 절대값 fallback (disc 3 → '이격 구간')
+    assert _run_in_node(3.0, None) == "이격 구간"
 
 
 # EG-005: stale 가드 — asOfTs 가 5분 초과 시 라벨에 ' (stale)' 접미사

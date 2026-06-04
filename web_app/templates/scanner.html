@@ -95,11 +95,17 @@
     <div class="stat-item" style="border-right:none;flex:1;justify-content:flex-end;">
       <div id="filter-chips" class="filter-chips">
         <button class="chip active" data-filter="all">전체</button>
+        <button class="chip" data-filter="watchlist" title="내가 추가한 관심종목만 표시">💎 관심종목</button>
         <button class="chip" data-filter="entry_green" title="타점점수 70점 이상 — 6가지 기술 신호(RSI·볼린저밴드·VWAP·52주 위치·MACD·시장 국면)가 모두 양호한 종목">🟢 기회 탐색</button>
         <button class="chip" data-filter="strong" title="종합점수 60점 이상 — S등급(75+)·A등급(60+) 해당 종목만 표시">🔥 S·A등급</button>
+        <button class="chip" data-filter="rs_leader" title="RS Rating 80 이상 — 시장 대비 상대강도 상위 종목 (CAN SLIM 주도주)">⭐ RS주도주</button>
+        <button class="chip" data-filter="breakout" title="시그널에 BREAKOUT 또는 PIVOT 포함 — 추세 돌파 감지 종목">🚀 돌파</button>
+        <button class="chip" data-filter="eps_accel" title="EPS(주당순이익) 분기별 가속 성장 중인 종목">⚡ EPS가속</button>
+        <button class="chip" data-filter="vol_surge" title="거래량 비율 2배 이상 — 평소 대비 거래 급증 (기관 참여 가능성)">📊 거래량급증</button>
         <button class="chip" data-filter="near_high" title="52주 신고가에 근접한 종목 — 추세 돌파 후보">📈 신고가</button>
-        <button class="chip" data-filter="oversold" title="RSI 30 미만 — 과매도 반등 후보">📉 RSI&lt;30</button>
+        <button class="chip" data-filter="pullback" title="RSI 40 이하 — 눌림목 매수 후보 구간">📉 눌림목</button>
         <button class="chip" data-filter="greedzone" title="GreedZone 진입 — 저점 대비 과열 구간 (Zeiierman 지표)">🟡 탐욕구간</button>
+        <button class="chip" data-filter="laggard" title="RS Rating 40 미만 또는 SELL/AVOID 시그널 — 회피 대상 종목">⛔ 위험</button>
 
       </div>
     </div>

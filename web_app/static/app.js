@@ -634,12 +634,17 @@ async function runScan() {
 // 퀵필터 적용 (다중 선택 AND)
 function _matchesFilter(s, f) {
   switch (f) {
-    case 'watchlist':  return _watchlist.has(s.Ticker);
+    case 'watchlist':   return _watchlist.has(s.Ticker);
     case 'entry_green': return s.EntryStatus === 'STRONG' || s.EntryStatus === 'GREEN';
-    case 'strong': { const g = _stockGrade(s.TotalScore); return g === 'S' || g === 'A'; }
-    case 'near_high':  return !!s.NearHighPass;
-    case 'oversold':   return s.RSI != null && s.RSI < 30;
-    case 'greedzone':  return !!s.GreedZone;
+    case 'strong':      { const g = _stockGrade(s.TotalScore); return g === 'S' || g === 'A'; }
+    case 'rs_leader':   return (s.RSRating ?? 0) >= 80;
+    case 'breakout':    return typeof s.Signal === 'string' && /BREAKOUT|PIVOT/.test(s.Signal);
+    case 'eps_accel':   return !!s.EPSAcceleration;
+    case 'vol_surge':   return (s.VolRatio ?? 0) >= 2.0;
+    case 'near_high':   return !!s.NearHighPass;
+    case 'pullback':    return s.RSI != null && s.RSI <= 40;
+    case 'greedzone':   return !!s.GreedZone;
+    case 'laggard':     return (s.RSRating ?? 99) < 40 || _signalTier(s.Signal) === 'sell';
     default: return true;
   }
 }

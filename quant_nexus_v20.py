@@ -2579,16 +2579,22 @@ class WallStreetQuantStrategies:
             logging.error(f"[Strategy] mtf_confluence: {e}")
         return result
 
-    # ── 10. Drawdown Risk (Bridgewater) ───────────────────────────────────
-    def drawdown_risk(self, hist: pd.DataFrame) -> dict:
+    # ── 10. Drawdown Risk (P0-P12: Bridgewater+Renaissance+Citadel+GS+BlackRock) ─
+    def drawdown_risk(self, hist: pd.DataFrame, benchmark_hist: pd.DataFrame = None,
+                      macro_regime: str = None) -> dict:
         """
-        레이 달리오 Bridgewater 스타일 낙폭 분석.
-        현재 MDD 크기에 따라 페널티 부과, 회복 중이면 보너스.
-
-        페널티: MDD > 30% → -20점
+        P0-P12 드로다운 리스크 종합 분석.
+        P4: velocity, P5: CVaR+skew, P6: TUW, P7: Calmar,
+        P9: downside beta, P10: macro-conditional, P12: stress test.
         """
+        import math
         result = {"max_dd": 0.0, "current_dd": 0.0, "recovery": 0.0,
-                  "cvar_95": 0.0, "score": 0, "risk": "NORMAL"}
+                  "cvar_95": 0.0, "score": 0, "risk": "NORMAL",
+                  "dd_velocity_5d": 0.0, "dd_velocity_20d": 0.0,
+                  "underwater_days": 0, "calmar_ratio": 0.0,
+                  "skewness": 0.0, "excess_kurtosis": 0.0,
+                  "downside_beta": None,
+                  "stress_2008": None, "stress_2020": None, "stress_2022": None}
         try:
             if len(hist) < 50:
                 return result
@@ -2602,28 +2608,90 @@ class WallStreetQuantStrategies:
                 if d.iloc[-1] > d.iloc[0]:
                     result["recovery"] = float(d.iloc[-1] - d.iloc[0])
 
-            # CVaR 95%: 일간 수익률 하위 5%의 평균 손실 (꼬리 위험 정량화)
+            # P4: Drawdown Velocity (5일/20일 낙폭 속도)
+            if len(dds) >= 6:
+                result["dd_velocity_5d"] = round(float(dds.iloc[-1] - dds.iloc[-6]), 4)
+            if len(dds) >= 21:
+                result["dd_velocity_20d"] = round(float(dds.iloc[-1] - dds.iloc[-21]), 4)
+
+            # P6: Time-Under-Water (수면하 체류 일수)
+            tuw = 0
+            for i in range(len(dds) - 1, -1, -1):
+                if float(dds.iloc[i]) < -0.001:
+                    tuw += 1
+                else:
+                    break
+            result["underwater_days"] = tuw
+
+            # P7: Calmar Ratio (연수익률 / |MDD|)
+            if len(c) >= 252 and abs(result["max_dd"]) > 0.001:
+                annual_ret = float(c.iloc[-1] / c.iloc[-252]) - 1.0
+                result["calmar_ratio"] = round(annual_ret / abs(result["max_dd"]), 2)
+
+            # CVaR 95% + P5: Skew/Kurtosis
             daily_ret = c.pct_change().dropna()
             if len(daily_ret) >= 30:
                 var_95 = float(daily_ret.quantile(0.05))
                 tail = daily_ret[daily_ret <= var_95]
                 result["cvar_95"] = round(float(tail.mean()) if len(tail) > 0 else var_95, 4)
+                result["skewness"] = round(float(daily_ret.skew()), 2)
+                result["excess_kurtosis"] = round(float(daily_ret.kurtosis()), 2)
 
-            import math
+            # P9: Downside Beta + P12: Stress Scenarios
+            if benchmark_hist is not None and len(daily_ret) >= 60:
+                try:
+                    bench_ret = benchmark_hist["Close"].pct_change().dropna()
+                    common = daily_ret.index.intersection(bench_ret.index)
+                    if len(common) >= 60:
+                        sr, br = daily_ret.loc[common], bench_ret.loc[common]
+                        down = br < 0
+                        if down.sum() >= 15:
+                            sd, bd = sr[down], br[down]
+                            cov_d = float((sd * bd).mean() - sd.mean() * bd.mean())
+                            var_d = float(bd.var())
+                            if var_d > 1e-10:
+                                beta = round(cov_d / var_d, 2)
+                                result["downside_beta"] = beta
+                                result["stress_2008"] = round(beta * -0.568, 3)
+                                result["stress_2020"] = round(beta * -0.339, 3)
+                                result["stress_2022"] = round(beta * -0.254, 3)
+                except Exception:
+                    pass
+
+            # ── Scoring ──
             cdd = abs(result["current_dd"])
-            # 시그모이드 연속 점수: 5 - 25 / (1 + exp(-18*(cdd-0.12)))
-            # cdd=0 → +5, cdd=0.05 → +1.5, cdd=0.10 → -5.6, cdd=0.20 → -16.5, cdd=0.30 → -19.6
-            score = 5.0 - 25.0 / (1.0 + math.exp(-18.0 * (cdd - 0.12)))
-            # risk 등급 (라벨용, 임계값 유지)
+            # P10: Macro-conditional sigmoid center
+            center = 0.12
+            if macro_regime == "Risk-Off":
+                center = 0.18   # 1.5x tolerant (시장 전체 하락)
+            elif macro_regime == "Risk-On":
+                center = 0.084  # 0.7x strict (저변동 환경에서 혼자 하락)
+            score = 5.0 - 25.0 / (1.0 + math.exp(-18.0 * (cdd - center)))
+
+            # risk 등급 (라벨용)
             if cdd > 0.30:   result["risk"] = "EXTREME"
             elif cdd > 0.20: result["risk"] = "HIGH"
             elif cdd > 0.10: result["risk"] = "ELEVATED"
             elif cdd > 0.05: result["risk"] = "MODERATE"
             else:            result["risk"] = "LOW"
-            # recovery 보너스: 비례 스케일링 (최대 +5, 5%p당 +1)
+
+            # Recovery 보너스 + P6 TUW 시간 감쇄
             rec = result["recovery"]
             if rec > 0:
-                score += min(5.0, rec / 0.05)
+                tuw_decay = max(0.2, 1.0 - result["underwater_days"] / 200)
+                score += min(5.0, rec / 0.05) * tuw_decay
+
+            # P5: CVaR penalty (활성화)
+            if result["cvar_95"] < 0:
+                score += max(-5.0, result["cvar_95"] * 50)
+
+            # P4: Velocity penalty (급락 속도 감쇄)
+            vel5 = result["dd_velocity_5d"]
+            if vel5 < -0.10:       # 5일간 -10%p 이상 급락
+                score *= 0.80
+            elif vel5 < -0.05:     # 5일간 -5%p 이상
+                score *= 0.90
+
             result["score"] = round(score, 1)
         except Exception as e:
             logging.error(f"[Strategy] drawdown_risk: {e}")
@@ -4791,6 +4859,24 @@ class QuantNexusApp:
                 _name_pre[_nt] = _nn
         self._ticker_name_cache = _name_pre
 
+        # P9/P10/P12: 벤치마크 히스토리 + 매크로 레짐 사전 캐싱 (스캔당 1회)
+        self._scan_benchmark = None
+        self._scan_macro_regime = None
+        try:
+            import yfinance as yf
+            _bench_tk = "^KS11" if self._scan_market == "KR" else "SPY"
+            _bh = yf.Ticker(_bench_tk).history(period="1y", auto_adjust=True)
+            if len(_bh) >= 60:
+                self._scan_benchmark = _bh
+        except Exception as _e:
+            logging.debug(f"[Benchmark] {_e}")
+        try:
+            if _macro_gate is not None:
+                _ms = _macro_gate.get_regime()
+                self._scan_macro_regime = _ms.get("regime")
+        except Exception:
+            pass
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as ex:
             fmap = {ex.submit(self._analyze_ticker, t): t for t in tickers}
             for fut in concurrent.futures.as_completed(fmap):
@@ -5220,7 +5306,9 @@ class QuantNexusApp:
             qual   = self.engine.quality_factor(info)
             flow   = self.engine.smart_money_flow(hist)
             mtf    = self.engine.mtf_confluence(hist)
-            dd     = self.engine.drawdown_risk(hist)
+            dd     = self.engine.drawdown_risk(hist,
+                       benchmark_hist=getattr(self, '_scan_benchmark', None),
+                       macro_regime=getattr(self, '_scan_macro_regime', None))
             vol_a  = self.engine.volume_anomaly(hist)
             rs     = self.engine.relative_strength(hist)
             # earnings_momentum 은 KR 재무 보강(Naver) 이후 호출한다.
@@ -6356,7 +6444,22 @@ class QuantNexusApp:
                 "mdd_risk": dd.get("risk", "NORMAL"),
                 "mdd_recovery": round(float(dd.get("recovery", 0.0) or 0.0) * 100, 1),
                 "size_suggestion": atr.get("size_suggestion", "NORMAL"),
-                "cvar_95": round(float(dd.get("cvar_95", 0.0) or 0.0) * 100, 2)}
+                "cvar_95": round(float(dd.get("cvar_95", 0.0) or 0.0) * 100, 2),
+                # P4: velocity
+                "dd_velocity_5d": round(float(dd.get("dd_velocity_5d", 0.0) or 0.0) * 100, 2),
+                "dd_velocity_20d": round(float(dd.get("dd_velocity_20d", 0.0) or 0.0) * 100, 2),
+                # P6: time under water
+                "underwater_days": dd.get("underwater_days", 0),
+                # P7: calmar ratio
+                "calmar_ratio": dd.get("calmar_ratio", 0.0),
+                # P5: skew/kurtosis
+                "skewness": dd.get("skewness", 0.0),
+                "excess_kurtosis": dd.get("excess_kurtosis", 0.0),
+                # P9: downside beta + P12: stress scenarios
+                "downside_beta": dd.get("downside_beta"),
+                "stress_2008": dd.get("stress_2008"),
+                "stress_2020": dd.get("stress_2020"),
+                "stress_2022": dd.get("stress_2022")}
 
             result = {
                 "Ticker":           ticker,

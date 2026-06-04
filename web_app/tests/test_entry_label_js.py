@@ -253,3 +253,43 @@ def test_neutral_mdd_high_shows_warning():
 def test_neutral_mdd_normal_no_warning():
     out = _run_neutral_mdd("NORMAL")
     assert "[" not in out
+
+
+# EG-009: P4 급락 속도 경보 — ddVelocity5d < -5 이면 [급락] 배지
+def _run_with_velocity(disc, vel5d, ddPct=None) -> str:
+    src = _extract_entry_label_src()
+    script = (
+        src
+        + f"\nconst out = _entryLabel('STRONG', {_to_js(disc)}, null, null, "
+        + f"{_to_js(ddPct)}, null, null, null, null, {_to_js(vel5d)});\n"
+        + "process.stdout.write(Buffer.from(out, 'utf8'));\n"
+    )
+    node_exe = shutil.which("node")
+    if not node_exe:
+        pytest.skip("node not available")
+    res = subprocess.run([node_exe, "-e", script], capture_output=True, check=True)
+    return res.stdout.decode("utf-8")
+
+
+@pytest.mark.parametrize(
+    "vel5d,expected_suffix",
+    [
+        (-8, "[급락]"),       # 5일간 -8%p → 급락
+        (-5.1, "[급락]"),     # 경계값 초과 → 급락
+        (-4.9, None),         # 경계값 미만 → 급락 아님
+        (0, None),            # 변동 없음
+    ],
+)
+def test_velocity_badge(vel5d, expected_suffix):
+    out = _run_with_velocity(0.5, vel5d)
+    if expected_suffix:
+        assert out.endswith(expected_suffix), f"expected '{expected_suffix}' in '{out}'"
+    else:
+        assert "[급락]" not in out, f"unexpected [급락] in '{out}'"
+
+
+def test_velocity_overrides_drawdown_badge():
+    # P13: 급락이 고위험보다 우선 — vel=-8 + dd=-35% → [급락]만 표시
+    out = _run_with_velocity(0.5, -8, ddPct=-35)
+    assert out.endswith("[급락]"), f"velocity should override drawdown badge: '{out}'"
+    assert "[고위험]" not in out

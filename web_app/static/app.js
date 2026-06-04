@@ -232,7 +232,7 @@ const _ENTRY_LABEL = { STRONG: '근접 구간', NEUTRAL: '눌림대기', AVOID: 
 // atrPct 있으면 disc/atrPct 비율로 — <0.5 근접 구간, <1.0 이격 구간, 그 외 풀백대기.
 // atrPct null/0 이면 절대값 fallback (1.5%/5%).
 // asOfTs (epoch sec) 가 5분 초과 stale 면 라벨에 ' (stale)' 접미사 (EG-005).
-function _entryLabel(st, disc, atrPct, asOfTs, ddPct, headlineAction, mddCurrent, mddRisk, volRegime) {
+function _entryLabel(st, disc, atrPct, asOfTs, ddPct, headlineAction, mddCurrent, mddRisk, volRegime, ddVelocity5d) {
   let label;
   if (st === 'STRONG' || st === 'GREEN') {
     if (disc == null || isNaN(disc)) {
@@ -245,21 +245,23 @@ function _entryLabel(st, disc, atrPct, asOfTs, ddPct, headlineAction, mddCurrent
     } else {
       label = (disc < 1.5) ? '근접 구간' : (disc < 5.0) ? '이격 구간' : '풀백대기';
     }
-    // 복합 드로다운 경고: 52주 고점 거리와 MDD 중 더 나쁜 쪽, vol_regime 적응형 임계값
+    // P13: 경고 피로 방지 — 가장 심각한 배지 1개만 (급락 > 고위험 > 경고 > 주의)
     if (label !== '데이터 부족') {
+      // P4: 급락 속도 경보 (5일간 -5%p 이상 급락)
+      const vel = (ddVelocity5d != null && !isNaN(ddVelocity5d)) ? ddVelocity5d : 0;
+      // 복합 드로다운: 52주/MDD 중 나쁜 쪽
       const dd52w = (ddPct != null && !isNaN(ddPct)) ? ddPct : 0;
       const ddMdd = (mddCurrent != null && !isNaN(mddCurrent)) ? mddCurrent : 0;
       const worstDd = Math.min(dd52w, ddMdd);
-      // vol_regime별 스케일링: LOW(저변동)=0.6x(더 민감), HIGH(고변동)=1.6x(더 관대)
       const vScale = (volRegime === 'LOW') ? 0.6 : (volRegime === 'HIGH') ? 1.6 : 1.0;
       const t1 = -15 * vScale, t2 = -20 * vScale, t3 = -30 * vScale;
-      if (worstDd <= t3)      label += ' [고위험]';
-      else if (worstDd <= t2) label += ' [경고]';
-      else if (worstDd <= t1) label += ' [주의]';
+      if (vel < -5)                label += ' [급락]';
+      else if (worstDd <= t3)      label += ' [고위험]';
+      else if (worstDd <= t2)      label += ' [경고]';
+      else if (worstDd <= t1)      label += ' [주의]';
     }
   } else if (headlineAction) {
     label = headlineAction;
-    // NEUTRAL/AVOID에도 MDD 극단적 위험 표시
     if (mddRisk === 'EXTREME') label += ' [고위험]';
     else if (mddRisk === 'HIGH') label += ' [경고]';
   } else {
@@ -345,11 +347,20 @@ function _entryLight(stock) {
   const _mddCur = (stock.EntryPlan && stock.EntryPlan.mdd_current != null) ? stock.EntryPlan.mdd_current : null;
   const _mddRisk = (stock.EntryPlan && stock.EntryPlan.mdd_risk) ? stock.EntryPlan.mdd_risk : null;
   const _volRegime = (stock.EntryPlan && stock.EntryPlan.vol_regime) ? stock.EntryPlan.vol_regime : null;
-  const lbl = _entryLabel(st, _disc, _atrPct, _asOf, _ddPct, _headline, _mddCur, _mddRisk, _volRegime);
+  const _vel5d = (stock.EntryPlan && stock.EntryPlan.dd_velocity_5d != null) ? stock.EntryPlan.dd_velocity_5d : null;
+  const lbl = _entryLabel(st, _disc, _atrPct, _asOf, _ddPct, _headline, _mddCur, _mddRisk, _volRegime, _vel5d);
   const cls = _ENTRY_COLOR[st] || 'neutral';
   const phr = stock.EntryPhrase || '';
   const sc  = stock.EntryScore != null ? `진입 타이밍 ${stock.EntryScore}/100` : '';
   let tip = phr ? `${phr}${sc ? ' (' + sc + ')' : ''}` : sc;
+  // P4-P8 리치 툴팁: 드로다운 메트릭스
+  const ep = stock.EntryPlan || {};
+  const _tipParts = [];
+  if (ep.underwater_days > 0) _tipParts.push(`수면하 ${ep.underwater_days}일`);
+  if (ep.calmar_ratio != null && ep.calmar_ratio !== 0) _tipParts.push(`Calmar ${ep.calmar_ratio}`);
+  if (ep.cvar_95 != null && ep.cvar_95 !== 0) _tipParts.push(`CVaR95 ${ep.cvar_95.toFixed(1)}% (100만원→${Math.round(ep.cvar_95*10000).toLocaleString()}원)`);
+  if (ep.downside_beta != null) _tipParts.push(`하방β ${ep.downside_beta}`);
+  if (_tipParts.length) tip += ' | ' + _tipParts.join(' · ');
   let aqBadge = '';
   if (stock.AQ_Verdict || stock.EntryScore_aq != null) {
     const vc = stock.AQ_VerdictCode;
@@ -1250,6 +1261,28 @@ function _renderMoatBadge(stock) {
   return `<span class="moat-badge moat-${esc(cat)}" title="${esc(titleTxt)}">🛡 ${esc(stock.Moat)}${confSpan}</span>`;
 }
 
+// P11: 섹터 집중도 경고 — 한 섹터 비중 40% 초과 시 배너
+function _renderSectorConcentration(stocks) {
+  const el = document.getElementById('sector-concentration-banner');
+  if (!el) return;
+  if (!stocks || stocks.length < 5) { el.style.display = 'none'; return; }
+  const counts = {};
+  stocks.forEach(s => { const sec = s.Sector || 'Unknown'; counts[sec] = (counts[sec] || 0) + 1; });
+  const total = stocks.length;
+  let worst = null, worstPct = 0;
+  for (const [sec, cnt] of Object.entries(counts)) {
+    const pct = cnt / total;
+    if (pct > worstPct) { worstPct = pct; worst = sec; }
+  }
+  if (worstPct > 0.4) {
+    const pctStr = (worstPct * 100).toFixed(0);
+    el.innerHTML = `<div style="margin:4px 12px;padding:8px 12px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;font-size:13px;color:#664d03;">⚠️ 분산 부족 — <b>${esc(worst)}</b> 섹터 ${pctStr}% 집중. 포트폴리오 분산 권장</div>`;
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
 function renderStockTable(stocks) {
   const renderToken = ++_renderToken;
   const tbody = document.getElementById('stock-list');
@@ -1270,6 +1303,7 @@ function renderStockTable(stocks) {
   const strong = filtered.filter(s => _signalTier(s.Signal) === 'strong').length;
   setStatHTML('stat-total',  `${filtered.length}<span class="unit">개</span>`);
   setStatHTML('stat-strong', `${strong}<span class="unit">개</span>`);
+  _renderSectorConcentration(filtered);
 
   if (filtered.length === 0) {
     const emptyMsg = (_activeFilters.size === 1 && _activeFilters.has('watchlist'))
@@ -2763,6 +2797,7 @@ function _populatePanelDetail(d, skipFourAxis) {
   _renderTechTab(d);
   _renderFinanceTab(d);
   _renderDetailFeatures(d);
+  _renderDrawdownRisk(d);
 
   if (Array.isArray(d.Breakdown)) renderBreakdown(d.Breakdown);
 
@@ -3109,6 +3144,56 @@ function _renderDetailFeatures(d) {
     }
   }
 
+}
+
+// P4-P12: 드로다운 리스크 메트릭 카드 (상세 패널)
+function _renderDrawdownRisk(d) {
+  const host = document.getElementById('dp-drawdown-risk');
+  if (!host) return;
+  const ep = (d && d.EntryPlan) || {};
+  const mdd = ep.mdd_current;
+  if (mdd == null && ep.cvar_95 == null) { host.innerHTML = ''; return; }
+  const rows = [];
+  // 기본 낙폭
+  if (mdd != null) {
+    const col = mdd < -20 ? '#DC2626' : mdd < -10 ? '#F59E0B' : 'var(--text-primary)';
+    rows.push(`<tr><td>현재 MDD</td><td style="color:${col};font-weight:600">${mdd.toFixed(1)}%</td></tr>`);
+  }
+  // P6: 수면하 체류
+  if (ep.underwater_days > 0) {
+    const col = ep.underwater_days > 120 ? '#DC2626' : ep.underwater_days > 60 ? '#F59E0B' : 'var(--text-secondary)';
+    rows.push(`<tr><td>수면하 체류</td><td style="color:${col}">${ep.underwater_days}일</td></tr>`);
+  }
+  // P4: 급락 속도
+  if (ep.dd_velocity_5d != null && ep.dd_velocity_5d < -2) {
+    rows.push(`<tr><td>5일 낙폭 속도</td><td style="color:#DC2626;font-weight:600">${ep.dd_velocity_5d.toFixed(1)}%p</td></tr>`);
+  }
+  // P7: Calmar
+  if (ep.calmar_ratio != null && ep.calmar_ratio !== 0) {
+    const col = ep.calmar_ratio > 1.5 ? '#16A34A' : ep.calmar_ratio > 0.5 ? 'var(--text-primary)' : '#F59E0B';
+    const lbl = ep.calmar_ratio > 1.5 ? '우수' : ep.calmar_ratio > 0.5 ? '보통' : '부진';
+    rows.push(`<tr><td>고통 대비 보상</td><td style="color:${col}">${ep.calmar_ratio.toFixed(2)} (${lbl})</td></tr>`);
+  }
+  // P8: CVaR 금액 번역
+  if (ep.cvar_95 != null && ep.cvar_95 !== 0) {
+    const won = Math.round(Math.abs(ep.cvar_95) * 10000);
+    rows.push(`<tr><td>최악의 날 예상</td><td style="color:#DC2626">${ep.cvar_95.toFixed(2)}% (100만원→-${won.toLocaleString()}원)</td></tr>`);
+  }
+  // P9: 하방 베타
+  if (ep.downside_beta != null) {
+    const col = ep.downside_beta > 1.5 ? '#DC2626' : ep.downside_beta > 1.0 ? '#F59E0B' : '#16A34A';
+    rows.push(`<tr><td>하방 민감도(β)</td><td style="color:${col}">${ep.downside_beta.toFixed(2)}×</td></tr>`);
+  }
+  // P12: 스트레스 테스트
+  if (ep.stress_2008 != null) {
+    rows.push(`<tr><td colspan="2" style="padding-top:6px;font-size:10px;color:var(--text-tertiary);font-weight:600;">과거 위기 재현 시 예상 낙폭</td></tr>`);
+    const _s = (v) => `<span style="color:#DC2626">${(v*100).toFixed(0)}%</span>`;
+    rows.push(`<tr><td>2008 금융위기</td><td>${_s(ep.stress_2008)}</td></tr>`);
+    rows.push(`<tr><td>2020 코로나</td><td>${_s(ep.stress_2020)}</td></tr>`);
+    rows.push(`<tr><td>2022 금리인상</td><td>${_s(ep.stress_2022)}</td></tr>`);
+  }
+  if (!rows.length) { host.innerHTML = ''; return; }
+  host.innerHTML = `<table style="width:100%;font-size:12px;line-height:1.8;border-collapse:collapse;">${rows.join('')}</table>`;
 }
 
 function _renderFinanceTab(d) {

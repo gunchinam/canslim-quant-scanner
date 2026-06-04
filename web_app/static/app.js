@@ -2666,6 +2666,12 @@ function _clearPanelDetail() {
   if (cc) cc.style.display = 'none';
   const ec = document.getElementById('dp-earnings-card');
   if (ec) ec.style.display = 'none';
+  // 새 카드 초기화
+  ['dp-risk-summary','dp-factor-waterfall','dp-drawdown-risk','dp-ac-card','dp-liquidity-card'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.innerHTML = '';
+  });
+  const rg = document.getElementById('dp-risk-gauge');
+  if (rg) rg.style.display = 'none';
 }
 
 function _populatePanelDetail(d, skipFourAxis) {
@@ -2802,7 +2808,12 @@ function _populatePanelDetail(d, skipFourAxis) {
   _renderTechTab(d);
   _renderFinanceTab(d);
   _renderDetailFeatures(d);
+  _renderRiskGauge(d);
+  _renderRiskSummary(d);
+  _renderFactorWaterfall(d);
   _renderDrawdownRisk(d);
+  _renderACCard(d);
+  _renderLiquidityCard(d);
 
   if (Array.isArray(d.Breakdown)) renderBreakdown(d.Breakdown);
 
@@ -3189,16 +3200,112 @@ function _renderDrawdownRisk(d) {
     const col = ep.downside_beta > 1.5 ? '#DC2626' : ep.downside_beta > 1.0 ? '#F59E0B' : '#16A34A';
     rows.push(`<tr><td>하방 민감도(β)</td><td style="color:${col}">${ep.downside_beta.toFixed(2)}×</td></tr>`);
   }
-  // P12: 스트레스 테스트
+  // P12: 체감형 스트레스 시나리오 (Goldman P3)
   if (ep.stress_2008 != null) {
-    rows.push(`<tr><td colspan="2" style="padding-top:6px;font-size:10px;color:var(--text-tertiary);font-weight:600;">과거 위기 재현 시 예상 낙폭</td></tr>`);
-    const _s = (v) => `<span style="color:#DC2626">${(v*100).toFixed(0)}%</span>`;
-    rows.push(`<tr><td>2008 금융위기</td><td>${_s(ep.stress_2008)}</td></tr>`);
-    rows.push(`<tr><td>2020 코로나</td><td>${_s(ep.stress_2020)}</td></tr>`);
-    rows.push(`<tr><td>2022 금리인상</td><td>${_s(ep.stress_2022)}</td></tr>`);
+    const inv = 100; // 100만원 기준
+    rows.push(`<tr><td colspan="2" style="padding-top:6px;font-size:10px;color:var(--text-tertiary);font-weight:600;">과거 위기 재현 시 (100만원 투자 기준)</td></tr>`);
+    const _stress = (label, v) => {
+      const pct = (v * 100).toFixed(0);
+      const remain = Math.round(inv * (1 + v));
+      const barW = Math.min(100, Math.abs(v) * 200);
+      return `<tr><td>${label}</td><td><div style="display:flex;align-items:center;gap:4px;"><div style="width:60px;height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${barW}%;background:#DC2626;border-radius:3px;"></div></div><span style="color:#DC2626;font-weight:600;">${pct}%</span><span style="font-size:10px;color:var(--text-tertiary);">${remain}만원</span></div></td></tr>`;
+    };
+    rows.push(_stress('2008 금융위기', ep.stress_2008));
+    rows.push(_stress('2020 코로나', ep.stress_2020));
+    rows.push(_stress('2022 금리인상', ep.stress_2022));
   }
   if (!rows.length) { host.innerHTML = ''; return; }
   host.innerHTML = `<table style="width:100%;font-size:12px;line-height:1.8;border-collapse:collapse;">${rows.join('')}</table>`;
+}
+
+// P1: Composite Risk Score — Hero 카드 내 Dual Display
+function _renderRiskGauge(d) {
+  const el = document.getElementById('dp-risk-gauge');
+  if (!el) return;
+  const ep = (d && d.EntryPlan) || {};
+  const cr = ep.composite_risk;
+  if (cr == null) { el.style.display = 'none'; return; }
+  const col = cr >= 60 ? '#DC2626' : cr >= 35 ? '#F59E0B' : '#16A34A';
+  const lbl = cr >= 60 ? '고위험' : cr >= 35 ? '주의' : '양호';
+  el.style.display = 'inline-flex';
+  el.style.background = col + '18';
+  el.style.color = col;
+  el.innerHTML = `🛡 Risk <span style="font-size:14px;">${Math.round(cr)}</span>/99 <span style="font-weight:500;">${lbl}</span>`;
+}
+
+// P2: Risk Summary Card — 리스크 핵심 3줄 요약 (Goldman P1)
+function _renderRiskSummary(d) {
+  const host = document.getElementById('dp-risk-summary');
+  if (!host) return;
+  const ep = (d && d.EntryPlan) || {};
+  if (ep.composite_risk == null && ep.mdd_current == null) { host.innerHTML = ''; return; }
+  const parts = [];
+  if (ep.composite_risk != null) {
+    const cr = ep.composite_risk;
+    const col = cr >= 60 ? '#DC2626' : cr >= 35 ? '#F59E0B' : '#16A34A';
+    const lbl = cr >= 60 ? '고위험' : cr >= 35 ? '주의' : '양호';
+    parts.push(`<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:20px;font-weight:800;color:${col};">${Math.round(cr)}</span><span style="font-size:11px;color:${col};font-weight:600;">/99 ${lbl}</span><span style="flex:1;height:4px;background:var(--border);border-radius:2px;position:relative;overflow:hidden;"><span style="position:absolute;left:0;top:0;height:100%;width:${cr}%;background:${col};border-radius:2px;"></span></span></div>`);
+  }
+  const chips = [];
+  if (ep.mdd_current != null) chips.push(`MDD ${ep.mdd_current.toFixed(1)}%`);
+  if (ep.cvar_95 != null && ep.cvar_95 !== 0) chips.push(`CVaR ${ep.cvar_95.toFixed(1)}%`);
+  if (ep.downside_beta != null) chips.push(`하방β ${ep.downside_beta.toFixed(2)}×`);
+  if (ep.liquidity_score != null) {
+    const lc = ep.liquidity_score >= 60 ? '#16A34A' : ep.liquidity_score >= 30 ? '#F59E0B' : '#DC2626';
+    chips.push(`<span style="color:${lc}">유동성 ${Math.round(ep.liquidity_score)}</span>`);
+  }
+  if (chips.length) parts.push(`<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text-secondary);">${chips.map(c => `<span style="background:var(--bg-secondary);padding:2px 8px;border-radius:4px;">${c}</span>`).join('')}</div>`);
+  if (!parts.length) { host.innerHTML = ''; return; }
+  host.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;"><div style="font-size:11px;font-weight:700;color:var(--text-tertiary);">🛡 통합 리스크 스코어</div>${parts.join('')}</div>`;
+}
+
+// P2: Factor Attribution Waterfall (시타델 P1 + 르네상스 P2)
+function _renderFactorWaterfall(d) {
+  const host = document.getElementById('dp-factor-waterfall');
+  if (!host) return;
+  const ep = (d && d.EntryPlan) || {};
+  const fc = ep.factor_contrib;
+  if (!fc || typeof fc !== 'object') { host.innerHTML = ''; return; }
+  const entries = Object.entries(fc).filter(([,v]) => v !== 0).sort((a,b) => b[1] - a[1]);
+  if (!entries.length) { host.innerHTML = ''; return; }
+  const maxAbs = Math.max(...entries.map(([,v]) => Math.abs(v)), 1);
+  const bars = entries.map(([k, v]) => {
+    const pct = Math.abs(v) / maxAbs * 100;
+    const col = v >= 0 ? '#16A34A' : '#DC2626';
+    const dir = v >= 0 ? 'right' : 'left';
+    return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;"><span style="width:48px;text-align:right;color:var(--text-secondary);flex-shrink:0;">${esc(k)}</span><div style="flex:1;height:14px;background:var(--bg-secondary);border-radius:3px;position:relative;overflow:hidden;display:flex;justify-content:${v >= 0 ? 'flex-start' : 'flex-end'};"><div style="height:100%;width:${pct}%;background:${col};border-radius:3px;opacity:0.7;"></div></div><span style="width:36px;font-weight:600;color:${col};">${v >= 0 ? '+' : ''}${v.toFixed(1)}</span></div>`;
+  }).join('');
+  host.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;"><div style="font-size:11px;font-weight:700;color:var(--text-tertiary);">📊 점수 기여도 (100점 중)</div>${bars}</div>`;
+}
+
+// P5: Autocorrelation + Mean-Reversion Half-life (르네상스 P3)
+function _renderACCard(d) {
+  const host = document.getElementById('dp-ac-card');
+  if (!host) return;
+  const ep = (d && d.EntryPlan) || {};
+  if (ep.ac1 == null) { host.innerHTML = ''; return; }
+  const ac = ep.ac1;
+  const regime = ac < -0.10 ? '평균회귀 유효' : ac > 0.08 ? '추세추종 유효' : '중립 구간';
+  const col = ac < -0.10 ? '#7C3AED' : ac > 0.08 ? '#16A34A' : 'var(--text-secondary)';
+  let hlText = '';
+  if (ep.halflife != null && ep.halflife > 0 && ep.halflife < 200) {
+    hlText = ` · 반감기 ${ep.halflife.toFixed(0)}일`;
+  }
+  host.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:12px;display:flex;align-items:center;gap:8px;"><span style="font-weight:700;color:var(--text-tertiary);">🔄 AC(1)</span><span style="font-weight:700;color:${col};">${ac.toFixed(3)}</span><span style="color:${col};font-weight:600;">${regime}${hlText}</span></div>`;
+}
+
+// P6: Liquidity Score (블랙록 P3)
+function _renderLiquidityCard(d) {
+  const host = document.getElementById('dp-liquidity-card');
+  if (!host) return;
+  const ep = (d && d.EntryPlan) || {};
+  if (ep.liquidity_score == null) { host.innerHTML = ''; return; }
+  const ls = ep.liquidity_score;
+  const col = ls >= 60 ? '#16A34A' : ls >= 30 ? '#F59E0B' : '#DC2626';
+  const lbl = ls >= 60 ? '양호' : ls >= 30 ? '주의' : '유동성 부족';
+  let detail = '';
+  if (ep.amihud != null) detail = ` · Amihud ${ep.amihud.toFixed(2)}`;
+  host.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:12px;display:flex;align-items:center;gap:8px;"><span style="font-weight:700;color:var(--text-tertiary);">💧 유동성</span><span style="font-weight:700;color:${col};">${Math.round(ls)}/100</span><span style="color:${col};font-weight:600;">${lbl}${detail}</span></div>`;
 }
 
 function _renderFinanceTab(d) {

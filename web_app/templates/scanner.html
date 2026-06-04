@@ -411,6 +411,9 @@
             <span class="dp-score-unit">점</span>
           </div>
           <div id="dp-signal" class="dp-signal-badge">—</div>
+          <!-- P1: Composite Risk Score (Dual Display) -->
+          <div id="dp-risk-gauge" style="display:none;margin-top:6px;display:inline-flex;align-items:center;gap:6px;
+               padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;"></div>
           <div id="dp-leader-badge" style="display:none;margin-top:6px;display:inline-flex;align-items:center;gap:4px;
                background:rgba(22,163,74,0.12);color:#16A34A;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;"></div>
           <!-- 핸드드로잉 워터마크 차트 -->
@@ -507,8 +510,12 @@
             </div>
           </div>
         </div>
-        <!-- P4-P12: 드로다운 리스크 메트릭 -->
+        <!-- 리스크 서머리 + 팩터 워터폴 + 드로다운 + 시그널 카드 -->
+        <div id="dp-risk-summary" style="padding:0 16px 8px;"></div>
+        <div id="dp-factor-waterfall" style="padding:0 16px 8px;"></div>
         <div id="dp-drawdown-risk" style="padding:0 16px 8px;"></div>
+        <div id="dp-ac-card" style="padding:0 16px 8px;"></div>
+        <div id="dp-liquidity-card" style="padding:0 16px 8px;"></div>
         <nav class="dp-tab-nav">
           <button class="dp-tab-btn active" data-tab="canslim" data-action="switchDpTab" data-arg="canslim">CAN SLIM 분석</button>
           <button class="dp-tab-btn" data-tab="tech" data-action="switchDpTab" data-arg="tech">기술 지표</button>

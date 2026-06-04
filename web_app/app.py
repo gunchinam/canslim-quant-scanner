@@ -187,6 +187,8 @@ _ENTRY_PLAN_KEEP: frozenset = frozenset({
     "dd_velocity_5d", "dd_velocity_20d", "underwater_days", "calmar_ratio",
     "skewness", "excess_kurtosis", "downside_beta",
     "stress_2008", "stress_2020", "stress_2022",
+    "composite_risk", "ac1", "halflife", "amihud", "liquidity_score",
+    "factor_contrib",
 })
 # MoatData 서브필드 중 리스트 뷰 미사용 (scores=111B/종목, 상세 패널에서만 사용)
 _MOAT_DATA_STRIP: frozenset = frozenset({"scores", "evidence_source", "story_risk"})

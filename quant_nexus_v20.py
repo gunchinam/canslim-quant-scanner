@@ -2594,7 +2594,9 @@ class WallStreetQuantStrategies:
                   "underwater_days": 0, "calmar_ratio": 0.0,
                   "skewness": 0.0, "excess_kurtosis": 0.0,
                   "downside_beta": None,
-                  "stress_2008": None, "stress_2020": None, "stress_2022": None}
+                  "stress_2008": None, "stress_2020": None, "stress_2022": None,
+                  "composite_risk": None, "ac1": None, "halflife": None,
+                  "amihud": None, "liquidity_score": None}
         try:
             if len(hist) < 50:
                 return result
@@ -2658,6 +2660,34 @@ class WallStreetQuantStrategies:
                 except Exception:
                     pass
 
+            # P-AC: Autocorrelation(1) + Mean-Reversion Half-life
+            if len(daily_ret) >= 60:
+                try:
+                    ac1 = float(daily_ret.iloc[-60:].autocorr(lag=1))
+                    if not (ac1 != ac1):  # NaN check
+                        result["ac1"] = round(ac1, 3)
+                        if ac1 < -0.01:
+                            result["halflife"] = round(-0.6931 / float(np.log(1 + ac1)), 1)
+                except Exception:
+                    pass
+
+            # P-LIQ: Amihud Illiquidity + Liquidity Score
+            if len(hist) >= 20:
+                try:
+                    _vol = hist["Volume"].iloc[-20:]
+                    _cls = hist["Close"].iloc[-20:]
+                    _ret = _cls.pct_change().abs().iloc[1:]
+                    _tvol = (_cls.iloc[1:].values * _vol.iloc[1:].values)
+                    _valid = _tvol > 0
+                    if _valid.sum() >= 10:
+                        _amihud = float((_ret.values[_valid] / _tvol[_valid]).mean()) * 1e6
+                        result["amihud"] = round(_amihud, 4)
+                        # Liquidity score: 0(illiquid) ~ 100(liquid)
+                        _lscore = max(0, min(100, 100 - min(100, _amihud * 20)))
+                        result["liquidity_score"] = round(_lscore, 0)
+                except Exception:
+                    pass
+
             # ── Scoring ──
             cdd = abs(result["current_dd"])
             # P10: Macro-conditional sigmoid center
@@ -2693,6 +2723,25 @@ class WallStreetQuantStrategies:
                 score *= 0.90
 
             result["score"] = round(score, 1)
+
+            # Composite Risk Score (0=안전 ~ 99=극위험) — BlackRock Aladdin 방식
+            # 6개 메트릭 가중합산: MDD(25%) + CVaR(20%) + Velocity(15%) + TUW(15%) + DownBeta(15%) + SkewKurt(10%)
+            try:
+                _mdd_r = min(1.0, abs(result["current_dd"]) / 0.50)        # 50%=max
+                _cvar_r = min(1.0, abs(result["cvar_95"]) / 0.08)          # 8%=max
+                _vel_r = min(1.0, abs(min(0, result["dd_velocity_5d"])) / 0.15)  # 15%p=max
+                _tuw_r = min(1.0, result["underwater_days"] / 200)          # 200일=max
+                _db = result["downside_beta"]
+                _db_r = min(1.0, (max(0, (_db or 1.0) - 0.5)) / 2.0)     # 0.5~2.5→0~1
+                _sk = abs(result["skewness"])
+                _ek = max(0, result["excess_kurtosis"])
+                _sk_r = min(1.0, (_sk + _ek * 0.3) / 4.0)
+                _cr = (_mdd_r * 0.25 + _cvar_r * 0.20 + _vel_r * 0.15
+                       + _tuw_r * 0.15 + _db_r * 0.15 + _sk_r * 0.10)
+                result["composite_risk"] = round(min(99, _cr * 99), 0)
+            except Exception:
+                pass
+
         except Exception as e:
             logging.error(f"[Strategy] drawdown_risk: {e}")
         return result
@@ -6459,7 +6508,19 @@ class QuantNexusApp:
                 "downside_beta": dd.get("downside_beta"),
                 "stress_2008": dd.get("stress_2008"),
                 "stress_2020": dd.get("stress_2020"),
-                "stress_2022": dd.get("stress_2022")}
+                "stress_2022": dd.get("stress_2022"),
+                # Composite Risk Score + AC + Liquidity
+                "composite_risk": dd.get("composite_risk"),
+                "ac1": dd.get("ac1"),
+                "halflife": dd.get("halflife"),
+                "amihud": dd.get("amihud"),
+                "liquidity_score": dd.get("liquidity_score"),
+                # Factor contributions (워터폴 차트용)
+                "factor_contrib": {
+                    "모멘텀": round(s_mom, 1), "밸류": round(s_ff, 1),
+                    "평균회귀": round(s_mr, 1), "퀄리티": round(s_qual, 1),
+                    "레짐": round(s_reg, 1), "수급": round(s_flow, 1),
+                }}
 
             result = {
                 "Ticker":           ticker,

@@ -232,7 +232,7 @@ const _ENTRY_LABEL = { STRONG: '근접 구간', NEUTRAL: '눌림대기', AVOID: 
 // atrPct 있으면 disc/atrPct 비율로 — <0.5 근접 구간, <1.0 이격 구간, 그 외 풀백대기.
 // atrPct null/0 이면 절대값 fallback (1.5%/5%).
 // asOfTs (epoch sec) 가 5분 초과 stale 면 라벨에 ' (stale)' 접미사 (EG-005).
-function _entryLabel(st, disc, atrPct, asOfTs, ddPct, headlineAction) {
+function _entryLabel(st, disc, atrPct, asOfTs, ddPct, headlineAction, mddCurrent, mddRisk, volRegime) {
   let label;
   if (st === 'STRONG' || st === 'GREEN') {
     if (disc == null || isNaN(disc)) {
@@ -245,15 +245,23 @@ function _entryLabel(st, disc, atrPct, asOfTs, ddPct, headlineAction) {
     } else {
       label = (disc < 1.5) ? '근접 구간' : (disc < 5.0) ? '이격 구간' : '풀백대기';
     }
-    // 드로다운 경고 오버레이: 52주 고점 대비 하락률 기반
-    if (ddPct != null && !isNaN(ddPct) && label !== '데이터 부족') {
-      if (ddPct <= -30)      label += ' [고위험]';
-      else if (ddPct <= -20) label += ' [경고]';
-      else if (ddPct <= -15) label += ' [주의]';
+    // 복합 드로다운 경고: 52주 고점 거리와 MDD 중 더 나쁜 쪽, vol_regime 적응형 임계값
+    if (label !== '데이터 부족') {
+      const dd52w = (ddPct != null && !isNaN(ddPct)) ? ddPct : 0;
+      const ddMdd = (mddCurrent != null && !isNaN(mddCurrent)) ? mddCurrent : 0;
+      const worstDd = Math.min(dd52w, ddMdd);
+      // vol_regime별 스케일링: LOW(저변동)=0.6x(더 민감), HIGH(고변동)=1.6x(더 관대)
+      const vScale = (volRegime === 'LOW') ? 0.6 : (volRegime === 'HIGH') ? 1.6 : 1.0;
+      const t1 = -15 * vScale, t2 = -20 * vScale, t3 = -30 * vScale;
+      if (worstDd <= t3)      label += ' [고위험]';
+      else if (worstDd <= t2) label += ' [경고]';
+      else if (worstDd <= t1) label += ' [주의]';
     }
   } else if (headlineAction) {
-    // NEUTRAL/AVOID: 백엔드 headline_action을 SSOT로 사용
     label = headlineAction;
+    // NEUTRAL/AVOID에도 MDD 극단적 위험 표시
+    if (mddRisk === 'EXTREME') label += ' [고위험]';
+    else if (mddRisk === 'HIGH') label += ' [경고]';
   } else {
     label = _ENTRY_LABEL[st] || '';
   }
@@ -334,7 +342,10 @@ function _entryLight(stock) {
   const _asOf = (stock.EntryPlan && stock.EntryPlan.as_of_ts != null) ? stock.EntryPlan.as_of_ts : null;
   const _ddPct = (stock.EntryPlan && stock.EntryPlan.drawdown_pct != null) ? stock.EntryPlan.drawdown_pct : null;
   const _headline = (stock.EntryPlan && stock.EntryPlan.headline_action) ? stock.EntryPlan.headline_action : null;
-  const lbl = _entryLabel(st, _disc, _atrPct, _asOf, _ddPct, _headline);
+  const _mddCur = (stock.EntryPlan && stock.EntryPlan.mdd_current != null) ? stock.EntryPlan.mdd_current : null;
+  const _mddRisk = (stock.EntryPlan && stock.EntryPlan.mdd_risk) ? stock.EntryPlan.mdd_risk : null;
+  const _volRegime = (stock.EntryPlan && stock.EntryPlan.vol_regime) ? stock.EntryPlan.vol_regime : null;
+  const lbl = _entryLabel(st, _disc, _atrPct, _asOf, _ddPct, _headline, _mddCur, _mddRisk, _volRegime);
   const cls = _ENTRY_COLOR[st] || 'neutral';
   const phr = stock.EntryPhrase || '';
   const sc  = stock.EntryScore != null ? `진입 타이밍 ${stock.EntryScore}/100` : '';

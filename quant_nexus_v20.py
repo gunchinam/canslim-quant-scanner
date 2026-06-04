@@ -726,13 +726,13 @@ STRATEGY_WEIGHTS: dict[str, dict[str, float]] = {
         "smart_money":    0.10,   # +0.02 (cs_i 흡수)
         # 보조 퀀트 (합 0.33 — sentiment 포함, volume/rs 흡수분 포함)
         "mtf":            0.04,
-        "drawdown":       0.03,
+        "drawdown":       0.07,   # ★ 상향 (리스크 게이트 강화)
         "volume":         0.08,   # +0.04 (cs_s 흡수)
         "rs":             0.08,   # +0.04 (cs_l 흡수)
-        "price_target":   0.03,
-        "short_int":      0.02,
-        "math":           0.02,
-        "sentiment":      0.03,
+        "price_target":   0.02,
+        "short_int":      0.01,
+        "math":           0.01,
+        "sentiment":      0.02,
         # CAN SLIM (합 0.11) — 독립 신호 cs_c·cs_n만 유지
         "cs_c":           0.06,
         "cs_a":           0.00,   # 중복 제거 → fama_french 흡수
@@ -755,13 +755,13 @@ STRATEGY_WEIGHTS: dict[str, dict[str, float]] = {
         "smart_money":    0.09,   # +0.01 (cs_i 흡수)
         # 보조 퀀트 (합 0.33 — sentiment 포함)
         "mtf":            0.05,   # 멀티타임프레임 모멘텀
-        "drawdown":       0.02,
+        "drawdown":       0.06,   # ★ 상향 (리스크 게이트 강화)
         "volume":         0.12,   # +0.06 (cs_s 흡수)
         "rs":             0.08,   # +0.03 (cs_l 흡수)
-        "price_target":   0.02,
-        "short_int":      0.01,
-        "math":           0.01,
-        "sentiment":      0.02,
+        "price_target":   0.01,
+        "short_int":      0.00,
+        "math":           0.00,
+        "sentiment":      0.01,
         # CAN SLIM (합 0.14) — 독립 신호만
         "cs_c":           0.05,
         "cs_a":           0.00,   # 중복 제거
@@ -783,13 +783,13 @@ STRATEGY_WEIGHTS: dict[str, dict[str, float]] = {
         "smart_money":    0.05,   # +0.02 (cs_i 흡수)
         # 보조 퀀트 (합 0.31 — sentiment 포함)
         "mtf":            0.02,
-        "drawdown":       0.04,   # 리스크 관리
+        "drawdown":       0.08,   # ★ 상향 (리스크 게이트 강화)
         "volume":         0.04,   # +0.02 (cs_s 흡수)
         "rs":             0.06,   # +0.04 (cs_l 흡수)
-        "price_target":   0.07,   # ★ DCF 적정가 상승여력
-        "short_int":      0.03,
-        "math":           0.02,
-        "sentiment":      0.03,
+        "price_target":   0.06,   # ★ DCF 적정가 상승여력
+        "short_int":      0.02,
+        "math":           0.01,
+        "sentiment":      0.02,
         # CAN SLIM (합 0.04) — 독립 신호만
         "cs_c":           0.02,
         "cs_a":           0.00,   # 중복 제거
@@ -811,13 +811,13 @@ STRATEGY_WEIGHTS: dict[str, dict[str, float]] = {
         "smart_money":    0.06,   # +0.02 (cs_i 흡수)
         # 보조 퀀트 (합 0.32 — sentiment 포함)
         "mtf":            0.03,
-        "drawdown":       0.02,
+        "drawdown":       0.06,   # ★ 상향 (리스크 게이트 강화)
         "volume":         0.10,   # +0.05 (cs_s/S원칙 흡수)
         "rs":             0.11,   # +0.07 (cs_l/L원칙 흡수)
-        "price_target":   0.01,
-        "short_int":      0.01,
-        "math":           0.02,
-        "sentiment":      0.02,
+        "price_target":   0.00,
+        "short_int":      0.00,
+        "math":           0.01,
+        "sentiment":      0.01,
         # CAN SLIM (합 0.19) — 독립 신호 cs_c·cs_n만 유지
         "cs_c":           0.12,   # ★★★ C: EPS 가속도
         "cs_a":           0.00,   # 중복 제거 → fama_french
@@ -839,13 +839,13 @@ STRATEGY_WEIGHTS: dict[str, dict[str, float]] = {
         "smart_money":    0.09,   # +0.01 (cs_i 흡수)
         # 보조 퀀트 (합 0.29)
         "mtf":            0.03,
-        "drawdown":       0.02,
+        "drawdown":       0.06,   # ★ 상향 (리스크 게이트 강화)
         "volume":         0.13,   # +0.05 (cs_s 흡수)
         "rs":             0.06,   # +0.03 (cs_l 흡수)
-        "price_target":   0.01,
-        "short_int":      0.01,
-        "math":           0.01,
-        "sentiment":      0.03,
+        "price_target":   0.00,
+        "short_int":      0.00,
+        "math":           0.00,
+        "sentiment":      0.02,
         # CAN SLIM (합 0.08) — 독립 신호만
         "cs_c":           0.03,
         "cs_a":           0.00,   # 중복 제거
@@ -2588,7 +2588,7 @@ class WallStreetQuantStrategies:
         페널티: MDD > 30% → -20점
         """
         result = {"max_dd": 0.0, "current_dd": 0.0, "recovery": 0.0,
-                  "score": 0, "risk": "NORMAL"}
+                  "cvar_95": 0.0, "score": 0, "risk": "NORMAL"}
         try:
             if len(hist) < 50:
                 return result
@@ -2602,15 +2602,29 @@ class WallStreetQuantStrategies:
                 if d.iloc[-1] > d.iloc[0]:
                     result["recovery"] = float(d.iloc[-1] - d.iloc[0])
 
-            score = 0
+            # CVaR 95%: 일간 수익률 하위 5%의 평균 손실 (꼬리 위험 정량화)
+            daily_ret = c.pct_change().dropna()
+            if len(daily_ret) >= 30:
+                var_95 = float(daily_ret.quantile(0.05))
+                tail = daily_ret[daily_ret <= var_95]
+                result["cvar_95"] = round(float(tail.mean()) if len(tail) > 0 else var_95, 4)
+
+            import math
             cdd = abs(result["current_dd"])
-            if cdd > 0.30:   score -= 20; result["risk"] = "EXTREME"
-            elif cdd > 0.20: score -= 15; result["risk"] = "HIGH"
-            elif cdd > 0.10: score -= 8;  result["risk"] = "ELEVATED"
-            elif cdd > 0.05: score -= 3;  result["risk"] = "MODERATE"
-            else:            score += 5;  result["risk"] = "LOW"
-            if result["recovery"] > 0.05: score += 5
-            result["score"] = score
+            # 시그모이드 연속 점수: 5 - 25 / (1 + exp(-18*(cdd-0.12)))
+            # cdd=0 → +5, cdd=0.05 → +1.5, cdd=0.10 → -5.6, cdd=0.20 → -16.5, cdd=0.30 → -19.6
+            score = 5.0 - 25.0 / (1.0 + math.exp(-18.0 * (cdd - 0.12)))
+            # risk 등급 (라벨용, 임계값 유지)
+            if cdd > 0.30:   result["risk"] = "EXTREME"
+            elif cdd > 0.20: result["risk"] = "HIGH"
+            elif cdd > 0.10: result["risk"] = "ELEVATED"
+            elif cdd > 0.05: result["risk"] = "MODERATE"
+            else:            result["risk"] = "LOW"
+            # recovery 보너스: 비례 스케일링 (최대 +5, 5%p당 +1)
+            rec = result["recovery"]
+            if rec > 0:
+                score += min(5.0, rec / 0.05)
+            result["score"] = round(score, 1)
         except Exception as e:
             logging.error(f"[Strategy] drawdown_risk: {e}")
         return result
@@ -5761,6 +5775,16 @@ class QuantNexusApp:
                 final = min(final, 55.0)
                 canslim_tags.append("[LIQ⚠️] 거래대금 부족 → 최대 55점")
 
+            # ── STEP 10.6 — Drawdown Risk Gate (multiplicative dampening) ──
+            # EXTREME MDD → ×0.65, HIGH → ×0.80 (가중합과 독립적인 하드 게이트)
+            _dd_risk = dd.get("risk", "NORMAL")
+            if _dd_risk == "EXTREME":
+                final *= 0.65
+                canslim_tags.append(f"[DD⚠️] MDD {dd['current_dd']:.0%} 극단적 낙폭 → ×0.65 감쇄")
+            elif _dd_risk == "HIGH":
+                final *= 0.80
+                canslim_tags.append(f"[DD⚠️] MDD {dd['current_dd']:.0%} 고위험 낙폭 → ×0.80 감쇄")
+
             # ════════════════════════════════════════════════════════════
             # STEP 10.7 — 전략 통합 점수 (5개 전략 동시 산출)
             # ────────────────────────────────────────────────────────────
@@ -6327,7 +6351,12 @@ class QuantNexusApp:
                 "confidence_band": confidence_band,
                 "one_reason": one_reason,
                 "vol_regime": atr.get("vol_regime", "NORMAL"),
-                "drawdown_pct": round(-float(atr.get("dist_from_52w_high", 0.0) or 0.0) * 100, 1)}
+                "drawdown_pct": round(-float(mom.get("dist_from_52w_high", 0.0) or 0.0) * 100, 1),
+                "mdd_current": round(float(dd.get("current_dd", 0.0) or 0.0) * 100, 1),
+                "mdd_risk": dd.get("risk", "NORMAL"),
+                "mdd_recovery": round(float(dd.get("recovery", 0.0) or 0.0) * 100, 1),
+                "size_suggestion": atr.get("size_suggestion", "NORMAL"),
+                "cvar_95": round(float(dd.get("cvar_95", 0.0) or 0.0) * 100, 2)}
 
             result = {
                 "Ticker":           ticker,

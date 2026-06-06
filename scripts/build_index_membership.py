@@ -17,6 +17,7 @@ import io
 import json
 import os
 import sys
+import time
 from datetime import datetime
 
 import pandas as pd
@@ -26,6 +27,9 @@ _UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 )
+
+_MIN_CONSTITUENTS = 50   # 구성종목 테이블 sanity 하한 (지수당 최소 종목 수)
+_MAX_RETRIES = 3         # 위키 요청 실패 시 재시도 횟수
 
 # (지수 키, 위키 URL, 심볼 컬럼 후보들)
 _SOURCES = [
@@ -46,10 +50,23 @@ def _normalize(sym: str) -> str:
     return s
 
 
+def _fetch_html(url: str) -> str:
+    """위키 페이지를 지수 backoff 재시도로 가져온다(일시적 네트워크/429 대응)."""
+    last_err: Exception | None = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            resp = requests.get(url, headers={"User-Agent": _UA}, timeout=20)
+            resp.raise_for_status()
+            return resp.text
+        except Exception as e:  # noqa: BLE001
+            last_err = e
+            if attempt < _MAX_RETRIES - 1:
+                time.sleep(2 ** attempt)  # 1s, 2s, ...
+    raise RuntimeError(f"요청 실패({_MAX_RETRIES}회): {url} — {last_err}")
+
+
 def _fetch_symbols(url: str, col_candidates: tuple[str, ...]) -> list[str]:
-    resp = requests.get(url, headers={"User-Agent": _UA}, timeout=20)
-    resp.raise_for_status()
-    tables = pd.read_html(io.StringIO(resp.text))
+    tables = pd.read_html(io.StringIO(_fetch_html(url)))
     # 심볼 컬럼을 가진 첫 테이블을 사용
     for df in tables:
         cols = {str(c).strip(): c for c in df.columns}
@@ -57,7 +74,7 @@ def _fetch_symbols(url: str, col_candidates: tuple[str, ...]) -> list[str]:
             if cand in cols:
                 raw = df[cols[cand]].dropna().tolist()
                 syms = sorted({_normalize(x) for x in raw if str(x).strip()})
-                if len(syms) >= 50:  # 구성종목 테이블이 맞는지 sanity check
+                if len(syms) >= _MIN_CONSTITUENTS:  # 구성종목 테이블이 맞는지 sanity check
                     return syms
     raise RuntimeError(f"심볼 컬럼을 찾지 못함: {url} (후보 {col_candidates})")
 
@@ -85,7 +102,7 @@ def main() -> int:
             result[key] = []
 
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=0)
+        json.dump(result, f, ensure_ascii=False, indent=1)
     print(f"\n저장: {out_path}")
     return 0
 

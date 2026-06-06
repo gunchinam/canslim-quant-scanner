@@ -9,7 +9,7 @@ import random
 import threading
 import logging
 import concurrent.futures
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 # ── 프로세스-전역 VIX 캐시 ────────────────────────────────────────────────
 # KR/US 어댑터가 거의 동시에 생성될 때 ^VIX 를 중복 호출해 429를 자초하던 문제 해결.
@@ -91,6 +91,7 @@ except Exception as _e:  # pragma: no cover
 _INDEX_KEYS = ("SP500", "SP400", "SP600", "NDX")  # 표시 우선순위
 _INDEX_REVERSE: dict[str, list[str]] | None = None
 _INDEX_META: dict = {}  # 명단 생성일·신선도 (point-in-time 규율용)
+_INDEX_LOCK = threading.Lock()  # _INDEX_REVERSE lazy 초기화 동시성 보호(US/KR 동시 생성)
 # 분기 리밸런싱 주기 → 100일 넘으면 명단이 늙은 것으로 간주(권고3: 갱신 캐던스 고정)
 _INDEX_STALE_DAYS = 100
 
@@ -106,62 +107,68 @@ def _load_index_membership() -> dict[str, list[str]]:
     global _INDEX_REVERSE, _INDEX_META
     if _INDEX_REVERSE is not None:
         return _INDEX_REVERSE
-    rev: dict[str, list[str]] = {}
-    meta: dict = {"generated": None, "stale_days": None, "is_stale": False, "tickers": 0}
-    try:
-        import json
-        from datetime import datetime as _dt
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index_membership.json")
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        for key in _INDEX_KEYS:
-            for sym in data.get(key, []):
-                rev.setdefault(str(sym).upper(), []).append(key)
-        # 우선순위대로 정렬 (SP500 → SP400 → SP600 → NDX)
-        order = {k: i for i, k in enumerate(_INDEX_KEYS)}
-        for sym in rev:
-            rev[sym].sort(key=lambda k: order.get(k, 99))
-        # 권고3: 명단 생성일 기준 신선도 점검 — 분기 리밸런싱을 놓치면 경고.
-        gen = (data.get("_meta") or {}).get("generated")
-        meta["generated"] = gen
-        meta["tickers"] = len(rev)
-        meta["counts"] = {k: len(data.get(k, [])) for k in _INDEX_KEYS}
-        if gen:
-            try:
-                gd = _dt.strptime(str(gen)[:10], "%Y-%m-%d")
-                days = (_dt.now() - gd).days
-                meta["stale_days"] = days
-                meta["is_stale"] = days > _INDEX_STALE_DAYS
-                if meta["is_stale"]:
-                    logging.warning(
-                        "[Adapter] 지수 명단이 %d일 경과(>%d) — "
-                        "scripts/build_index_membership.py 재실행 권장",
-                        days, _INDEX_STALE_DAYS,
-                    )
-            except Exception:  # noqa: BLE001
-                pass
-        logging.info("[Adapter] index membership loaded: %d tickers (기준일 %s)", len(rev), gen)
-    except FileNotFoundError:
-        logging.warning("[Adapter] index_membership.json 없음 → 지수 필터 비활성화")
-    except Exception as e:  # noqa: BLE001
-        logging.warning("[Adapter] index membership 로드 실패: %s", e)
-    _INDEX_REVERSE = rev
-    _INDEX_META = meta
-    return rev
+    with _INDEX_LOCK:  # 이중확인 락 — US/KR 어댑터 동시 생성 시 중복 로드·경고 이중출력 방지
+        if _INDEX_REVERSE is not None:
+            return _INDEX_REVERSE
+        rev: dict[str, list[str]] = {}
+        meta: dict = {"generated": None, "stale_days": None, "is_stale": False, "tickers": 0}
+        try:
+            import json
+            from datetime import datetime as _dt
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index_membership.json")
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            for key in _INDEX_KEYS:
+                for sym in data.get(key, []):
+                    rev.setdefault(str(sym).upper(), []).append(key)
+            # 우선순위대로 정렬 (SP500 → SP400 → SP600 → NDX)
+            order = {k: i for i, k in enumerate(_INDEX_KEYS)}
+            for sym in rev:
+                rev[sym].sort(key=lambda k: order.get(k, 99))
+            # 권고3: 명단 생성일 기준 신선도 점검 — 분기 리밸런싱을 놓치면 경고.
+            gen = (data.get("_meta") or {}).get("generated")
+            meta["generated"] = gen
+            meta["tickers"] = len(rev)
+            meta["counts"] = {k: len(data.get(k, [])) for k in _INDEX_KEYS}
+            if gen:
+                try:
+                    gd = _dt.strptime(str(gen)[:10], "%Y-%m-%d")
+                    days = (_dt.now() - gd).days
+                    meta["stale_days"] = days
+                    meta["is_stale"] = days > _INDEX_STALE_DAYS
+                    if meta["is_stale"]:
+                        logging.warning(
+                            "[Adapter] 지수 명단이 %d일 경과(>%d) — "
+                            "scripts/build_index_membership.py 재실행 권장",
+                            days, _INDEX_STALE_DAYS,
+                        )
+                except Exception:  # noqa: BLE001
+                    pass
+            logging.info("[Adapter] index membership loaded: %d tickers (기준일 %s)", len(rev), gen)
+        except FileNotFoundError:
+            logging.warning("[Adapter] index_membership.json 없음 → 지수 필터 비활성화")
+        except Exception as e:  # noqa: BLE001
+            logging.warning("[Adapter] index membership 로드 실패: %s", e)
+        _INDEX_REVERSE = rev
+        _INDEX_META = meta
+        return rev
 
 
-def _attach_index_membership(rows: list[dict]) -> None:
+def _attach_index_membership(rows: list[dict], *, compute_bucket: bool = True) -> None:
     """각 종목 row 에 Indices(편입 지수) + RSBucket(버킷 내 size-중립 상대강도)을 부착.
 
     권고1: 전체 유니버스가 아니라 같은 지수 버킷 안에서 RS를 백분위 랭크해
     size 베타에 오염된 가짜 주도주를 걸러낸다. 기존 RSRating 은 보존(추가 필드).
+
+    compute_bucket: RSBucket(버킷 내 백분위)은 rows 가 '전체 유니버스'일 때만
+    의미가 있다. 단일 섹터 스캔(scan_sector)은 (섹터∩지수) 소표본이라 백분위가
+    왜곡되므로 False 로 호출해 RSBucket 계산을 생략한다(Indices 는 항상 부착).
     """
     rev = _load_index_membership()
     if not rev:
         return
 
     # 1) Indices 부착 + 대표 버킷 결정 (우선순위 첫 번째, 미편입은 OTHER)
-    from collections import defaultdict
     groups: dict[str, list[dict]] = defaultdict(list)
     for r in rows:
         sym = str(r.get("Ticker", "")).upper()
@@ -171,7 +178,11 @@ def _attach_index_membership(rows: list[dict]) -> None:
         r["RSBucketName"] = bucket
         groups[bucket].append(r)
 
+    if not compute_bucket:
+        return  # 섹터 스캔: 소표본 백분위는 오해를 부르므로 생략
+
     # 2) 버킷 내 RS 백분위 (1~99, 높을수록 동일-시총군 내 상대강도 우위)
+    #    동률은 평균 순위로 처리해 같은 RS 가 같은 백분위를 받도록 한다.
     def _rs_key(r: dict):
         v = r.get("RS_WeightedRet")
         if v is None:
@@ -186,8 +197,16 @@ def _attach_index_membership(rows: list[dict]) -> None:
                 r["RSBucket"] = 50
             continue
         ranked = sorted(members, key=_rs_key)  # 약 → 강
-        for i, r in enumerate(ranked):
-            r["RSBucket"] = int(round(i / (n - 1) * 98)) + 1
+        i = 0
+        while i < n:
+            j = i
+            kv = _rs_key(ranked[i])
+            while j + 1 < n and _rs_key(ranked[j + 1]) == kv:
+                j += 1  # 동률 구간 [i, j]
+            pct = int(round(((i + j) / 2.0) / (n - 1) * 98)) + 1  # 평균 순위 → 1~99
+            for t in range(i, j + 1):
+                ranked[t]["RSBucket"] = pct
+            i = j + 1
 
 
 class ScanAdapter:
@@ -363,6 +382,8 @@ class ScanAdapter:
             "SP600": "🗂️ S&P600 스몰캡 (지수보강)",
             "NDX":   "🗂️ 나스닥100 (지수보강)",
         }
+        # S&P600 스몰캡(저유동성 다수)은 INDEX_AUGMENT_SP600=0 으로 보강 제외 가능.
+        skip_sp600 = os.environ.get("INDEX_AUGMENT_SP600", "1").strip().lower() in ("0", "false", "no")
         buckets: dict[str, list[str]] = {k: [] for k in label}
         for sym, idxs in rev.items():
             if sym in have or not idxs:
@@ -372,12 +393,15 @@ class ScanAdapter:
                 buckets[primary].append(sym)
         added = 0
         for key, syms in buckets.items():
+            if key == "SP600" and skip_sp600:
+                continue
             syms = _filter_symbols(sorted(syms))  # alias 정규화 + DELISTED 제거
             if syms:
                 self._sectors[label[key]] = syms
                 added += len(syms)
         if added:
-            logging.info("[Adapter] 지수 유니버스 보강: +%d 종목 (빠진 구성종목 채움)", added)
+            logging.info("[Adapter] 지수 유니버스 보강: +%d 종목 (빠진 구성종목 채움%s)",
+                         added, ", S&P600 제외" if skip_sp600 else "")
 
     # ── QuantNexusApp이 사용하는 메서드 (tkinter 콜백 대체) ──────────────
 
@@ -502,7 +526,7 @@ class ScanAdapter:
         apply_speculative_correction(results)
         _annotate_micro_outlier(results)
         _attach_bottleneck(results)
-        _attach_index_membership(results)
+        _attach_index_membership(results, compute_bucket=False)  # 섹터 스캔: 소표본 백분위 왜곡 방지
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         return results
 

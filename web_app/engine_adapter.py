@@ -540,6 +540,15 @@ class ScanAdapter:
         _attach_bottleneck(results)
         _attach_index_membership(results)
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
+        # forward IC 추적: BOTTLENECK_SNAPSHOT=1 일 때만 오늘 병목 등급 스냅샷 적재
+        if os.environ.get("BOTTLENECK_SNAPSHOT") == "1":
+            try:
+                import datetime as _dt
+                import bottleneck_ic as _bic
+                n = _bic.record_snapshot(results, date=_dt.date.today())
+                logging.info("[bottleneck_ic] 스냅샷 %d건 적재", n)
+            except Exception as e:
+                logging.debug("[bottleneck_ic] 스냅샷 실패: %s", e)
         return results
 
     @staticmethod

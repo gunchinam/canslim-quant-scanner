@@ -104,3 +104,4 @@ package-lock.json
 
 # 세션 작업 디렉터리 (커밋 제외)
 .superpowers/
+.bottleneck_snapshots/

@@ -1307,13 +1307,25 @@ def api_etf_sectors(ticker: str):
     """GET /api/etf-sectors/SPY → ETF 섹터 비중(지연 로딩). /api/etf 와 분리."""
     ticker = _validate_ticker(ticker)
     if not ticker:
-        return jsonify({"ticker": "", "sectors": [], "stale": True}), 400
+        return jsonify({"ticker": "", "sectors": [], "holdings": [], "stale": True}), 400
     try:
         import etf
         return jsonify(etf.get_etf_sectors(ticker))
     except Exception as e:
         logging.warning("api_etf_sectors failed: %s", e)
-        return jsonify({"ticker": ticker, "sectors": [], "stale": True})
+        return jsonify({"ticker": ticker, "sectors": [], "holdings": [], "stale": True})
+
+
+@app.route("/api/etf-rotation")
+def api_etf_rotation():
+    """GET /api/etf-rotation → 섹터 ETF M1/M3 수익률 히트맵. /api/scan 과 분리."""
+    try:
+        import etf
+        force = request.args.get("force") in ("1", "true", "yes")
+        return jsonify(etf.get_etf_rotation(force=force))
+    except Exception as e:
+        logging.warning("api_etf_rotation failed: %s", e)
+        return jsonify({"us": [], "kr": [], "ts": None, "stale": True})
 
 
 @app.route("/api/score-eval")

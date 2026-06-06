@@ -234,7 +234,7 @@ const _ENTRY_LABEL = { STRONG: '근접 구간', NEUTRAL: '눌림대기', AVOID: 
 // disc<0 → '풀백대기' (현재가가 entry 위, 추격),
 // atrPct 있으면 disc/atrPct 비율로 — <0.5 근접 구간, <1.0 이격 구간, 그 외 풀백대기.
 // atrPct null/0 이면 절대값 fallback (1.5%/5%).
-// asOfTs (epoch sec) 가 5분 초과 stale 면 라벨에 ' (stale)' 접미사 (EG-005).
+// asOfTs (epoch sec) 가 5분 초과 stale 면 라벨에 ' · 지연' 접미사 (EG-005).
 function _entryLabel(st, disc, atrPct, asOfTs, ddPct, headlineAction, mddCurrent, mddRisk, volRegime, ddVelocity5d) {
   let label;
   if (st === 'STRONG' || st === 'GREEN') {
@@ -258,21 +258,21 @@ function _entryLabel(st, disc, atrPct, asOfTs, ddPct, headlineAction, mddCurrent
       const worstDd = Math.min(dd52w, ddMdd);
       const vScale = (volRegime === 'LOW') ? 0.6 : (volRegime === 'HIGH') ? 1.6 : 1.0;
       const t1 = -15 * vScale, t2 = -20 * vScale, t3 = -30 * vScale;
-      if (vel < -5)                label += ' [급락]';
-      else if (worstDd <= t3)      label += ' [고위험]';
-      else if (worstDd <= t2)      label += ' [경고]';
-      else if (worstDd <= t1)      label += ' [주의]';
+      if (vel < -5)                label += ' · 급락';
+      else if (worstDd <= t3)      label += ' · 고위험';
+      else if (worstDd <= t2)      label += ' · 경고';
+      else if (worstDd <= t1)      label += ' · 주의';
     }
   } else if (headlineAction) {
     label = headlineAction;
-    if (mddRisk === 'EXTREME') label += ' [고위험]';
-    else if (mddRisk === 'HIGH') label += ' [경고]';
+    if (mddRisk === 'EXTREME') label += ' · 고위험';
+    else if (mddRisk === 'HIGH') label += ' · 경고';
   } else {
     label = _ENTRY_LABEL[st] || '';
   }
   if (label && asOfTs != null && !isNaN(asOfTs) && asOfTs > 0) {
     const ageSec = Date.now() / 1000 - asOfTs;
-    if (ageSec > 300) label += ' (stale)';
+    if (ageSec > 300) label += ' · 지연';
   }
   return label;
 }
@@ -4533,8 +4533,9 @@ function openEtfView() {
   if (tbl) tbl.style.display = 'none';
   if (mob) mob.style.display = 'none';
   view.hidden = false;
-  const chip = document.querySelector('.chip-etf');
-  if (chip) chip.classList.add('active');
+  const rot = document.getElementById('etf-rotation');
+  if (rot) rot.hidden = false;   // F. 로테이션 토글 노출(본문은 클릭 시 지연 로딩)
+  _setViewTab('etf');
   // 매번 새로 호출하되 서버 TTL 캐시가 비용을 흡수 (최초 1회만 로딩 표시)
   loadEtfData(!_etfLoaded);
 }
@@ -4548,8 +4549,20 @@ function closeEtfView() {
   const mob = document.getElementById('mobile-stock-list');
   if (tbl) tbl.style.display = '';
   if (mob) mob.style.display = '';
-  const chip = document.querySelector('.chip-etf');
-  if (chip) chip.classList.remove('active');
+  _setViewTab('stock');
+}
+
+// 종목 스캐너 뷰로 복귀 (ETF 탭 → 종목 탭)
+function showStockView() {
+  closeEtfView();
+  _setViewTab('stock');
+}
+
+// 뷰 전환 탭 active 동기화
+function _setViewTab(view) {
+  document.querySelectorAll('.view-tab').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.view === view);
+  });
 }
 
 async function loadEtfData(showLoading) {
@@ -4575,6 +4588,76 @@ async function loadEtfData(showLoading) {
       krEl.innerHTML = '';
     }
   }
+}
+
+// ── F. 섹터 로테이션 히트맵 ──────────────────────────────────────────
+let _etfRotationLoaded = false;
+
+function toggleEtfRotation() {
+  const wrap = document.getElementById('etf-rotation');
+  const body = document.getElementById('etf-rotation-body');
+  if (!wrap || !body) return;
+  const toggle = wrap.querySelector('.etf-rotation-toggle');
+  const open = body.hidden;   // 현재 닫혀 있으면 연다
+  body.hidden = !open;
+  wrap.classList.toggle('expanded', open);
+  if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open && !_etfRotationLoaded) loadEtfRotation();
+}
+
+async function loadEtfRotation() {
+  const body = document.getElementById('etf-rotation-body');
+  if (!body) return;
+  body.innerHTML = '<div class="etf-sectors-loading">로테이션 불러오는 중…</div>';
+  try {
+    const res = await fetch('/api/etf-rotation');
+    const d = await res.json();
+    _etfRotationLoaded = true;
+    body.innerHTML = _renderEtfRotation(d);
+  } catch (e) {
+    console.warn('loadEtfRotation failed', e);
+    body.innerHTML = '<div class="etf-sectors-empty">로테이션을 불러오지 못했어요.</div>';
+  }
+}
+
+// 수익률 → 색(초록=상승/빨강=하락 강도). 한국식 색이 아니라 글로벌 히트맵 관례.
+function _rotationCellStyle(v) {
+  if (v == null || isNaN(Number(v))) return 'background:var(--surface-subtle);color:var(--text-tertiary);';
+  const n = Number(v);
+  // ±15% 를 최대 강도로 클램프
+  const a = Math.min(1, Math.abs(n) / 15);
+  if (n >= 0) return `background:rgba(16,185,129,${(0.12 + a * 0.6).toFixed(2)});color:#065f46;`;
+  return `background:rgba(239,68,68,${(0.12 + a * 0.6).toFixed(2)});color:#7f1d1d;`;
+}
+
+function _rotationCell(v) {
+  if (v == null || isNaN(Number(v))) return `<td class="etf-rot-cell" style="${_rotationCellStyle(null)}">—</td>`;
+  const n = Number(v);
+  const txt = (n > 0 ? '+' : '') + n.toFixed(1) + '%';
+  return `<td class="etf-rot-cell" style="${_rotationCellStyle(n)}">${esc(txt)}</td>`;
+}
+
+function _rotationTable(title, rows) {
+  if (!rows.length) return '';
+  // M3 기준 내림차순 정렬 → 주도 섹터가 위로
+  const sorted = rows.slice().sort((a, b) => (Number(b.m3) || -999) - (Number(a.m3) || -999));
+  const body = sorted.map(r =>
+    `<tr><td class="etf-rot-label" title="${esc(r.ticker || '')}">${esc(r.label || '')}</td>` +
+    _rotationCell(r.m1) + _rotationCell(r.m3) + '</tr>').join('');
+  return `<div class="etf-rot-block">
+    <div class="etf-rot-title">${esc(title)}</div>
+    <table class="etf-rot-table"><thead><tr>
+      <th></th><th>1개월</th><th>3개월</th>
+    </tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+function _renderEtfRotation(d) {
+  const us = (d && Array.isArray(d.us)) ? d.us : [];
+  const kr = (d && Array.isArray(d.kr)) ? d.kr : [];
+  if (!us.length && !kr.length) {
+    return '<div class="etf-sectors-empty">로테이션 데이터가 없어요.</div>';
+  }
+  return `<div class="etf-rot-grid">${_rotationTable('🇺🇸 미국 섹터', us)}${_rotationTable('🇰🇷 한국 테마', kr)}</div>`;
 }
 
 // 거래량 한글 축약 (만/억)
@@ -4612,12 +4695,20 @@ function _etfCardHtml(row) {
   const markCls = pos >= 85 ? 'high' : (pos <= 15 ? 'low' : 'mid');
 
   const tk = esc(row.ticker || '');
+  const isKr = /\.(KS|KQ)$/i.test(tk);
+  const bareCode = isKr ? tk.replace(/\.(KS|KQ)$/i, '') : tk;
+  // 미국은 티커(SOXL 등)가 핵심 식별자 → 이름 줄에 굵게 앞세움. 한국 6자리 코드는 우측 작게.
+  const tickerTag = isKr ? '' : `<span class="etf-tk">${tk}</span> `;
+  const rightId = isKr ? (esc(bareCode) + ' ') : '';
+  const levBadge = row.is_leveraged
+    ? '<span class="etf-lev-badge" title="레버리지·인버스 — 장기보유 부적합">⚠</span>'
+    : '';
   return `
-    <div class="etf-card" data-etf-ticker="${tk}">
+    <div class="etf-card${row.is_leveraged ? ' leveraged' : ''}" data-etf-ticker="${tk}">
       <div class="etf-card-clickable" data-action="toggleEtfSectors" data-arg="${tk}" title="섹터 비중 보기">
         <div class="etf-card-top">
-          <span class="etf-name">${esc(row.label || '')}</span>
-          <span class="etf-ticker">${tk} <span class="etf-expand-chevron">▾</span></span>
+          <span class="etf-name">${levBadge}${tickerTag}${esc(row.label || '')}</span>
+          <span class="etf-ticker">${rightId}<span class="etf-expand-chevron">▾</span></span>
         </div>
         <div class="etf-card-mid">
           <span class="etf-price">${esc(_fmtEtfPrice(row))}</span>
@@ -4662,41 +4753,144 @@ async function toggleEtfSectors(ticker) {
   card.classList.add('expanded');
   box.hidden = false;
 
+  const isLev = card.classList.contains('leveraged');
+
   // 캐시 적중 시 재요청 안 함
   if (_etfSectorCache[ticker]) {
-    box.innerHTML = _renderEtfSectors(_etfSectorCache[ticker]);
+    box.innerHTML = _renderEtfDetail(_etfSectorCache[ticker], ticker, isLev);
     return;
   }
 
-  box.innerHTML = '<div class="etf-sectors-loading">섹터 비중 불러오는 중…</div>';
+  box.innerHTML = '<div class="etf-sectors-loading">구성 정보 불러오는 중…</div>';
   try {
     const res = await fetch('/api/etf-sectors/' + encodeURIComponent(ticker));
     const d = await res.json();
-    const sectors = Array.isArray(d.sectors) ? d.sectors : [];
-    _etfSectorCache[ticker] = sectors;
-    box.innerHTML = _renderEtfSectors(sectors);
+    const detail = {
+      sectors: Array.isArray(d.sectors) ? d.sectors : [],
+      holdings: Array.isArray(d.holdings) ? d.holdings : [],
+      meta: (d && typeof d.meta === 'object' && d.meta) ? d.meta : null,
+    };
+    _etfSectorCache[ticker] = detail;
+    box.innerHTML = _renderEtfDetail(detail, ticker, isLev);
   } catch (e) {
     console.warn('toggleEtfSectors failed', e);
-    box.innerHTML = '<div class="etf-sectors-empty">섹터 비중을 불러오지 못했어요.</div>';
+    box.innerHTML = '<div class="etf-sectors-empty">구성 정보를 불러오지 못했어요.</div>';
   }
 }
 
-function _renderEtfSectors(sectors) {
-  if (!Array.isArray(sectors) || !sectors.length) {
-    return '<div class="etf-sectors-empty">섹터 비중 정보가 없어요.</div>';
-  }
-  const max = sectors.reduce((m, s) => Math.max(m, Number(s.weight_pct) || 0), 0) || 100;
-  const rows = sectors.map((s) => {
-    const pct = Number(s.weight_pct) || 0;
-    const w = Math.max(2, Math.min(100, (pct / max) * 100));
-    return `
+// 가중치 막대 행 1개 (구성종목/섹터 공용)
+function _etfWeightRow(label, pct, maxPct, cls, fixed, subTitle) {
+  const p = Number(pct) || 0;
+  const w = Math.max(2, Math.min(100, (p / (maxPct || 100)) * 100));
+  const titleAttr = subTitle ? ` title="${esc(subTitle)}"` : '';
+  return `
       <div class="etf-sector-row">
-        <span class="etf-sector-label">${esc(s.label || '')}</span>
-        <span class="etf-sector-track"><span class="etf-sector-fill" style="width:${w}%"></span></span>
-        <span class="etf-sector-pct">${pct.toFixed(1)}%</span>
+        <span class="etf-sector-label"${titleAttr}>${esc(label || '')}</span>
+        <span class="etf-sector-track"><span class="etf-sector-fill ${cls}" style="width:${w}%"></span></span>
+        <span class="etf-sector-pct">${p.toFixed(fixed)}%</span>
       </div>`;
-  }).join('');
-  return '<div class="etf-sectors-title">섹터 비중</div>' + rows;
+}
+
+// 수익률 1개(한국식: +빨강/−파랑) — null이면 빈 문자열
+function _etfRetChip(label, v) {
+  if (v == null || isNaN(Number(v))) return '';
+  const n = Number(v);
+  const dir = n > 0.005 ? 'up' : (n < -0.005 ? 'down' : 'flat');
+  const txt = (n > 0 ? '+' : '') + n.toFixed(2) + '%';
+  return `<span class="etf-ret-chip"><span class="etf-ret-label">${esc(label)}</span>` +
+         `<span class="etf-ret-val ${dir}">${esc(txt)}</span></span>`;
+}
+
+// 보유종목 ticker → 스캐너 상세용 심볼. KR 6자리코드는 .KS 부착(추정), US는 그대로.
+function _etfHoldingSymbol(rawTicker, etfTicker) {
+  const t = String(rawTicker || '').trim();
+  if (!t) return '';
+  const etfKr = /\.(KS|KQ)$/.test(String(etfTicker || ''));
+  if (etfKr && /^\d{6}$/.test(t)) return t + '.KS';
+  return t;
+}
+
+// 보유종목 클릭 → 스캐너 상세 이동(존재하면 openDetail, 없으면 무반응)
+function openEtfHolding(symbol) {
+  if (!symbol) return;
+  try {
+    if (typeof openDetail === 'function') { openDetail(symbol); }
+  } catch (e) { console.warn('openEtfHolding failed', e); }
+}
+
+function _renderEtfDetail(d, etfTicker, isLev) {
+  const sectors = (d && Array.isArray(d.sectors)) ? d.sectors : [];
+  const holdings = (d && Array.isArray(d.holdings)) ? d.holdings : [];
+  const meta = (d && typeof d.meta === 'object' && d.meta) ? d.meta : null;
+
+  let html = '';
+
+  // G. 레버리지/인버스 경고 (상세 상단)
+  if (isLev) {
+    html += '<div class="etf-lev-warn">⚠ 레버리지·인버스 — 일일 리밸런싱, 장기보유 부적합(변동성 감쇠)</div>';
+  }
+
+  // A/B/C/D. 메타 요약(있는 항목만)
+  if (meta) {
+    let metaHtml = '';
+    // A. 총보수
+    if (meta.fee_pct != null && !isNaN(Number(meta.fee_pct))) {
+      metaHtml += `<div class="etf-meta-row"><span class="etf-meta-k">총보수</span>` +
+                  `<span class="etf-meta-v">${esc(Number(meta.fee_pct).toFixed(2))}%</span></div>`;
+    }
+    // B. 기간 수익률
+    const r = (meta.returns && typeof meta.returns === 'object') ? meta.returns : {};
+    const chips = _etfRetChip('1개월', r.m1) + _etfRetChip('3개월', r.m3) + _etfRetChip('1년', r.y1);
+    if (chips) {
+      metaHtml += `<div class="etf-meta-row etf-meta-rets"><span class="etf-meta-k">수익률</span>` +
+                  `<span class="etf-meta-v etf-ret-chips">${chips}</span></div>`;
+    }
+    // C. 괴리율 / 추적오차 (KR만)
+    const dev = (meta.deviation_pct != null && !isNaN(Number(meta.deviation_pct)))
+      ? `괴리율 ${Number(meta.deviation_pct).toFixed(2)}%` : '';
+    const trk = (meta.tracking_err_pct != null && !isNaN(Number(meta.tracking_err_pct)))
+      ? `추적오차 ${Number(meta.tracking_err_pct).toFixed(2)}%` : '';
+    const ct = [dev, trk].filter(Boolean).join(' · ');
+    if (ct) {
+      metaHtml += `<div class="etf-meta-row"><span class="etf-meta-k">추종</span>` +
+                  `<span class="etf-meta-v">${esc(ct)}</span></div>`;
+    }
+    // D. 자금 순유입 (KR best-effort)
+    if (meta.net_inflow && meta.net_inflow.text) {
+      const pos = meta.net_inflow.positive !== false;
+      const sign = pos ? '▲ 순유입' : '▼ 순유출';
+      const cls = pos ? 'up' : 'down';
+      const period = meta.net_inflow.period ? esc(meta.net_inflow.period) + ' ' : '';
+      metaHtml += `<div class="etf-meta-row"><span class="etf-meta-k">자금</span>` +
+                  `<span class="etf-meta-v"><span class="etf-flow ${cls}">${period}${sign} ${esc(meta.net_inflow.text)}</span></span></div>`;
+    }
+    if (metaHtml) html += `<div class="etf-meta-box">${metaHtml}</div>`;
+  }
+
+  if (!sectors.length && !holdings.length) {
+    if (!html) {
+      return '<div class="etf-sectors-empty">구성 정보가 없어요 (레버리지·파생형은 보통 미제공).</div>';
+    }
+    return html;  // 메타/경고만 있는 경우
+  }
+
+  if (holdings.length) {
+    const maxH = holdings.reduce((m, h) => Math.max(m, Number(h.weight_pct) || 0), 0) || 100;
+    html += `<div class="etf-sectors-title">구성 종목 TOP ${holdings.length}</div>`;
+    html += holdings.map(h => {
+      const sym = _etfHoldingSymbol(h.ticker, etfTicker);
+      const row = _etfWeightRow(h.name, h.weight_pct, maxH, 'hold', 2, h.ticker);
+      if (!sym) return row;
+      // 클릭 가능한 종목 행으로 감싼다(이벤트 위임 data-action)
+      return `<div class="etf-hold-link" data-action="openEtfHolding" data-arg="${esc(sym)}" title="${esc(sym)} 상세 보기">${row}</div>`;
+    }).join('');
+  }
+  if (sectors.length) {
+    const maxS = sectors.reduce((m, s) => Math.max(m, Number(s.weight_pct) || 0), 0) || 100;
+    html += `<div class="etf-sectors-title"${holdings.length ? ' style="margin-top:12px;"' : ''}>섹터 비중</div>`;
+    html += sectors.map(s => _etfWeightRow(s.label, s.weight_pct, maxS, '', 1, '')).join('');
+  }
+  return html;
 }
 
 // 52주 고저 라벨용 간단 숫자 축약

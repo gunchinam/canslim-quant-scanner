@@ -6511,7 +6511,7 @@ class QuantNexusApp:
                     elif any(k in _ph_joined for k in ("VWAP", "지지", "지지선")):
                         headline_action = "지지 확인 필요"
                     else:
-                        headline_action = "신호 혼조 — 다음 기회 대기"
+                        headline_action = "관망(혼조)"
                 else:  # AVOID
                     if any(k in _ph_joined for k in ("하락", "데드크로스", "약세")):
                         headline_action = "하락 추세 — 관망"
@@ -6520,7 +6520,7 @@ class QuantNexusApp:
                     elif any(k in _ph_joined for k in ("공매도", "숏")):
                         headline_action = "공매도 압력 — 관망"
                     else:
-                        headline_action = "관망 — 다음 기회 대기"
+                        headline_action = "관망"
 
                 _low_wr = _wr > 0 and _wr < 40
                 _low_rr = (_rr_now_v > 0 and _rr_now_v < 1.5) or (_rr_v > 0 and _rr_v < 1.5)
@@ -9424,12 +9424,12 @@ class QuantNexusApp:
         "377480.KQ": "온디바이스AI부품",
         "405100.KQ": "AI엣지컴퓨팅모듈",
         "432720.KQ": "온디바이스AI반도체",
-        "010170.KQ": "머신비전카메라·의료영상",  # 뷰웍스
+        "010170.KQ": "광섬유·광케이블",            # 대한광통신
         "017670.KS": "5G무선통신서비스",           # SK텔레콤
         "030200.KS": "통신·클라우드·미디어",     # KT
         "032640.KS": "통신·인터넷·IPTV",          # LG유플러스
-        "084730.KQ": "광통신장비·부품",
-        "187790.KQ": "광케이블·광섬유제조",
+        "084730.KQ": "내비게이션·블랙박스·ADAS",   # 팅크웨어
+        "187790.KQ": "탈질촉매·대기환경설비",       # 나노
         # 전력 인프라 추가
         "025540.KS": "배전반·전력기기",
         "199820.KQ": "전력기기·전선소재",
@@ -11441,6 +11441,10 @@ class QuantNexusApp:
     # US_DESC — 미국 종목 한글 설명 (Name 컬럼 옆에 표시)
     # ─────────────────────────────────────────────────────────────────────
     US_DESC: dict[str, str] = {
+        # 공급망 병목(화합물반도체 기판·에피·레이저) — CPO/광 I-O 상류 희소층
+        "AXTI": "InP·GaAs 화합물반도체 기판(substrate) · CPO 광통신 핵심소재",
+        "SIVEF": "Sivers 반도체 · CW/DFB 머천트 레이저 광원 · CPO",
+        "IQEPF": "IQE · 화합물반도체 에피웨이퍼(epiwafer) · 포토닉스 소재",
         # Mag 7
         "AAPL": "아이폰 · 맥 · 애플 실리콘", "MSFT": "애저 클라우드 · 코파일럿",
         "NVDA": "AI GPU · 블랙웰 · HBM", "GOOGL": "검색 광고 · 유튜브 · 제미나이",
@@ -13156,6 +13160,8 @@ class QuantNexusApp:
                 "Semicon Equipment":    ["ACLS","AEHR","AEIS","AMAT","ASML","AZTA","CAMT","COHU","ENTG","FORM","ICHR","IPGP","KLAC",
                                       "KLIC","LRCX","MKSI","NVMI","ONTO","UCTT","VECO"],
                 "Memory & Packaging":   ["AMKR","CEVA","MU","NTAP","NVTS","PSTG","SIMO","SMCI","SNDK","STX","WDC"],
+                # 공급망 병목(상류 희소층) — 화합물반도체 기판·에피·머천트 레이저. CPO/광 I-O 슈퍼사이클 길목.
+                "Compound Semi & Substrates": ["AXTI","SIVEF","IQEPF"],
                 "Quantum Computing":    ["ARQQ","INFQ","IONQ","QBTS","QUBT","RGTI","XNDU"]
             },
 
@@ -13449,7 +13455,7 @@ class QuantNexusApp:
             '🤖 AI 인프라': {
                 'AI플랫폼·클라우드': ['012510.KS', '018260.KS', '022100.KS', '035420.KS', '035720.KS', '053800.KQ', '064400.KS', '304100.KQ', '030520.KQ', '402030.KQ', '315640.KQ', '023590.KS', '377480.KQ', '032190.KQ', '093320.KQ', '486990.KQ', '058970.KS', '052400.KQ', '124500.KQ'],
                 '온디바이스AI': ['052710.KQ', '054450.KQ', '323280.KQ', '377480.KQ', '405100.KQ', '432720.KQ', '066570.KS', '011070.KS', '213420.KQ', '005930.KS', '009150.KS', '091700.KQ', '097520.KS', '122990.KQ', '045970.KQ', '053450.KQ', '033640.KQ'],
-                '통신·광네트워크': ['010170.KQ', '017670.KS', '030200.KS', '032640.KS', '084730.KQ', '187790.KQ', '056360.KQ', '122990.KQ', '032500.KQ', '039560.KQ', '037560.KS', '218410.KQ', '050890.KQ', '368770.KQ', '007660.KS', '060370.KQ', '443060.KS', '011070.KS', '018260.KS', '064400.KS', '032190.KQ', '138080.KQ'],
+                '통신·광네트워크': ['010170.KQ', '017670.KS', '030200.KS', '032640.KS', '056360.KQ', '122990.KQ', '032500.KQ', '039560.KQ', '037560.KS', '218410.KQ', '050890.KQ', '368770.KQ', '007660.KS', '060370.KQ', '011070.KS', '138080.KQ'],
             },
             '⚡ 전력 인프라': {
                 '변압기·전력기기': ['010120.KS', '025540.KS', '033100.KQ', '062040.KS', '103590.KS', '199820.KQ', '267260.KS', '298040.KS', '229640.KS', '009470.KS', '032820.KQ', '007610.KS', '160190.KQ', '006260.KS', '001440.KS', '000500.KS', '006340.KS', '034020.KS', '052690.KS', '051600.KS', '015760.KS'],

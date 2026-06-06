@@ -59,6 +59,12 @@ SCARCE_LAYERS: dict[str, dict[str, Any]] = {
         "keywords": ["cpo", "co-packaged", "silicon photonics", "실리콘 포토닉스",
                      "광트랜시버", "transceiver", "optical", "광모듈", "광통신", "광소자"],
     },
+    "화합물반도체/기판·에피·레이저": {
+        "weight": 5,
+        "keywords": ["inp", "gaas", "화합물반도체", "화합물 반도체", "compound semi",
+                     "epiwafer", "에피웨이퍼", "에피택시", "mocvd", "dfb", "eml",
+                     "광원", "cw 레이저", "laser diode", "사파이어 기판", "soi 웨이퍼"],
+    },
     "전력/냉각 인프라": {
         "weight": 4,
         "keywords": ["전력반도체", "sic", "gan", "전력기기", "변압기", "액침냉각",

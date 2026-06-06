@@ -30,6 +30,33 @@ if _BASE not in sys.path:
 import quant_nexus_v20 as _qn
 from speculative_themes import apply_speculative_correction, apply_to_row
 from micro_outlier import annotate as _annotate_micro_outlier
+
+try:
+    import bottleneck_screen as _bottleneck
+except Exception:
+    _bottleneck = None  # type: ignore
+
+
+def _attach_bottleneck(rows: list[dict]) -> None:
+    """각 종목에 공급망 병목 근접도(BottleneckScore/Layers/Top)를 부착.
+
+    사업설명·섹터 텍스트를 희소층 키워드와 매칭하는 '초벌 패스' 프록시.
+    증거기반 심층 판단이 아니라 후보 발굴용 — 종목별 심층은 별도 브리프로.
+    """
+    if _bottleneck is None:
+        return
+    for r in rows:
+        try:
+            txt = " ".join(str(r.get(k, "") or "") for k in
+                           ("Desc", "Industry", "About", "CompanyInfo"))
+            bp = _bottleneck.bottleneck_proximity(txt, r.get("Sector", ""))
+            r["BottleneckScore"] = bp["score"]
+            r["BottleneckLayers"] = bp["layers"]
+            r["BottleneckTop"] = bp["top_layer"]
+        except Exception:
+            r.setdefault("BottleneckScore", 0)
+            r.setdefault("BottleneckLayers", [])
+            r.setdefault("BottleneckTop", None)
 try:
     # web_app 디렉토리 보장 (engine_adapter 가 외부에서 import 될 때 대비)
     _WEB_APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -40,6 +67,112 @@ except Exception as _e:  # pragma: no cover
     logging.warning("[Adapter] symbol_alias import failed → DELISTED filter disabled: %s", _e)
     def _filter_symbols(xs):  # fallback no-op
         return list(xs)
+
+
+# ── 주가지수 구성종목 매핑 ────────────────────────────────────────────────
+# scripts/build_index_membership.py 가 생성한 index_membership.json 을 읽어
+# ticker → ["SP500","NDX",...] 역인덱스를 만든다. 파일이 없으면 빈 맵으로 동작
+# (지수 필터가 단순히 비활성화될 뿐, 스캔 자체에는 영향 없음).
+_INDEX_KEYS = ("SP500", "SP400", "SP600", "NDX")  # 표시 우선순위
+_INDEX_REVERSE: dict[str, list[str]] | None = None
+_INDEX_META: dict = {}  # 명단 생성일·신선도 (point-in-time 규율용)
+# 분기 리밸런싱 주기 → 100일 넘으면 명단이 늙은 것으로 간주(권고3: 갱신 캐던스 고정)
+_INDEX_STALE_DAYS = 100
+
+
+def index_membership_meta() -> dict:
+    """명단 기준일·신선도 메타 반환 (UI '명단 기준일' 표시 + 갱신 알림용)."""
+    _load_index_membership()
+    return dict(_INDEX_META)
+
+
+def _load_index_membership() -> dict[str, list[str]]:
+    """ticker → 편입 지수 리스트(표시 우선순위 정렬) 역인덱스를 lazy 로드."""
+    global _INDEX_REVERSE, _INDEX_META
+    if _INDEX_REVERSE is not None:
+        return _INDEX_REVERSE
+    rev: dict[str, list[str]] = {}
+    meta: dict = {"generated": None, "stale_days": None, "is_stale": False, "tickers": 0}
+    try:
+        import json
+        from datetime import datetime as _dt
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index_membership.json")
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        for key in _INDEX_KEYS:
+            for sym in data.get(key, []):
+                rev.setdefault(str(sym).upper(), []).append(key)
+        # 우선순위대로 정렬 (SP500 → SP400 → SP600 → NDX)
+        order = {k: i for i, k in enumerate(_INDEX_KEYS)}
+        for sym in rev:
+            rev[sym].sort(key=lambda k: order.get(k, 99))
+        # 권고3: 명단 생성일 기준 신선도 점검 — 분기 리밸런싱을 놓치면 경고.
+        gen = (data.get("_meta") or {}).get("generated")
+        meta["generated"] = gen
+        meta["tickers"] = len(rev)
+        meta["counts"] = {k: len(data.get(k, [])) for k in _INDEX_KEYS}
+        if gen:
+            try:
+                gd = _dt.strptime(str(gen)[:10], "%Y-%m-%d")
+                days = (_dt.now() - gd).days
+                meta["stale_days"] = days
+                meta["is_stale"] = days > _INDEX_STALE_DAYS
+                if meta["is_stale"]:
+                    logging.warning(
+                        "[Adapter] 지수 명단이 %d일 경과(>%d) — "
+                        "scripts/build_index_membership.py 재실행 권장",
+                        days, _INDEX_STALE_DAYS,
+                    )
+            except Exception:  # noqa: BLE001
+                pass
+        logging.info("[Adapter] index membership loaded: %d tickers (기준일 %s)", len(rev), gen)
+    except FileNotFoundError:
+        logging.warning("[Adapter] index_membership.json 없음 → 지수 필터 비활성화")
+    except Exception as e:  # noqa: BLE001
+        logging.warning("[Adapter] index membership 로드 실패: %s", e)
+    _INDEX_REVERSE = rev
+    _INDEX_META = meta
+    return rev
+
+
+def _attach_index_membership(rows: list[dict]) -> None:
+    """각 종목 row 에 Indices(편입 지수) + RSBucket(버킷 내 size-중립 상대강도)을 부착.
+
+    권고1: 전체 유니버스가 아니라 같은 지수 버킷 안에서 RS를 백분위 랭크해
+    size 베타에 오염된 가짜 주도주를 걸러낸다. 기존 RSRating 은 보존(추가 필드).
+    """
+    rev = _load_index_membership()
+    if not rev:
+        return
+
+    # 1) Indices 부착 + 대표 버킷 결정 (우선순위 첫 번째, 미편입은 OTHER)
+    from collections import defaultdict
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        sym = str(r.get("Ticker", "")).upper()
+        ix = rev.get(sym, [])
+        r["Indices"] = ix
+        bucket = ix[0] if ix else "OTHER"
+        r["RSBucketName"] = bucket
+        groups[bucket].append(r)
+
+    # 2) 버킷 내 RS 백분위 (1~99, 높을수록 동일-시총군 내 상대강도 우위)
+    def _rs_key(r: dict):
+        v = r.get("RS_WeightedRet")
+        if v is None:
+            v = r.get("MomentumScore")
+        # 값 없으면 최약체로 정렬
+        return (v is None, v if v is not None else -9e18)
+
+    for bucket, members in groups.items():
+        n = len(members)
+        if n < 2:
+            for r in members:
+                r["RSBucket"] = 50
+            continue
+        ranked = sorted(members, key=_rs_key)  # 약 → 강
+        for i, r in enumerate(ranked):
+            r["RSBucket"] = int(round(i / (n - 1) * 98)) + 1
 
 
 class ScanAdapter:
@@ -193,6 +326,43 @@ class ScanAdapter:
             for subcat, tickers in cat_data.items():
                 # normalize aliases (FB→META) + drop DELISTED (ATVI/TWTR/VMW/…)
                 self._sectors[sub_kr.get(subcat, subcat)] = _filter_symbols(list(tickers))
+        if self._market == "US":
+            self._augment_index_universe()
+
+    def _augment_index_universe(self) -> None:
+        """지수 구성종목 중 큐레이션 유니버스에 빠진 종목을 보강한다.
+
+        index_membership.json 을 기준으로, 어느 섹터에도 없는 지수 편입 종목을
+        '지수보강' 서브섹터에 채워 넣어 S&P500/400/600·나스닥100 버킷이
+        실제 편입 종목 수와 일치하도록 만든다. 한 종목은 우선순위가 가장 높은
+        지수 하나에만 배정한다(SP500 > SP400 > SP600 > NDX). 명단이 갱신되면
+        자동으로 동기화되므로 소스에 정적 목록을 손으로 넣지 않는다.
+        """
+        rev = _load_index_membership()
+        if not rev:
+            return
+        have = {t for ts in self._sectors.values() for t in ts}
+        label = {
+            "SP500": "🗂️ S&P500 (지수보강)",
+            "SP400": "🗂️ S&P400 미드캡 (지수보강)",
+            "SP600": "🗂️ S&P600 스몰캡 (지수보강)",
+            "NDX":   "🗂️ 나스닥100 (지수보강)",
+        }
+        buckets: dict[str, list[str]] = {k: [] for k in label}
+        for sym, idxs in rev.items():
+            if sym in have or not idxs:
+                continue
+            primary = idxs[0]  # rev 는 우선순위 정렬되어 있음
+            if primary in buckets:
+                buckets[primary].append(sym)
+        added = 0
+        for key, syms in buckets.items():
+            syms = _filter_symbols(sorted(syms))  # alias 정규화 + DELISTED 제거
+            if syms:
+                self._sectors[label[key]] = syms
+                added += len(syms)
+        if added:
+            logging.info("[Adapter] 지수 유니버스 보강: +%d 종목 (빠진 구성종목 채움)", added)
 
     # ── QuantNexusApp이 사용하는 메서드 (tkinter 콜백 대체) ──────────────
 
@@ -316,6 +486,8 @@ class ScanAdapter:
         self._attach_sector_residual(results)
         apply_speculative_correction(results)
         _annotate_micro_outlier(results)
+        _attach_bottleneck(results)
+        _attach_index_membership(results)
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         return results
 
@@ -350,6 +522,8 @@ class ScanAdapter:
         self._attach_sector_residual(results)
         apply_speculative_correction(results)
         _annotate_micro_outlier(results)
+        _attach_bottleneck(results)
+        _attach_index_membership(results)
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         return results
 

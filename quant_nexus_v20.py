@@ -84,6 +84,20 @@ except Exception:
     _dart_api = None  # type: ignore
     _DART_OK = False
 
+try:
+    import fundamental_value_grade as _fvg
+    _FVG_OK = True
+except Exception:
+    _fvg = None  # type: ignore
+    _FVG_OK = False
+
+try:
+    import bottleneck_screen as _bottleneck
+    _BOTTLENECK_OK = True
+except Exception:
+    _bottleneck = None  # type: ignore
+    _BOTTLENECK_OK = False
+
 import concurrent.futures
 from datetime import datetime, timedelta
 import pickle
@@ -916,6 +930,11 @@ COLUMN_TOOLTIPS = {
     "MomScore": "[N+S] 모멘텀+거래량 확인 점수\n컵앤핸들 피벗 돌파 시 가산.",
     "Value":    "[A] 연간 실적 점수\nROE 17%+ 기준 Fama-French 팩터.",
     "Quality":  "[C+A] 실적 품질 점수\nEPS 가속도·ROE·이익률 기반.",
+    "FinValue": "재무가치 등급 (0~100, 전체종목 백분위)\n"
+                "분기 성장(매출·영업이익·순이익 QoQ) + ROE + PBR·PSR(저평가).\n"
+                "• 높을수록 성장+저평가 우위 (PBR·PSR은 낮을수록 가점)\n"
+                "• 섹터내 백분위는 별도 보관(FinValueSec)\n"
+                "※ Phase 1: 네이버 분기 데이터. YoY·현금흐름·PEGR은 DART 연동 후 추가 예정.",
     "RSI":      "RSI (0~100)\n과매수/과매도 보조 지표.",
     "VWAP":     "[I] VWAP 괴리율\n기관 평균단가 대비 위치.",
     "ATR%":     "변동성 (ATR%)\n일평균 가격 변동폭 비율.",
@@ -2589,7 +2608,7 @@ class WallStreetQuantStrategies:
         """
         import math
         result = {"max_dd": 0.0, "current_dd": 0.0, "recovery": 0.0,
-                  "cvar_95": 0.0, "score": 0, "risk": "NORMAL",
+                  "cvar_95": 0.0, "worst_day": None, "score": 0, "risk": "NORMAL",
                   "dd_velocity_5d": 0.0, "dd_velocity_20d": 0.0,
                   "underwater_days": 0, "calmar_ratio": 0.0,
                   "skewness": 0.0, "excess_kurtosis": 0.0,
@@ -2625,19 +2644,30 @@ class WallStreetQuantStrategies:
                     break
             result["underwater_days"] = tuw
 
-            # P7: Calmar Ratio (연수익률 / |MDD|)
-            if len(c) >= 252 and abs(result["max_dd"]) > 0.001:
-                annual_ret = float(c.iloc[-1] / c.iloc[-252]) - 1.0
-                result["calmar_ratio"] = round(annual_ret / abs(result["max_dd"]), 2)
+            # P7: Calmar Ratio (B3: 분자·분모 모두 최근 1년으로 기간 일치)
+            # 기존 버그: 분자=최근1년 수익 / 분모=전체역사 MDD → 옛날 폭락이 분모를 영구히 부풀림
+            if len(c) >= 252:
+                c_1y = c.iloc[-252:]
+                _rmax_1y = c_1y.expanding().max()
+                _dd_1y = (c_1y - _rmax_1y) / _rmax_1y
+                _mdd_1y = float(_dd_1y.min())
+                if abs(_mdd_1y) > 0.001:
+                    annual_ret = float(c.iloc[-1] / c.iloc[-252]) - 1.0
+                    result["calmar_ratio"] = round(annual_ret / abs(_mdd_1y), 2)
 
             # CVaR 95% + P5: Skew/Kurtosis
+            # B1: 전체 history(시점 혼재) + 30일 하한(꼬리 1~2개) → 최근 252일 트레일링 + 표본 하한 상향.
+            # daily_ret(전체)은 하방베타·자기상관용으로 유지하고, 꼬리 통계는 최근 1년 창으로 계산.
             daily_ret = c.pct_change().dropna()
-            if len(daily_ret) >= 30:
-                var_95 = float(daily_ret.quantile(0.05))
-                tail = daily_ret[daily_ret <= var_95]
-                result["cvar_95"] = round(float(tail.mean()) if len(tail) > 0 else var_95, 4)
-                result["skewness"] = round(float(daily_ret.skew()), 2)
-                result["excess_kurtosis"] = round(float(daily_ret.kurtosis()), 2)
+            _ret_w = daily_ret.iloc[-252:]                       # 최근 1년(252거래일) 한정
+            if len(_ret_w) >= 120:                                # 30→120: 5% 꼬리 ≥6개 확보
+                var_95 = float(_ret_w.quantile(0.05))
+                tail = _ret_w[_ret_w <= var_95]
+                # ES95는 꼬리 표본이 충분(≥10)할 때만 신뢰 — 아니면 VaR(=하위 5% 지점)로 폴백
+                result["cvar_95"] = round(float(tail.mean()) if len(tail) >= 10 else var_95, 4)
+                result["worst_day"] = round(float(_ret_w.min()), 4)   # 진짜 단일 최악일(역대 최저 일간수익률)
+                result["skewness"] = round(float(_ret_w.skew()), 2)
+                result["excess_kurtosis"] = round(float(_ret_w.kurtosis()), 2)
 
             # P9: Downside Beta + P12: Stress Scenarios
             if benchmark_hist is not None and len(daily_ret) >= 60:
@@ -2654,9 +2684,11 @@ class WallStreetQuantStrategies:
                             if var_d > 1e-10:
                                 beta = round(cov_d / var_d, 2)
                                 result["downside_beta"] = beta
-                                result["stress_2008"] = round(beta * -0.568, 3)
-                                result["stress_2020"] = round(beta * -0.339, 3)
-                                result["stress_2022"] = round(beta * -0.254, 3)
+                                # B2: 선형 외삽이라 레버리지 종목(β>1.76)이면 -100% 초과(원금 이상 손실)라는
+                                # 불가능한 수가 나옴 → max(-1.0, ...)로 -100% 하한 클리핑. (선형 추정 한계는 프론트 주석으로 고지)
+                                result["stress_2008"] = max(-1.0, round(beta * -0.568, 3))
+                                result["stress_2020"] = max(-1.0, round(beta * -0.339, 3))
+                                result["stress_2022"] = max(-1.0, round(beta * -0.254, 3))
                 except Exception:
                     pass
 
@@ -2666,8 +2698,11 @@ class WallStreetQuantStrategies:
                     ac1 = float(daily_ret.iloc[-60:].autocorr(lag=1))
                     if not (ac1 != ac1):  # NaN check
                         result["ac1"] = round(ac1, 3)
-                        if ac1 < -0.01:
-                            result["halflife"] = round(-0.6931 / float(np.log(1 + ac1)), 1)
+                        # B5: np.log(1+ac1)은 ac1<=-1이면 log(0 또는 음수)=NaN/-inf → 정의역 가드 추가
+                        if -0.99 < ac1 < -0.01:
+                            _logv = float(np.log(1 + ac1))
+                            if _logv < -1e-10:
+                                result["halflife"] = round(-0.6931 / _logv, 1)
                 except Exception:
                     pass
 
@@ -2727,12 +2762,17 @@ class WallStreetQuantStrategies:
             # Composite Risk Score (0=안전 ~ 99=극위험) — BlackRock Aladdin 방식
             # 6개 메트릭 가중합산: MDD(25%) + CVaR(20%) + Velocity(15%) + TUW(15%) + DownBeta(15%) + SkewKurt(10%)
             try:
-                _mdd_r = min(1.0, abs(result["current_dd"]) / 0.50)        # 50%=max
-                _cvar_r = min(1.0, abs(result["cvar_95"]) / 0.08)          # 8%=max
+                # B4: ①현재 낙폭뿐 아니라 역사적 max_dd도 반영 ②CVaR 상한 8%→3%(일간 ES 3%도 충격적,
+                #     8%면 실제 위험이 정규화에서 희석됨) ③downside_beta None(데이터없음)과 0(저변동) 구분
+                _mdd_r = min(1.0, max(abs(result["current_dd"]), abs(result["max_dd"]) * 0.5) / 0.40)  # 40%=max
+                _cvar_r = min(1.0, abs(result["cvar_95"]) / 0.03)          # 3%=max
                 _vel_r = min(1.0, abs(min(0, result["dd_velocity_5d"])) / 0.15)  # 15%p=max
                 _tuw_r = min(1.0, result["underwater_days"] / 200)          # 200일=max
                 _db = result["downside_beta"]
-                _db_r = min(1.0, (max(0, (_db or 1.0) - 0.5)) / 2.0)     # 0.5~2.5→0~1
+                if _db is None:
+                    _db_r = 0.5                                            # 벤치마크 없음 → 중립값
+                else:
+                    _db_r = min(1.0, max(0.0, _db - 0.5) / 2.0)           # 0.5~2.5→0~1
                 _sk = abs(result["skewness"])
                 _ek = max(0, result["excess_kurtosis"])
                 _sk_r = min(1.0, (_sk + _ek * 0.3) / 4.0)
@@ -4200,7 +4240,7 @@ class QuantNexusApp:
         tf = self.main_tree_frame
 
         cols = ("Sector","Name","Desc","Price","Target","Score","Conv","SRank","Day%","Mom12M","MomScore",
-                "Value","Quality","RSI","VWAP","ATR%","Regime","Cmte","Signal","Reason")
+                "Value","Quality","FinValue","RSI","VWAP","ATR%","Regime","Cmte","Signal","Reason")
         self.tree = ttk.Treeview(tf, columns=cols, show="tree headings")
 
         # ── 컬럼 비율 정의 ──────────────────────────────────────────────
@@ -4223,6 +4263,7 @@ class QuantNexusApp:
             "MomScore": (2,      62,       "center"),
             "Value":    (2,      55,       "center"),
             "Quality":  (2,      58,       "center"),
+            "FinValue": (2,      62,       "center"),  # 재무가치 등급(전체 백분위)
             "RSI":      (1,      48,       "center"),
             "VWAP":     (2,      55,       "center"),
             "ATR%":     (1,      52,       "center"),
@@ -4238,7 +4279,7 @@ class QuantNexusApp:
                          minwidth=_COL_SPEC["#0"][1],
                          anchor=_COL_SPEC["#0"][2],
                          stretch=True)
-        _COL_LABEL = {"Desc": "설명", "Name": "종목명", "Sector": "섹터"}
+        _COL_LABEL = {"Desc": "설명", "Name": "종목명", "Sector": "섹터", "FinValue": "재무가치"}
         self.tree.heading("#0", text="TICKER")
         for col in cols:
             w, mw, anc = _COL_SPEC[col]
@@ -4886,6 +4927,12 @@ class QuantNexusApp:
             self._log(f"📡 KR 재무 데이터 사전 로드 ({len(_kr_uncached)}개)...")
             with concurrent.futures.ThreadPoolExecutor(max_workers=8) as _naver_ex:
                 list(_naver_ex.map(self._fetch_naver_fundamentals, _kr_uncached))
+                # 재무가치 등급(Phase 1)용 분기 QoQ 지표도 병렬 워밍 (12h 캐시)
+                if _FVG_OK and _NAVERQ_OK and _naver_q is not None:
+                    try:
+                        list(_naver_ex.map(_naver_q.get_quarter_metrics, _kr_uncached))
+                    except Exception as _e:
+                        logging.debug(f"[FinValue] 분기지표 워밍 실패: {_e}")
 
         # F5: 종목명 사전 1회 구축 — _analyze_ticker 내 3단계 조회를 dict 1회 조회로 대체
         _kr_names_d = getattr(QuantNexusApp, "KR_NAMES", {})
@@ -4983,6 +5030,36 @@ class QuantNexusApp:
                     elif pct <= 25: r["SectorRank"] = "Top 25%"
                     elif pct <= 50: r["SectorRank"] = "Top 50%"
                     else:           r["SectorRank"] = "Bottom"
+
+        # ── 재무가치 등급 (Phase 1: 횡단면 백분위, 전체/섹터 병행) ──
+        if _FVG_OK and _fvg is not None and _NAVERQ_OK and _naver_q is not None and results:
+            try:
+                _fvg.apply_grades(
+                    results,
+                    quarter_fetch=_naver_q.get_quarter_metrics,
+                    ttm_fetch=_naver_q.get_ttm_financials,
+                    log=lambda m: self.root.after(0, lambda _m=m: self._log(_m)),
+                )
+            except Exception as _e:
+                logging.warning(f"[FinValue] 등급 패스 실패: {_e}")
+                for _r in results:
+                    _r.setdefault("FinValue", None)
+                    _r.setdefault("FinValueSec", None)
+
+        # ── 공급망 병목 근접도 (초벌 패스: 사업설명·섹터 키워드 매칭) ──
+        if _BOTTLENECK_OK and _bottleneck is not None and results:
+            for _r in results:
+                try:
+                    _txt = " ".join(str(_r.get(_k, "") or "") for _k in
+                                    ("Desc", "Industry", "About", "CompanyInfo"))
+                    _bp = _bottleneck.bottleneck_proximity(_txt, _r.get("Sector", ""))
+                    _r["BottleneckScore"] = _bp["score"]
+                    _r["BottleneckLayers"] = _bp["layers"]
+                    _r["BottleneckTop"] = _bp["top_layer"]
+                except Exception:
+                    _r.setdefault("BottleneckScore", 0)
+                    _r.setdefault("BottleneckLayers", [])
+                    _r.setdefault("BottleneckTop", None)
 
         # ── Cross-Sectional RS Rating (백분위 기반 재조정) ─────
         if len(results) >= 5:
@@ -6494,6 +6571,9 @@ class QuantNexusApp:
                 "mdd_recovery": round(float(dd.get("recovery", 0.0) or 0.0) * 100, 1),
                 "size_suggestion": atr.get("size_suggestion", "NORMAL"),
                 "cvar_95": round(float(dd.get("cvar_95", 0.0) or 0.0) * 100, 2),
+                # B1: 진짜 단일 최악일 (None이면 데이터 부족 → 프론트 미표시)
+                "worst_day": (round(float(dd["worst_day"]) * 100, 2)
+                              if dd.get("worst_day") is not None else None),
                 # P4: velocity
                 "dd_velocity_5d": round(float(dd.get("dd_velocity_5d", 0.0) or 0.0) * 100, 2),
                 "dd_velocity_20d": round(float(dd.get("dd_velocity_20d", 0.0) or 0.0) * 100, 2),
@@ -6841,6 +6921,8 @@ class QuantNexusApp:
 
             _desc_map = self.KR_DESC if is_kr else self.US_DESC
             _desc = _desc_map.get(d['Ticker'], "")
+            _fv = d.get("FinValue")
+            fv_str = f"{_fv:.0f}" if _fv is not None else "-"
             vals = (
                 d.get("Sector", "")[:18],
                 d['Name'], _desc, price_str, target_str, sc_viz,
@@ -6850,6 +6932,7 @@ class QuantNexusApp:
                 f"{d.get('RSRating', 0)} {leader_mark}",
                 f"{d['ValueScore']:.0f}",
                 f"{d['QualityScore']:.0f}",
+                fv_str,
                 rsi_viz,
                 f"{d['VWAPDistance']:+.1%}",
                 f"{d['ATRPercent']:.1f}%",
@@ -7228,11 +7311,11 @@ class QuantNexusApp:
             sc = d['TotalScore']
             _desc_map = self.KR_DESC if is_kr else self.US_DESC
             _desc = _desc_map.get(d['Ticker'], "")
-            # 최종 렌더와 컬럼 수(20) 일치
+            # 최종 렌더와 컬럼 수(21) 일치
             vals = (
                 d.get("Sector", "")[:18],
                 d["Name"], _desc, price_str, "-",
-                f"{sc:.0f}", "", "", "", "", "", "", "", "", "", "", "",
+                f"{sc:.0f}", "", "", "", "", "", "", "", "", "", "", "", "",
                 "",
                 d.get("Signal", ""),
                 d.get("TopReason", "-"),

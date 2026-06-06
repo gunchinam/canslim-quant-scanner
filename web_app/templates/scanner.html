@@ -92,12 +92,18 @@
       <span class="stat-label">섹터</span>
       <span id="stat-sector" class="stat-value" style="font-size:13px;font-weight:500;">전체</span>
     </div>
+    <div class="stat-item" id="score-eval-stat" hidden>
+      <span class="stat-label" title="점수가 미래 수익을 실제로 예측하는지 표본외(out-of-sample) 검증한 결과. IC(정보계수)>0이면 고점수가 실제로 더 올랐다는 뜻. 스냅샷이 쌓일수록 신뢰도 상승.">점수 신뢰도</span>
+      <span id="score-eval-badge" class="score-eval-badge none">—</span>
+    </div>
     <div class="stat-item" style="border-right:none;flex:1;justify-content:flex-end;">
       <div id="filter-chips" class="filter-chips">
         <button class="chip active" data-filter="all">전체</button>
         <button class="chip" data-filter="watchlist" title="내가 추가한 관심종목만 표시">💎 관심종목</button>
         <button class="chip" data-filter="entry_green" title="타점점수 70점 이상 — 6가지 기술 신호(RSI·볼린저밴드·VWAP·52주 위치·MACD·시장 국면)가 모두 양호한 종목">🟢 기회 탐색</button>
         <button class="chip" data-filter="strong" title="종합점수 60점 이상 — S등급(75+)·A등급(60+) 해당 종목만 표시">🔥 S·A등급</button>
+        <button class="chip chip-delta" data-filter="score_surge" title="어제(기준일) 대비 종합점수 +3 이상 급등 — 클릭 시 급등 폭 순으로 자동 정렬">📈 점수급등</button>
+        <button class="chip chip-delta" data-filter="new_entry" title="기준일 이후 목록에 새로 진입한 종목">🆕 신규진입</button>
         <button class="chip" data-filter="rs_leader" title="RS Rating 80 이상 — 시장 대비 상대강도 상위 종목 (CAN SLIM 주도주)">⭐ RS주도주</button>
         <button class="chip" data-filter="breakout" title="시그널에 BREAKOUT 또는 PIVOT 포함 — 추세 돌파 감지 종목">🚀 돌파</button>
         <button class="chip" data-filter="eps_accel" title="EPS(주당순이익) 분기별 가속 성장 중인 종목">⚡ EPS가속</button>
@@ -105,10 +111,24 @@
         <button class="chip" data-filter="near_high" title="52주 신고가에 근접한 종목 — 추세 돌파 후보">📈 신고가</button>
         <button class="chip" data-filter="pullback" title="RSI 40 이하 — 눌림목 매수 후보 구간">📉 눌림목</button>
         <button class="chip" data-filter="greedzone" title="GreedZone 진입 — 저점 대비 과열 구간 (Zeiierman 지표)">🟡 탐욕구간</button>
+        <button class="chip" data-filter="bottleneck" title="공급망 병목 후보 — 사업설명·섹터가 상류 희소층(반도체 장비·소재·후공정·HBM·기판·CPO·전력 등)에 근접한 종목. 시스템 확장 시 우회하기 어려운 핵심노드 발굴(초벌). 심층 판단은 종목별 병목 브리프에서.">🔩 병목후보</button>
         <button class="chip" data-filter="laggard" title="RS Rating 40 미만 또는 SELL/AVOID 시그널 — 회피 대상 종목">⛔ 위험</button>
-
+        <span class="chip-sep" aria-hidden="true"></span>
+        <button class="chip-etf" data-action="openEtfView" title="미국·한국 인기 ETF 현황을 한눈에">📊 ETF 현황</button>
       </div>
     </div>
+  </div>
+
+  <!-- 지수별 보기 (미국 전용) -->
+  <div id="index-bar" class="index-bar" role="group" aria-label="주가지수별 보기" hidden>
+    <span class="index-bar-label">📊 지수</span>
+    <button class="index-chip active" data-index="all" title="전체 종목 (지수 구분 없음)">전체 <span class="ix-count" data-ixc="all"></span></button>
+    <button class="index-chip" data-index="SP500" title="S&P 500 — 미국 대형주 500개 지수 편입 종목">S&amp;P 500 <span class="ix-count" data-ixc="SP500"></span></button>
+    <button class="index-chip" data-index="SP400" title="S&P 400 — 미국 중형주(미드캡) 지수 편입 종목">S&amp;P 400 미드캡 <span class="ix-count" data-ixc="SP400"></span></button>
+    <button class="index-chip" data-index="SP600" title="S&P 600 — 미국 소형주(스몰캡) 지수 편입 종목">S&amp;P 600 스몰캡 <span class="ix-count" data-ixc="SP600"></span></button>
+    <button class="index-chip" data-index="NDX" title="나스닥100 — 나스닥 상장 비금융 대형주 100개 지수">나스닥100 <span class="ix-count" data-ixc="NDX"></span></button>
+    <button class="index-chip" data-index="OTHER" title="위 4개 지수에 편입되지 않은 종목 (ADR·스팩·초소형주 등)">기타 <span class="ix-count" data-ixc="OTHER"></span></button>
+    <span class="index-bar-meta" id="index-bar-meta" title="지수 구성종목 명단 기준일과 가격 캐시 신선도"></span>
   </div>
 
   <!-- P11: 섹터 집중도 경고 배너 -->
@@ -154,6 +174,24 @@
       </div>
       <div id="mobile-stock-list" class="mobile-stock-list">
         <div class="mobile-stock-list-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</div>
+      </div>
+
+      <!-- ── ETF 현황 (인라인 탭 — 종목 표 자리에 표시) ─────────────── -->
+      <div id="etf-view" class="etf-view" hidden>
+        <div class="etf-view-header">
+          <div class="etf-view-title">📊 인기 ETF 현황 <span id="etf-meta" class="etf-view-meta"></span></div>
+          <button class="etf-view-close" data-action="closeEtfView" aria-label="종목 목록으로">← 종목 목록</button>
+        </div>
+        <div class="etf-view-body">
+          <section class="etf-col">
+            <h3 class="etf-col-title">🇺🇸 미국</h3>
+            <div id="etf-list-us" class="etf-list"></div>
+          </section>
+          <section class="etf-col">
+            <h3 class="etf-col-title">🇰🇷 한국</h3>
+            <div id="etf-list-kr" class="etf-list"></div>
+          </section>
+        </div>
       </div>
     </main>
   </div>
@@ -445,10 +483,6 @@
             <span class="dp-metric-label">등락률</span>
             <span id="dp-day-chg" class="dp-metric-val">—</span>
           </div>
-          <div class="dp-metric-row">
-            <span class="dp-metric-label">RSI</span>
-            <span id="dp-rsi" class="dp-metric-val">—</span>
-          </div>
         </div>
 
         <!-- 증권사 컨센서스 -->
@@ -510,12 +544,12 @@
             </div>
           </div>
         </div>
-        <!-- 리스크 서머리 + 팩터 워터폴 + 드로다운 + 시그널 카드 -->
-        <div id="dp-risk-summary" style="padding:0 16px 8px;"></div>
-        <div id="dp-factor-waterfall" style="padding:0 16px 8px;"></div>
+        <!-- 상세 드로어 면책 — 상단 배너가 스크롤로 사라져도 결론 영역에 항상 동반 -->
+        <div style="margin:0 16px 8px;padding:7px 10px;background:var(--surface-subtle,#F7F8FA);border:1px solid var(--border);border-radius:8px;font-size:10px;line-height:1.4;color:var(--text-tertiary);">
+          ⚠️ 등급·신호·목표가는 <b>알고리즘 스크리닝 결과</b>일 뿐, 매수 추천이 아닙니다. 아래 <b>드로다운 리스크</b>를 꼭 함께 확인하세요. 판단과 손익은 본인 책임입니다.
+        </div>
+        <!-- 드로다운 리스크 카드 (점수 기여도·리스크 요약 카드는 중복으로 제거됨) -->
         <div id="dp-drawdown-risk" style="padding:0 16px 8px;"></div>
-        <div id="dp-ac-card" style="padding:0 16px 8px;"></div>
-        <div id="dp-liquidity-card" style="padding:0 16px 8px;"></div>
         <nav class="dp-tab-nav">
           <button class="dp-tab-btn active" data-tab="canslim" data-action="switchDpTab" data-arg="canslim">CAN SLIM 분석</button>
           <button class="dp-tab-btn" data-tab="tech" data-action="switchDpTab" data-arg="tech">기술 지표</button>
@@ -718,6 +752,94 @@ document.addEventListener('click', function(e) {
     return _socketLoading;
   }
 
+  function _createPollingSocket() {
+    const handlers = {};
+    let sid = '';
+    let closed = false;
+    let connected = false;
+    let ready = null;
+
+    function _url() {
+      return '/socket.io/?EIO=4&transport=polling' +
+        (sid ? '&sid=' + encodeURIComponent(sid) : '') +
+        '&t=' + Date.now().toString(36);
+    }
+    function _fire(name, data) {
+      (handlers[name] || []).forEach(fn => {
+        try { fn(data); } catch (e) { console.warn('[chat]', e); }
+      });
+    }
+    async function _post(packet) {
+      await fetch(_url(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: packet,
+        cache: 'no-store',
+      });
+    }
+    function _packets(payload) {
+      return String(payload || '').split('\x1e').filter(Boolean);
+    }
+    async function _handle(packet) {
+      const type = packet.charAt(0);
+      if (type === '0') {
+        sid = JSON.parse(packet.slice(1)).sid;
+        return;
+      }
+      if (type === '2') {
+        await _post('3');
+        return;
+      }
+      if (packet === '40' || packet.startsWith('40{')) {
+        connected = true;
+        return;
+      }
+      if (packet.startsWith('42')) {
+        const payload = JSON.parse(packet.slice(2));
+        if (Array.isArray(payload) && payload.length) _fire(payload[0], payload[1]);
+      }
+    }
+    async function _poll() {
+      while (!closed && sid) {
+        try {
+          const res = await fetch(_url(), { cache: 'no-store' });
+          if (!res.ok) throw new Error('poll ' + res.status);
+          const text = await res.text();
+          for (const packet of _packets(text)) await _handle(packet);
+        } catch (e) {
+          if (!closed) {
+            console.warn('[chat] polling fallback retry', e);
+            await new Promise(r => setTimeout(r, 1200));
+          }
+        }
+      }
+    }
+    ready = (async () => {
+      const res = await fetch(_url(), { cache: 'no-store' });
+      if (!res.ok) throw new Error('open ' + res.status);
+      for (const packet of _packets(await res.text())) await _handle(packet);
+      await _post('40');
+      _poll();
+      const started = Date.now();
+      while (!connected && Date.now() - started < 3000) {
+        await new Promise(r => setTimeout(r, 30));
+      }
+    })();
+    return {
+      on(name, fn) {
+        (handlers[name] = handlers[name] || []).push(fn);
+      },
+      emit(name, data) {
+        ready.then(() => _post('42' + JSON.stringify([name, data || {}])))
+          .catch(e => console.warn('[chat] emit failed', e));
+      },
+      disconnect() {
+        closed = true;
+        if (sid) _post('41').catch(() => {});
+      },
+    };
+  }
+
   function fmtTime(ts) {
     const d = new Date(ts * 1000);
     return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
@@ -760,11 +882,9 @@ document.addEventListener('click', function(e) {
 
   function _initSocket() {
     if (socket) return;
-    if (typeof io === 'undefined') {
-      console.warn('[chat] socket.io 로드 실패 — 패널은 열리지만 메시지 전송 불가');
-      return;
-    }
-    socket = io({ transports: ['websocket','polling'] });
+    socket = (typeof io !== 'undefined')
+      ? io({ transports: ['websocket','polling'] })
+      : _createPollingSocket();
 
     socket.on('init', (data) => {
       myNick = data.nick;

@@ -15,6 +15,9 @@ let _sortKey        = 'TotalScore';  // 현재 정렬 키 (기본: 복합 점수
 let _sortDir        = -1;   // 0=없음, 1=asc, -1=desc
 let _stockMap       = {};   // ticker → stock data (팝업용)
 let _activeFilters  = new Set(); // 활성 퀵필터 집합 (비어있으면 전체)
+let _activeIndex    = 'all';     // 지수 보기: all | SP500 | SP400 | SP600 | NDX | OTHER
+let _indexMeta      = null;      // 지수 명단 기준일·신선도 (/api/index-meta)
+let _scanCacheAgeMin = null;     // 현재 스캔 결과 캐시 경과(분) — 신선도 표시용
 let _watchlist      = new Set(); // 현재 마켓의 워치리스트 티커 집합
 let _selectedStocks = new Set(); // 공유 카드용 선택 종목
 
@@ -358,7 +361,7 @@ function _entryLight(stock) {
   const _tipParts = [];
   if (ep.underwater_days > 0) _tipParts.push(`수면하 ${ep.underwater_days}일`);
   if (ep.calmar_ratio != null && ep.calmar_ratio !== 0) _tipParts.push(`Calmar ${ep.calmar_ratio}`);
-  if (ep.cvar_95 != null && ep.cvar_95 !== 0) _tipParts.push(`CVaR95 ${ep.cvar_95.toFixed(1)}% (100만원→${Math.round(ep.cvar_95*10000).toLocaleString()}원)`);
+  if (ep.cvar_95 != null && ep.cvar_95 !== 0) _tipParts.push(`CVaR95 ${ep.cvar_95.toFixed(1)}% (100만원→${Math.round(1000000*(1+ep.cvar_95/100)).toLocaleString()}원)`);
   if (ep.downside_beta != null) _tipParts.push(`하방β ${ep.downside_beta}`);
   if (_tipParts.length) tip += ' | ' + _tipParts.join(' · ');
   let aqBadge = '';
@@ -444,12 +447,15 @@ function onMarketChange(val) {
   currentMarket = val;
   currentSector = '';
   allStocks     = [];
+  _activeIndex  = 'all';      // 지수 보기는 미국 전용 — 마켓 전환 시 전체로 리셋
+  _syncIndexBarUI();
   _setSegActive('market-btn-group', val);
   loadSectors();
   runScan().then(() => {
     loadWatchlist();
     if (typeof _loadMacroStrip === 'function') _loadMacroStrip(val);
   });
+  loadScoreEval();
 }
 
 // 중첩 키 접근 ("Scores.BALANCED" → obj.Scores?.BALANCED)
@@ -573,6 +579,9 @@ async function runScan() {
     const res    = await fetch(`/api/scan?${p}`);
     // 이미 더 새로운 요청이 떴으면 이 결과는 폐기
     if (myToken !== _scanToken) return;
+    // 시세 캐시 신선도 캡처 (지수바 메타 표시용)
+    const _age = res.headers.get('X-Cache-Age-Min');
+    _scanCacheAgeMin = _age != null && _age !== '' ? Number(_age) : null;
     // body 를 한 번만 읽고 직접 파싱 — res.json() 실패 후 res.text() 호출 시
     // "body stream already read" 로 raw 가 비어 진짜 원인(NaN/Infinity 등)을 가린다.
     const bodyText = await res.text().catch(() => '');
@@ -644,6 +653,9 @@ function _matchesFilter(s, f) {
     case 'near_high':   return !!s.NearHighPass;
     case 'pullback':    return s.RSI != null && s.RSI <= 40;
     case 'greedzone':   return !!s.GreedZone;
+    case 'bottleneck':  return (s.BottleneckScore ?? 0) >= 60;   // 공급망 병목 후보(상류 희소층 근접)
+    case 'score_surge': return (s.ScoreDelta ?? -Infinity) >= 3;   // 어제 대비 점수 +3 이상 급등
+    case 'new_entry':   return !!s.IsNew;                          // 기준일 이후 새로 진입
     case 'laggard':     return (s.RSRating ?? 99) < 40 || _signalTier(s.Signal) === 'sell';
     default: return true;
   }
@@ -654,9 +666,17 @@ function _applyQuickFilter(stocks) {
   return stocks.filter(s => [..._activeFilters].every(f => _matchesFilter(s, f)));
 }
 
+// 지수별 보기 필터 — all=전체, OTHER=4개 지수 미편입, 그 외=해당 지수 편입 종목
+function _applyIndexFilter(stocks) {
+  if (_activeIndex === 'all') return stocks;
+  if (_activeIndex === 'OTHER') return stocks.filter(s => !(s.Indices && s.Indices.length));
+  return stocks.filter(s => Array.isArray(s.Indices) && s.Indices.includes(_activeIndex));
+}
+
 // 표가 실제로 보여주는 것과 동일한 필터 결과(검색 → 퀵필터 → 원라이너 버킷)
 function _scopedStocks() {
   let scoped = _applySearchFilter(_searchBaseStocks());
+  scoped = _applyIndexFilter(scoped);
   scoped = _applyQuickFilter(scoped);
   if (_oneLinerFilter) {
     scoped = scoped.filter(s => (s.OneLinerTag || '') === _oneLinerFilter);
@@ -1298,8 +1318,10 @@ function renderStockTable(stocks) {
   const wlEl = document.getElementById('chip-watch-count');
   if (wlEl) wlEl.textContent = stocks.filter(s => _watchlist.has(s.Ticker)).length;
 
-  // 퀵필터 적용
-  const quickFiltered = _applyQuickFilter(_currentResults);
+  // 지수 보기 카운트 갱신 + 지수/퀵필터 적용
+  _updateIndexBar(_currentResults);
+  const indexScoped   = _applyIndexFilter(_currentResults);
+  const quickFiltered = _applyQuickFilter(indexScoped);
   _renderOneLinerFilterChip(quickFiltered);
   const filtered = _oneLinerFilter
     ? quickFiltered.filter(s => (s.OneLinerTag || '') === _oneLinerFilter)
@@ -1313,7 +1335,9 @@ function renderStockTable(stocks) {
   if (filtered.length === 0) {
     const emptyMsg = (_activeFilters.size === 1 && _activeFilters.has('watchlist'))
       ? '워치리스트 비어있음. 표의 ☆ 버튼으로 추가 ㄱㄱ'
-      : _activeFilters.size > 0 ? '필터 조건에 맞는 종목 없음.' : '결과 없음';
+      : (_activeIndex !== 'all' && !_activeFilters.size)
+        ? '이 지수에 해당하는 종목 없음.'
+        : (_activeFilters.size > 0 || _activeIndex !== 'all') ? '필터 조건에 맞는 종목 없음.' : '결과 없음';
     tbody.innerHTML = `<tr><td colspan="${_colCount()}" class="state-msg">${esc(emptyMsg)}</td></tr>`;
     _updateMobileList([], emptyMsg, renderToken);
     return;
@@ -1423,6 +1447,33 @@ function _deltaBadge(stock) {
   return `<span class="score-delta flat" title="${days}일 전 대비 변동 없음${rdTxt}">—</span>`;
 }
 
+// GreedZone 뱃지 — "🟡 45pt" 의 방향 오해 제거.
+// GreedZone(greedzone.py)은 역추세 경고: 점수↑ = 저점 대비 더 오래·깊게 과열 = 추격매수 위험.
+// ⚠ 아이콘 + 분모(/100) + 강도별 색(40↑주황·70↑빨강) + 게이지바로 "위험"임을 직접 전달.
+function _greedBadge(stock) {
+  if (!stock || !stock.GreedZone) return '';
+  const gz  = stock.GreedZoneScore || 0;
+  const w   = Math.min(100, Math.max(0, gz));
+  const col = gz >= 70 ? '#DC2626' : gz >= 40 ? '#D97706' : '#F59E0B';
+  const tip = `저점 대비 과열 ${gz}/100 · ${stock.GreedZoneDays || 0}일 연속`
+            + `${stock.GreedZoneEntry ? ' · 오늘 신규 진입!' : ''} — 추격매수 주의 (역추세 경고)`;
+  return ` <span class="greed-badge-v2" title="${esc(tip)}">`
+       + `<span class="gz-label">⚠ 과열 ${gz}<span class="gz-denom">/100</span></span>`
+       + `<span class="gz-bar-track"><span class="gz-bar-fill" style="width:${w}%;background:${col}"></span></span>`
+       + `</span>`;
+}
+
+// 테이블 RSI 셀 — 맨숫자에 과매수(빨강)/과매도(파랑) 미니바 추가.
+function _rsiCellHtml(stock) {
+  const v = stock.RSI != null ? Number(stock.RSI) : null;
+  const txt = v != null ? fmt(v, 1) : '—';
+  if (v == null) return `<span class="rsi-num">—</span>`;
+  const col = v > 70 ? '#E03131' : v < 30 ? '#1971C2' : '#9CA3AF';
+  const bw  = Math.min(100, Math.max(0, v));
+  return `<span class="rsi-num">${txt}</span>`
+       + `<div class="rsi-seg-track"><div class="rsi-seg-fill" style="width:${bw}%;background:${col}"></div></div>`;
+}
+
 function renderStockRow(stock, rank) {
   const rankClass  = rank <= 3 ? `rank-${rank}` : 'rank-other';
   const score      = Math.round(stock.TotalScore || 0);
@@ -1475,7 +1526,7 @@ function renderStockRow(stock, rank) {
   <td class="center"><input type="checkbox" ${checked ? 'checked' : ''} onclick="toggleSelectStock('${t}', event)" style="cursor:pointer;width:16px;height:16px;accent-color:#3182F6;"></td>
   <td class="center"><span class="rank-cell ${rankClass}">${rank}</span></td>
   <td class="name-cell" onmouseenter="showStockPopup('${t}', event)" onmouseleave="hideStockPopup()">
-    <span class="stock-name">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}${stock.GreedZone ? ` <span class="greed-badge" title="탐욕 강도 ${stock.GreedZoneScore || 0}pt · ${stock.GreedZoneDays || 0}일 연속${stock.GreedZoneEntry ? ' · 오늘 신규 진입!' : ''}">🟡 ${stock.GreedZoneScore || 0}pt</span>` : ''}</span>
+    <span class="stock-name">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}${_greedBadge(stock)}</span>
     <span class="stock-code">${t}</span>
   </td>
   <td class="desc-cell">${esc(stock.Desc || '')}</td>
@@ -1490,7 +1541,7 @@ function renderStockRow(stock, rank) {
   </td>
   <td class="right">${fmtPrice(stock.Price)}</td>
   <td class="right ${chgClass}">${chgSign}${chgPct}%</td>
-  <td class="right">${rsi}</td>
+  <td class="right rsi-cell">${_rsiCellHtml(stock)}</td>
   <td class="right">${avgVol}</td>
   <td class="right">${marketCap}</td>
   <td class="right" title="${stock.BrokerTargetSource ? esc(stock.BrokerTargetSource) : '증권사 컨센서스 없음'}">${brokerHtml}</td>
@@ -1524,7 +1575,7 @@ function renderMobileCard(stock, rank) {
     <div class="stock-card-main">
       <span class="stock-card-rank">${rank}</span>
       <div class="stock-card-name">
-        <span class="stock-card-name-main">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬</span>` : ''}${stock.GreedZone ? ` <span class="greed-badge">🟡 ${stock.GreedZoneScore || 0}pt</span>` : ''}</span>
+        <span class="stock-card-name-main">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬</span>` : ''}</span>
         <span class="stock-card-ticker">${t}${stock.Sector ? ` · ${esc(stock.Sector)}` : ''}</span>
       </div>
     </div>
@@ -1535,6 +1586,8 @@ function renderMobileCard(stock, rank) {
   </div>
   <div class="stock-card-row2">
     ${_renderSignalHtml(stock.Signal, stock)}
+    ${stock.RSI != null ? `<span class="stock-card-rsi" style="font-size:11px;font-weight:700;color:${Number(stock.RSI) > 70 ? '#E03131' : Number(stock.RSI) < 30 ? '#1971C2' : '#9CA3AF'}">RSI ${fmt(stock.RSI, 0)}</span>` : ''}
+    ${_greedBadge(stock)}
   </div>
 </div>`;
 }
@@ -2652,7 +2705,7 @@ function _clearPanelDetail() {
   const _nb = document.getElementById('dp-news-bar');
   if (_nb) _nb.style.display = 'none';
   ['dp-name','dp-ticker','dp-sector','dp-about','dp-score','dp-signal',
-   'dp-price','dp-day-chg','dp-target','dp-broker-target','dp-rsi',
+   'dp-price','dp-day-chg','dp-target','dp-broker-target',
    'dp-axis-eps-val','dp-axis-roe-val','dp-axis-mom-val','dp-axis-rs-val'].forEach(id => setText(id, '…'));
   ['dp-dcf-upside','dp-broker-upside'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = ''; });
   const loading = '<div style="padding:32px 16px;text-align:center;color:var(--text-tertiary);font-size:13px;">로딩 중...</div>';
@@ -2746,7 +2799,6 @@ function _populatePanelDetail(d, skipFourAxis) {
       tgtSrcEl.removeAttribute('title');
     }
   }
-  setText('dp-rsi',     d.RSI    != null ? fmt(d.RSI, 1) : '—');
 
   const dayChg = d.DayChg || 0;
   const chgEl  = document.getElementById('dp-day-chg');
@@ -2809,11 +2861,7 @@ function _populatePanelDetail(d, skipFourAxis) {
   _renderFinanceTab(d);
   _renderDetailFeatures(d);
   _renderRiskGauge(d);
-  _renderRiskSummary(d);
-  _renderFactorWaterfall(d);
   _renderDrawdownRisk(d);
-  _renderACCard(d);
-  _renderLiquidityCard(d);
 
   if (Array.isArray(d.Breakdown)) renderBreakdown(d.Breakdown);
 
@@ -3071,8 +3119,6 @@ function _renderTechTab(d) {
   const rsiCol  = d.RSI > 70 ? 'var(--destructive)' : d.RSI < 30 ? 'var(--info)' : 'var(--text-primary)';
   const adxRaw  = d._ADX != null ? fmt(d._ADX, 1) + _adxLabel(d._ADX) : '—';
   const adxCol  = d._ADX > 25 ? 'var(--success)' : 'var(--text-tertiary)';
-  const rsRaw   = d.RSRating != null ? String(d.RSRating) + _rsLabel(d.RSRating) : '—';
-  const rsCol   = d.RSRating >= 80 ? 'var(--success)' : d.RSRating < 40 ? 'var(--destructive)' : 'var(--text-primary)';
   const vwapRaw = d.VWAPDistance != null ? (d.VWAPDistance >= 0 ? '+' : '') + fmt(d.VWAPDistance*100,1)+'%'
                   + (d.VWAPDistance > 0.03 ? ' · VWAP 위' : d.VWAPDistance < -0.03 ? ' · VWAP 아래' : ' · VWAP 근접') : '—';
   const volRaw  = d.VolRatio != null ? fmt(d.VolRatio, 2)+'x'
@@ -3082,26 +3128,17 @@ function _renderTechTab(d) {
     ? (d._MACDHist > 0 ? '상승 전환 중' : d._MACDHist < 0 ? '하락 중' : '중립')
     : '—';
   const macdCol = d._MACDHist > 0 ? 'var(--success)' : d._MACDHist < 0 ? 'var(--destructive)' : null;
-  const sectorRankRaw = d.SectorRank && d.SectorRank !== '-' ? d.SectorRank : (d.SectorRank === '-' ? '스캔 필요' : '—');
-  const sectorRankCol = d.SectorRank === 'Top 10%' ? 'var(--success)' : d.SectorRank === 'Bottom' ? 'var(--destructive)' : null;
 
+  // 중복/저신호 행 제거: RS등급(→RS 도넛 게이지)·12M/3M수익률(→RS 구성성분)·
+  // NR7(→ORB와 중복)·볼린저(→온도계/RSI와 상관)·확신도(→점수와 단조)·섹터순위(대부분 '스캔 필요').
   const rows = [
     ['RSI (14)',    rsiVal,  '70↑ 과매수(조정 주의) · 30↓ 과매도(반등 주목)', rsiCol],
     ['ADX',        adxRaw,  '25↑ 추세 존재 · 40↑ 강한 추세 · 25↓ 횡보',     adxCol],
     ['ATR%',       d.ATRPercent != null ? fmt(d.ATRPercent,2)+'%' : '—', '높을수록 변동성 큼 — 위험과 기회 동시', null],
     ['VWAP 거리',  vwapRaw, '양수=평균가 위(강세) · 음수=아래(약세)',         d.VWAPDistance > 0 ? 'var(--success)' : 'var(--destructive)'],
-    ['RS 등급',    rsRaw,   '80↑ 시장 주도주 · 40↓ 부진주',                  rsCol],
-    ['12M 수익률', d.Mom12M != null ? (d.Mom12M >= 0 ? '+' : '') + fmt(d.Mom12M*100,1)+'%' : '—',
-     '1년간 주가 등락 — 양수면 상승 추세', d.Mom12M > 0 ? 'var(--success)' : 'var(--destructive)'],
-    ['3M 수익률',  d._Mom3M != null ? (d._Mom3M >= 0 ? '+' : '') + fmt(d._Mom3M,1)+'%' : '—',
-     '3개월간 주가 등락 — 단기 추세 확인', d._Mom3M > 0 ? 'var(--success)' : 'var(--destructive)'],
     ['거래량 비율',volRaw,  '1↑ 평소보다 활발 · 2↑ 기관 참여 가능성',        d.VolRatio > 1.5 ? 'var(--success)' : null],
     ['MACD 방향',  macdRaw, '히스토그램 양수=상승 모멘텀 · 음수=하락 모멘텀', macdCol],
     ['ORB 신호',   _orbNr7Label(d.ORBSignal), '시초가 범위 돌파 시 매수 신호',     _orbNr7Color(d.ORBSignal)],
-    ['NR7 압축',   _orbNr7Label(d.NR7Signal), '변동폭 수축 후 큰 움직임 대비',     _orbNr7Color(d.NR7Signal)],
-    ['볼린저밴드', _trKo(d.BBSignal   || '—'), '하단 반등=반등 주목 · 상단=과열 주의', null],
-    ['확신도',     _trKo(d.Conviction || '—'), '높음=팩터 방향 일치 · 낮음=신호 혼재', null],
-    ['섹터 순위',  sectorRankRaw, '스캔 결과 기준 섹터 내 상대 위치 (목록 스캔 후 표시)', sectorRankCol],
   ];
 
   el.innerHTML = rows.map(([l, v, s, c]) => _indicatorRowHtml(l, v, s, c)).join('');
@@ -3145,17 +3182,35 @@ function _renderDetailFeatures(d) {
   if (rsVal && rsLbl) {
     if (rs != null) {
       let rsCol, rsTxt;
-      if      (rs >= 80) { rsCol = 'var(--success)';      rsTxt = '주도주'; }
-      else if (rs >= 60) { rsCol = '#16A34A';              rsTxt = '강세';  }
-      else if (rs >= 40) { rsCol = 'var(--text-primary)';  rsTxt = '중립';  }
-      else if (rs >= 20) { rsCol = '#F59E0B';              rsTxt = '약세';  }
-      else               { rsCol = 'var(--destructive)';   rsTxt = '부진';  }
-      rsVal.textContent = rs;
-      rsVal.style.color = rsCol;
-      rsLbl.textContent = rsTxt + ' / 99';
+      if      (rs >= 80) { rsCol = '#16A34A'; rsTxt = '주도주'; }
+      else if (rs >= 60) { rsCol = '#16A34A'; rsTxt = '강세';  }
+      else if (rs >= 40) { rsCol = '#6B7280'; rsTxt = '중립';  }
+      else if (rs >= 20) { rsCol = '#F59E0B'; rsTxt = '약세';  }
+      else               { rsCol = '#DC2626'; rsTxt = '부진';  }
+      // 0~99 도넛 호 게이지로 시각화 — 큰 숫자 단독보다 스케일 내 위치를 즉시 전달
+      const _r = 23, _cx = 28, _cy = 28, _sw = 5;
+      const _circ = 2 * Math.PI * _r;
+      const _dash = (Math.min(99, Math.max(0, rs)) / 99) * _circ;
+      rsVal.innerHTML =
+        `<svg class="dp-rs-donut" width="56" height="56" viewBox="0 0 56 56" role="img" aria-label="RS Rating ${rs} / 99">`
+        + `<circle cx="${_cx}" cy="${_cy}" r="${_r}" fill="none" stroke="var(--surface-muted,#EDEFF2)" stroke-width="${_sw}"/>`
+        + `<circle cx="${_cx}" cy="${_cy}" r="${_r}" fill="none" stroke="${rsCol}" stroke-width="${_sw}" `
+        +   `stroke-dasharray="${_dash.toFixed(1)} ${_circ.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 ${_cx} ${_cy})"/>`
+        + `<text x="${_cx}" y="${_cy}" text-anchor="middle" dominant-baseline="central" font-size="19" font-weight="800" fill="${rsCol}">${rs}</text>`
+        + `</svg>`;
+      // 권고1: 같은 지수(시총군) 내 상대강도 — size 베타 제거한 진짜 순위
+      const _IXLBL = { SP500: 'S&P500', SP400: '미드캡', SP600: '스몰캡', NDX: '나스닥100', OTHER: '기타' };
+      const bkt = d.RSBucket, bktNm = d.RSBucketName;
+      const bktSuffix = (bkt != null && bktNm && _IXLBL[bktNm])
+        ? ` · ${_IXLBL[bktNm]} 내 ${Math.round(bkt)}` : '';
+      rsLbl.textContent = rsTxt + ' / 99' + bktSuffix;
       rsLbl.style.color = rsCol;
+      if (bktSuffix) {
+        rsLbl.title = `전체 유니버스 RS는 ${rs}점이지만, 같은 ${_IXLBL[bktNm]} 종목들 사이에서는 ${Math.round(bkt)}점(백분위)입니다. ` +
+                      `대형주와 소형주를 섞어 비교할 때 생기는 size 왜곡을 제거한 순위예요.`;
+      }
     } else {
-      rsVal.textContent = '—';
+      rsVal.innerHTML = '—';
       rsLbl.textContent = '/ 99';
     }
   }
@@ -3191,9 +3246,15 @@ function _renderDrawdownRisk(d) {
     rows.push(`<tr><td>고통 대비 보상</td><td style="color:${col}">${ep.calmar_ratio.toFixed(2)} (${lbl})</td></tr>`);
   }
   // P8: CVaR 금액 번역
+  // P8: CVaR(ES95) — 라벨 정정. '최악의 날'이 아니라 '하위 5% 나쁜 날들의 평균 손실'.
   if (ep.cvar_95 != null && ep.cvar_95 !== 0) {
-    const won = Math.round(Math.abs(ep.cvar_95) * 10000);
-    rows.push(`<tr><td>최악의 날 예상</td><td style="color:#DC2626">${ep.cvar_95.toFixed(2)}% (100만원→-${won.toLocaleString()}원)</td></tr>`);
+    const remain = Math.round(1000000 * (1 + ep.cvar_95 / 100));  // 나쁜 날 잔액 (100만원 기준)
+    rows.push(`<tr><td title="하위 5% 나쁜 날들의 평균 손실 (CVaR/Expected Shortfall 95%). '가장 나쁜 하루'가 아니라 '나쁜 날이면 평균 이 정도' 입니다. 최근 1년 기준.">나쁜 날 손실 <span style="font-size:10px;color:var(--text-tertiary);">(하위5%·ES)</span></td><td style="color:#DC2626">${ep.cvar_95.toFixed(2)}% <span style="color:var(--text-tertiary);font-size:11px;">(100만원→${remain.toLocaleString()}원)</span></td></tr>`);
+  }
+  // B1: 진짜 단일 최악일 (최근 1년 중 하루 최대 낙폭) — '최악의 날'은 이쪽이 정확
+  if (ep.worst_day != null && ep.worst_day !== 0) {
+    const wremain = Math.round(1000000 * (1 + ep.worst_day / 100));  // 최악의 날 잔액 (100만원 기준)
+    rows.push(`<tr><td title="최근 1년간 실제 하루 최대 낙폭 (단일 최악일)">최근 1년 최악의 날</td><td style="color:#B91C1C;font-weight:600">${ep.worst_day.toFixed(2)}% <span style="color:var(--text-tertiary);font-size:11px;font-weight:400;">(100만원→${wremain.toLocaleString()}원)</span></td></tr>`);
   }
   // P9: 하방 베타
   if (ep.downside_beta != null) {
@@ -3203,7 +3264,7 @@ function _renderDrawdownRisk(d) {
   // P12: 체감형 스트레스 시나리오 (Goldman P3)
   if (ep.stress_2008 != null) {
     const inv = 100; // 100만원 기준
-    rows.push(`<tr><td colspan="2" style="padding-top:6px;font-size:10px;color:var(--text-tertiary);font-weight:600;">과거 위기 재현 시 (100만원 투자 기준)</td></tr>`);
+    rows.push(`<tr><td colspan="2" style="padding-top:6px;font-size:10px;color:var(--text-tertiary);font-weight:600;">과거 위기 재현 시 (100만원 투자 기준) <span style="font-weight:400;opacity:.75;">※ 하방β 선형 추정치 — 실제 손실은 더 클 수 있음</span></td></tr>`);
     const _stress = (label, v) => {
       const pct = (v * 100).toFixed(0);
       const remain = Math.round(inv * (1 + v));
@@ -3233,80 +3294,9 @@ function _renderRiskGauge(d) {
   el.innerHTML = `🛡 Risk <span style="font-size:14px;">${Math.round(cr)}</span>/99 <span style="font-weight:500;">${lbl}</span>`;
 }
 
-// P2: Risk Summary Card — 리스크 핵심 3줄 요약 (Goldman P1)
-function _renderRiskSummary(d) {
-  const host = document.getElementById('dp-risk-summary');
-  if (!host) return;
-  const ep = (d && d.EntryPlan) || {};
-  if (ep.composite_risk == null && ep.mdd_current == null) { host.innerHTML = ''; return; }
-  const parts = [];
-  if (ep.composite_risk != null) {
-    const cr = ep.composite_risk;
-    const col = cr >= 60 ? '#DC2626' : cr >= 35 ? '#F59E0B' : '#16A34A';
-    const lbl = cr >= 60 ? '고위험' : cr >= 35 ? '주의' : '양호';
-    parts.push(`<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:20px;font-weight:800;color:${col};">${Math.round(cr)}</span><span style="font-size:11px;color:${col};font-weight:600;">/99 ${lbl}</span><span style="flex:1;height:4px;background:var(--border);border-radius:2px;position:relative;overflow:hidden;"><span style="position:absolute;left:0;top:0;height:100%;width:${cr}%;background:${col};border-radius:2px;"></span></span></div>`);
-  }
-  const chips = [];
-  if (ep.mdd_current != null) chips.push(`MDD ${ep.mdd_current.toFixed(1)}%`);
-  if (ep.cvar_95 != null && ep.cvar_95 !== 0) chips.push(`CVaR ${ep.cvar_95.toFixed(1)}%`);
-  if (ep.downside_beta != null) chips.push(`하방β ${ep.downside_beta.toFixed(2)}×`);
-  if (ep.liquidity_score != null) {
-    const lc = ep.liquidity_score >= 60 ? '#16A34A' : ep.liquidity_score >= 30 ? '#F59E0B' : '#DC2626';
-    chips.push(`<span style="color:${lc}">유동성 ${Math.round(ep.liquidity_score)}</span>`);
-  }
-  if (chips.length) parts.push(`<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text-secondary);">${chips.map(c => `<span style="background:var(--bg-secondary);padding:2px 8px;border-radius:4px;">${c}</span>`).join('')}</div>`);
-  if (!parts.length) { host.innerHTML = ''; return; }
-  host.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;"><div style="font-size:11px;font-weight:700;color:var(--text-tertiary);">🛡 통합 리스크 스코어</div>${parts.join('')}</div>`;
-}
-
-// P2: Factor Attribution Waterfall (시타델 P1 + 르네상스 P2)
-function _renderFactorWaterfall(d) {
-  const host = document.getElementById('dp-factor-waterfall');
-  if (!host) return;
-  const ep = (d && d.EntryPlan) || {};
-  const fc = ep.factor_contrib;
-  if (!fc || typeof fc !== 'object') { host.innerHTML = ''; return; }
-  const entries = Object.entries(fc).filter(([,v]) => v !== 0).sort((a,b) => b[1] - a[1]);
-  if (!entries.length) { host.innerHTML = ''; return; }
-  const maxAbs = Math.max(...entries.map(([,v]) => Math.abs(v)), 1);
-  const bars = entries.map(([k, v]) => {
-    const pct = Math.abs(v) / maxAbs * 100;
-    const col = v >= 0 ? '#16A34A' : '#DC2626';
-    const dir = v >= 0 ? 'right' : 'left';
-    return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;"><span style="width:48px;text-align:right;color:var(--text-secondary);flex-shrink:0;">${esc(k)}</span><div style="flex:1;height:14px;background:var(--bg-secondary);border-radius:3px;position:relative;overflow:hidden;display:flex;justify-content:${v >= 0 ? 'flex-start' : 'flex-end'};"><div style="height:100%;width:${pct}%;background:${col};border-radius:3px;opacity:0.7;"></div></div><span style="width:36px;font-weight:600;color:${col};">${v >= 0 ? '+' : ''}${v.toFixed(1)}</span></div>`;
-  }).join('');
-  host.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;"><div style="font-size:11px;font-weight:700;color:var(--text-tertiary);">📊 점수 기여도 (100점 중)</div>${bars}</div>`;
-}
-
-// P5: Autocorrelation + Mean-Reversion Half-life (르네상스 P3)
-function _renderACCard(d) {
-  const host = document.getElementById('dp-ac-card');
-  if (!host) return;
-  const ep = (d && d.EntryPlan) || {};
-  if (ep.ac1 == null) { host.innerHTML = ''; return; }
-  const ac = ep.ac1;
-  const regime = ac < -0.10 ? '평균회귀 유효' : ac > 0.08 ? '추세추종 유효' : '중립 구간';
-  const col = ac < -0.10 ? '#7C3AED' : ac > 0.08 ? '#16A34A' : 'var(--text-secondary)';
-  let hlText = '';
-  if (ep.halflife != null && ep.halflife > 0 && ep.halflife < 200) {
-    hlText = ` · 반감기 ${ep.halflife.toFixed(0)}일`;
-  }
-  host.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:12px;display:flex;align-items:center;gap:8px;"><span style="font-weight:700;color:var(--text-tertiary);">🔄 AC(1)</span><span style="font-weight:700;color:${col};">${ac.toFixed(3)}</span><span style="color:${col};font-weight:600;">${regime}${hlText}</span></div>`;
-}
-
-// P6: Liquidity Score (블랙록 P3)
-function _renderLiquidityCard(d) {
-  const host = document.getElementById('dp-liquidity-card');
-  if (!host) return;
-  const ep = (d && d.EntryPlan) || {};
-  if (ep.liquidity_score == null) { host.innerHTML = ''; return; }
-  const ls = ep.liquidity_score;
-  const col = ls >= 60 ? '#16A34A' : ls >= 30 ? '#F59E0B' : '#DC2626';
-  const lbl = ls >= 60 ? '양호' : ls >= 30 ? '주의' : '유동성 부족';
-  let detail = '';
-  if (ep.amihud != null) detail = ` · Amihud ${ep.amihud.toFixed(2)}`;
-  host.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:12px;display:flex;align-items:center;gap:8px;"><span style="font-weight:700;color:var(--text-tertiary);">💧 유동성</span><span style="font-weight:700;color:${col};">${Math.round(ls)}/100</span><span style="color:${col};font-weight:600;">${lbl}${detail}</span></div>`;
-}
+// (정리됨) _renderRiskSummary·_renderFactorWaterfall·_renderACCard·_renderLiquidityCard 4개 함수 제거.
+// 중복/저신호로 컨테이너(dp-risk-summary·dp-factor-waterfall·dp-ac-card·dp-liquidity-card)와 호출부를 삭제.
+// 데이터 필드(composite_risk·factor_contrib·ac1·liquidity_score)는 백엔드에 보존 — 되돌리기 가능.
 
 function _renderFinanceTab(d) {
   const el = document.getElementById('dp-finance-content');
@@ -3327,39 +3317,24 @@ function _renderFinanceTab(d) {
   const epsRaw = (d._EPSGrowth != null && d._EPSGrowth !== 0) ? (d._EPSGrowth >= 0 ? '+' : '') + fmt(d._EPSGrowth*100,1)+'%' + _epsLbl(d._EPSGrowth) : '—';
   const perLbl = d._PER ? (d._PER < 15 ? ' · 저평가 가능' : d._PER > 40 ? ' · 고평가 주의' : '') : '';
   const pbrLbl = d._PBR ? (d._PBR < 1 ? ' · 자산 대비 저평가' : d._PBR > 5 ? ' · 고평가' : '') : '';
-  const dbtLbl = d._DebtRatio ? (d._DebtRatio > 200 ? ' · 위험' : d._DebtRatio > 100 ? ' · 주의' : ' · 안정') : '';
   const omLbl  = d._OperatingMargin ? (d._OperatingMargin > 0.20 ? ' · 우수' : d._OperatingMargin > 0.10 ? ' · 양호' : d._OperatingMargin > 0 ? ' · 보통' : ' · 손실') : '';
   const epsAccelRaw = d.EPSAcceleration ? '가속 중 🚀' : (d.EPSAcceleration === false ? '가속 아님' : '—');
   const epsAccelCol = d.EPSAcceleration ? 'var(--success)' : null;
-  const divRaw  = d._DivYield && d._DivYield > 0 ? fmt(d._DivYield * 100, 2) + '%' : '—';
-  const revRaw  = d._RevenueGrowth != null && d._RevenueGrowth !== 0
-    ? (d._RevenueGrowth >= 0 ? '+' : '') + fmt(d._RevenueGrowth * 100, 1) + '%' : '—';
 
+  // 중복/저신호 행 제거: 매출성장(→EPS성장과 상관)·배당(성장주 스캔서 저신호)·부채비율(섹터마다 정상범위 달라 오해)·
+  // 시가총액(→테이블에 있음)·밸류/퀄리티 팩터(→CAN SLIM 탭에 분해 표시).
   const rows = [
     ['PER',       d._PER   ? fmt(d._PER, 1) + perLbl  : '—', '주가÷순이익 · 15↓ 저평가 · 40↑ 고평가',    d._PER && d._PER < 15 ? 'var(--success)' : d._PER > 40 ? 'var(--destructive)' : null],
     ['PBR',       d._PBR   ? fmt(d._PBR, 2) + pbrLbl  : '—', '주가÷순자산 · 1↓ 자산 대비 저렴',           null],
     ['ROE',       roeRaw,                                      '자기자본이익률 · 17%↑ 오닐 기준 합격',     d._ROE > 0.15 ? 'var(--success)' : null],
     ['EPS 성장률',epsRaw,                                      '분기 순이익 전년비 · 25%↑ 성장주 기준',    d._EPSGrowth > 0 ? 'var(--success)' : 'var(--destructive)'],
     ['EPS 가속',  epsAccelRaw,                                 '전분기 대비 성장 가속 중인가 (CAN SLIM C원칙)', epsAccelCol],
-    ['매출 성장', revRaw,                                      '전년비 매출 성장률 — 양수=매출 확장 중',   d._RevenueGrowth > 0 ? 'var(--success)' : d._RevenueGrowth < 0 ? 'var(--destructive)' : null],
-    ['배당수익률',divRaw,                                      '연간 배당금 ÷ 현재가 (배당주 참고)',        null],
     ['영업이익률',d._OperatingMargin ? fmt(d._OperatingMargin*100,1)+'%' + omLbl : '—', '매출 대비 영업이익 · 20%↑ 우수',  null],
-    ['부채비율',  d._DebtRatio ? fmt(d._DebtRatio, 1)+'%' + dbtLbl : '—', '100%↓ 양호 · 200%↑ 위험', d._DebtRatio > 150 ? 'var(--destructive)' : d._DebtRatio < 50 ? 'var(--success)' : null],
-    ['시가총액',  d._MarketCap ? _fmtCap(d._MarketCap) : '—',          '기업 규모 — 클수록 안정적',         null],
-    ['밸류 팩터', d.ValueScore   ? fmt(d.ValueScore, 1) + '점' : '—', '가치·저평가 매력도 — 양수=저평가', d.ValueScore > 10 ? 'var(--success)' : d.ValueScore < -5 ? 'var(--destructive)' : null],
-    ['퀄리티 팩터',d.QualityScore ? fmt(d.QualityScore,1) + '점': '—', '수익성·안정성 종합 — 높을수록 우량', d.QualityScore > 10 ? 'var(--success)' : null],
   ];
 
   el.innerHTML = rows.map(([l, v, s, c]) => _indicatorRowHtml(l, v, s, c)).join('');
 }
 
-function _fmtCap(v) {
-  if (!v) return '—';
-  if (v >= 1e12) return (v/1e12).toFixed(1) + 'T';
-  if (v >= 1e9)  return (v/1e9).toFixed(1)  + 'B';
-  if (v >= 1e6)  return (v/1e6).toFixed(1)  + 'M';
-  return String(v);
-}
 
 // ── RS Rating 카드 ───────────────────────────────────────────────────────
 function _renderRsRating(rs) {
@@ -4209,6 +4184,7 @@ function _renderReasonTags(topReason) {
 function initFilterChips() {
   document.querySelectorAll('#filter-chips .chip').forEach(chip => {
     chip.addEventListener('click', () => {
+      closeEtfView();   // ETF 인라인 탭이 열려 있으면 종목 목록으로 복귀
       const f = chip.dataset.filter || 'all';
       if (f === 'all') {
         _activeFilters.clear();
@@ -4216,6 +4192,15 @@ function initFilterChips() {
         _activeFilters.delete(f);
       } else {
         _activeFilters.add(f);
+      }
+      // 점수급등 필터는 어제 대비 변동(ScoreDelta) 기준으로 자동 정렬 — 급등 종목이 위로.
+      if (f === 'score_surge') {
+        if (_activeFilters.has('score_surge')) {
+          _sortKey = 'ScoreDelta'; _sortDir = -1;
+        } else if (_sortKey === 'ScoreDelta') {
+          _sortKey = 'TotalScore'; _sortDir = -1;  // 해제 시 점수순 복귀
+        }
+        _syncSortArrowUI();
       }
       _syncFilterChipUI();
       if (_searchBaseStocks().length) _refreshFilteredView();
@@ -4232,6 +4217,102 @@ function _syncFilterChipUI() {
       c.classList.toggle('active', _activeFilters.has(f));
     }
   });
+}
+
+// ── 지수별 보기 바 ────────────────────────────────────────────────────────
+function initIndexBar() {
+  document.querySelectorAll('#index-bar .index-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      _activeIndex = chip.dataset.index || 'all';
+      _syncIndexBarUI();
+      if (_searchBaseStocks().length) _refreshFilteredView();
+    });
+  });
+}
+
+function _syncIndexBarUI() {
+  document.querySelectorAll('#index-bar .index-chip').forEach(c => {
+    c.classList.toggle('active', (c.dataset.index || 'all') === _activeIndex);
+  });
+}
+
+// 지수 바: 미국에서만 표시하고 각 지수 편입 종목 수를 갱신한다.
+function _updateIndexBar(stocks) {
+  const bar = document.getElementById('index-bar');
+  if (!bar) return;
+  const list = Array.isArray(stocks) ? stocks : [];
+  // KR 마켓이거나 지수 데이터가 전혀 없으면 바를 숨기고 전체 보기로 리셋.
+  const anyTagged = list.some(s => Array.isArray(s.Indices));
+  if (currentMarket !== 'US' || !anyTagged) {
+    bar.hidden = true;
+    if (_activeIndex !== 'all') { _activeIndex = 'all'; _syncIndexBarUI(); }
+    return;
+  }
+  bar.hidden = false;
+  // 버킷별 종목 수 + 유동성(권고2): 중앙 거래대금·저유동성 종목 수
+  const counts = { all: list.length, SP500: 0, SP400: 0, SP600: 0, NDX: 0, OTHER: 0 };
+  const advs   = { all: [], SP500: [], SP400: [], SP600: [], NDX: [], OTHER: [] };
+  const lowliq = { all: 0, SP500: 0, SP400: 0, SP600: 0, NDX: 0, OTHER: 0 };
+  const _push = (k, s) => {
+    counts[k]++;
+    const a = Number(s._AvgDollarVol20);
+    if (isFinite(a) && a > 0) advs[k].push(a);
+    if (s.LowLiquidity) lowliq[k]++;
+  };
+  list.forEach(s => {
+    _push('all', s);
+    const ix = Array.isArray(s.Indices) ? s.Indices : [];
+    if (!ix.length) { _push('OTHER', s); return; }
+    ix.forEach(k => { if (k in counts) _push(k, s); });
+  });
+  bar.querySelectorAll('.index-chip').forEach(chip => {
+    const k = chip.dataset.index;
+    const cnt = chip.querySelector('.ix-count');
+    if (cnt) cnt.textContent = counts[k] != null ? counts[k] : '';
+    if (k && k !== 'all' && counts[k] != null) {
+      const med = _median(advs[k]);
+      const liqTxt = med != null ? `중앙 거래대금 ${_fmtMarketCap(med)}` : '거래대금 정보 부족';
+      const lowTxt = lowliq[k] ? ` · 유동성↓ ${lowliq[k]}종목` : '';
+      const base = (chip.dataset.baseTitle || (chip.dataset.baseTitle = chip.title || ''));
+      chip.title = `${base}\n${counts[k]}종목 · ${liqTxt}${lowTxt}`;
+    }
+  });
+  _renderIndexBarMeta();
+}
+
+// 정렬 없이 중앙값 (빈 배열이면 null)
+function _median(arr) {
+  if (!arr || !arr.length) return null;
+  const a = arr.slice().sort((x, y) => x - y);
+  const m = a.length >> 1;
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+
+// 명단 기준일 + 가격 캐시 신선도 표시 (권고3 surface)
+function _renderIndexBarMeta() {
+  const el = document.getElementById('index-bar-meta');
+  if (!el) return;
+  const parts = [];
+  if (_indexMeta && _indexMeta.generated) {
+    const day = String(_indexMeta.generated).slice(0, 10);
+    parts.push(`명단 ${day}${_indexMeta.is_stale ? ' ⚠️갱신요망' : ''}`);
+  }
+  if (_scanCacheAgeMin != null && isFinite(_scanCacheAgeMin)) {
+    const h = _scanCacheAgeMin / 60;
+    const fresh = h < 24 ? `${Math.round(_scanCacheAgeMin)}분 전` :
+                  `${(h / 24).toFixed(1)}일 전`;
+    const warn = h >= 24 ? ' ⚠️' : '';
+    parts.push(`시세 ${fresh}${warn}`);
+  }
+  el.textContent = parts.join('  ·  ');
+}
+
+async function loadIndexMeta() {
+  try {
+    const res = await fetch('/api/index-meta');
+    _indexMeta = await res.json();
+    _renderIndexBarMeta();
+  } catch (e) { /* 비치명적 — 메타 없이도 동작 */ }
 }
 
 function initOneLinerFilter() {
@@ -4255,6 +4336,17 @@ function initOneLinerFilter() {
       clearOneLinerFilter();
     });
   }
+}
+
+// 현재 _sortKey/_sortDir 에 맞춰 테이블 헤더 정렬 화살표를 동기화.
+// ScoreDelta 처럼 열 헤더가 없는 키면 모든 화살표가 비워진다.
+function _syncSortArrowUI() {
+  document.querySelectorAll('.stock-table th.sortable').forEach(th => {
+    th.classList.remove('asc', 'desc');
+    if (th.dataset.sort === _sortKey && _sortDir !== 0) {
+      th.classList.add(_sortDir === 1 ? 'asc' : 'desc');
+    }
+  });
 }
 
 function initSort() {
@@ -4367,7 +4459,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (sSel) sSel.value = currentStrategy;
 
   // ESC로 드로어 닫기
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetailBtn(); });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const etfView = document.getElementById('etf-view');
+    if (etfView && !etfView.hidden) { closeEtfView(); return; }
+    closeDetailBtn();
+  });
 
   if (typeof COMPARE_MARKET !== 'undefined' && COMPARE_MARKET) {
     currentMarket = COMPARE_MARKET;
@@ -4391,6 +4488,8 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     // ── 스캐너 페이지
     initFilterChips();
+    initIndexBar();
+    loadIndexMeta();
     initSearch();
     initOneLinerFilter();
     initSort();
@@ -4401,6 +4500,7 @@ document.addEventListener('DOMContentLoaded', () => {
     runScan().then(() => {
       loadWatchlist();
       loadMacro();
+      loadScoreEval();
       if (typeof _loadMacroStrip === 'function') _loadMacroStrip(currentMarket);
     });
     setInterval(loadMacro, 15 * 60 * 1000);
@@ -4419,6 +4519,218 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+// ── ETF 현황 탭 (미국 + 한국) ───────────────────────────────────────────────
+
+let _etfLoaded = false;
+
+function openEtfView() {
+  const view = document.getElementById('etf-view');
+  if (!view) return;
+  if (!view.hidden) { closeEtfView(); return; }   // 탭 토글 — 다시 누르면 목록으로
+  // 인라인 탭 — 종목 표 자리에 ETF를 끼워 넣는다(상단·필터는 그대로).
+  const tbl = document.querySelector('.stock-table-wrap');
+  const mob = document.getElementById('mobile-stock-list');
+  if (tbl) tbl.style.display = 'none';
+  if (mob) mob.style.display = 'none';
+  view.hidden = false;
+  const chip = document.querySelector('.chip-etf');
+  if (chip) chip.classList.add('active');
+  // 매번 새로 호출하되 서버 TTL 캐시가 비용을 흡수 (최초 1회만 로딩 표시)
+  loadEtfData(!_etfLoaded);
+}
+
+function closeEtfView() {
+  const view = document.getElementById('etf-view');
+  if (!view || view.hidden) return;
+  view.hidden = true;
+  // 인라인 스타일 제거 → CSS/미디어쿼리 기본 표시로 복귀
+  const tbl = document.querySelector('.stock-table-wrap');
+  const mob = document.getElementById('mobile-stock-list');
+  if (tbl) tbl.style.display = '';
+  if (mob) mob.style.display = '';
+  const chip = document.querySelector('.chip-etf');
+  if (chip) chip.classList.remove('active');
+}
+
+async function loadEtfData(showLoading) {
+  const usEl = document.getElementById('etf-list-us');
+  const krEl = document.getElementById('etf-list-kr');
+  const metaEl = document.getElementById('etf-meta');
+  if (!usEl || !krEl) return;
+  if (showLoading) {
+    const ph = '<div class="etf-empty">불러오는 중…</div>';
+    usEl.innerHTML = ph;
+    krEl.innerHTML = ph;
+  }
+  try {
+    const res = await fetch('/api/etf');
+    const d = await res.json();
+    renderEtfData(d);
+    _etfLoaded = true;
+  } catch (e) {
+    console.warn('loadEtfData failed', e);
+    if (metaEl) metaEl.textContent = '· 불러오기 실패';
+    if (!_etfLoaded) {
+      usEl.innerHTML = '<div class="etf-empty">데이터를 불러오지 못했어요.</div>';
+      krEl.innerHTML = '';
+    }
+  }
+}
+
+// 거래량 한글 축약 (만/억)
+function _fmtEtfVol(n) {
+  if (n == null) return '—';
+  if (n >= 1e8) return (n / 1e8).toFixed(1).replace(/\.0$/, '') + '억';
+  if (n >= 1e4) return Math.round(n / 1e4).toLocaleString('ko-KR') + '만';
+  return Number(n).toLocaleString('ko-KR');
+}
+
+function _fmtEtfPrice(row) {
+  const t = (row.ticker || '').toUpperCase();
+  const isKr = t.endsWith('.KS') || t.endsWith('.KQ');
+  if (isKr) return '₩' + Math.round(row.price).toLocaleString('ko-KR');
+  return '$' + Number(row.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function _etfCardHtml(row) {
+  const c = Number(row.change_pct);
+  const dir = c > 0.005 ? 'up' : (c < -0.005 ? 'down' : 'flat');
+  const arrow = dir === 'up' ? '▲' : (dir === 'down' ? '▼' : '—');
+  const chgTxt = (c > 0 ? '+' : '') + c.toFixed(2) + '%';
+
+  // 거래량 급증 배지
+  let ratioBadge = '';
+  const vr = row.vol_ratio;
+  if (vr != null && vr >= 2) {
+    ratioBadge = `<span class="etf-volbadge hot">🔥${vr}배</span>`;
+  } else if (vr != null && vr >= 1.3) {
+    ratioBadge = `<span class="etf-volbadge warm">${vr}배</span>`;
+  }
+
+  const pos = Math.max(0, Math.min(100, Number(row.pos52) || 0));
+  // 위치별 색: 신고가 근접(빨강 계열)·바닥(파랑 계열)
+  const markCls = pos >= 85 ? 'high' : (pos <= 15 ? 'low' : 'mid');
+
+  const tk = esc(row.ticker || '');
+  return `
+    <div class="etf-card" data-etf-ticker="${tk}">
+      <div class="etf-card-clickable" data-action="toggleEtfSectors" data-arg="${tk}" title="섹터 비중 보기">
+        <div class="etf-card-top">
+          <span class="etf-name">${esc(row.label || '')}</span>
+          <span class="etf-ticker">${tk} <span class="etf-expand-chevron">▾</span></span>
+        </div>
+        <div class="etf-card-mid">
+          <span class="etf-price">${esc(_fmtEtfPrice(row))}</span>
+          <span class="etf-chg ${dir}">${arrow} ${esc(chgTxt)}</span>
+        </div>
+        <div class="etf-card-meta">
+          <span class="etf-vol">거래량 ${esc(_fmtEtfVol(row.volume))}</span>
+          ${ratioBadge}
+        </div>
+        <div class="etf-52w">
+          <div class="etf-52w-bar">
+            <span class="etf-52w-marker ${markCls}" style="left:${pos}%"></span>
+          </div>
+          <div class="etf-52w-labels">
+            <span class="etf-52w-lo">${esc(_compactNum(row.low52))}</span>
+            <span class="etf-52w-pos">52주 ${pos.toFixed(0)}%</span>
+            <span class="etf-52w-hi">${esc(_compactNum(row.high52))}</span>
+          </div>
+        </div>
+      </div>
+      <div class="etf-sectors" hidden></div>
+    </div>`;
+}
+
+// ── ETF 섹터 비중 아코디언 (카드 클릭 시 지연 로딩) ──────────────────────
+const _etfSectorCache = {};   // ticker -> sectors 배열(한 번 로드 후 재요청 안 함)
+
+async function toggleEtfSectors(ticker) {
+  if (!ticker) return;
+  const card = document.querySelector('.etf-card[data-etf-ticker="' + (window.CSS && CSS.escape ? CSS.escape(ticker) : ticker) + '"]');
+  if (!card) return;
+  const box = card.querySelector('.etf-sectors');
+  if (!box) return;
+
+  // 이미 열려 있으면 접기
+  if (!box.hidden) {
+    box.hidden = true;
+    card.classList.remove('expanded');
+    return;
+  }
+
+  card.classList.add('expanded');
+  box.hidden = false;
+
+  // 캐시 적중 시 재요청 안 함
+  if (_etfSectorCache[ticker]) {
+    box.innerHTML = _renderEtfSectors(_etfSectorCache[ticker]);
+    return;
+  }
+
+  box.innerHTML = '<div class="etf-sectors-loading">섹터 비중 불러오는 중…</div>';
+  try {
+    const res = await fetch('/api/etf-sectors/' + encodeURIComponent(ticker));
+    const d = await res.json();
+    const sectors = Array.isArray(d.sectors) ? d.sectors : [];
+    _etfSectorCache[ticker] = sectors;
+    box.innerHTML = _renderEtfSectors(sectors);
+  } catch (e) {
+    console.warn('toggleEtfSectors failed', e);
+    box.innerHTML = '<div class="etf-sectors-empty">섹터 비중을 불러오지 못했어요.</div>';
+  }
+}
+
+function _renderEtfSectors(sectors) {
+  if (!Array.isArray(sectors) || !sectors.length) {
+    return '<div class="etf-sectors-empty">섹터 비중 정보가 없어요.</div>';
+  }
+  const max = sectors.reduce((m, s) => Math.max(m, Number(s.weight_pct) || 0), 0) || 100;
+  const rows = sectors.map((s) => {
+    const pct = Number(s.weight_pct) || 0;
+    const w = Math.max(2, Math.min(100, (pct / max) * 100));
+    return `
+      <div class="etf-sector-row">
+        <span class="etf-sector-label">${esc(s.label || '')}</span>
+        <span class="etf-sector-track"><span class="etf-sector-fill" style="width:${w}%"></span></span>
+        <span class="etf-sector-pct">${pct.toFixed(1)}%</span>
+      </div>`;
+  }).join('');
+  return '<div class="etf-sectors-title">섹터 비중</div>' + rows;
+}
+
+// 52주 고저 라벨용 간단 숫자 축약
+function _compactNum(v) {
+  if (v == null) return '—';
+  const n = Number(v);
+  if (n >= 1000) return Math.round(n).toLocaleString('ko-KR');
+  return n.toFixed(2);
+}
+
+function renderEtfData(d) {
+  const usEl = document.getElementById('etf-list-us');
+  const krEl = document.getElementById('etf-list-kr');
+  const metaEl = document.getElementById('etf-meta');
+  if (!usEl || !krEl) return;
+
+  const us = Array.isArray(d.us) ? d.us : [];
+  const kr = Array.isArray(d.kr) ? d.kr : [];
+  usEl.innerHTML = us.length ? us.map(_etfCardHtml).join('') : '<div class="etf-empty">데이터 없음</div>';
+  krEl.innerHTML = kr.length ? kr.map(_etfCardHtml).join('') : '<div class="etf-empty">데이터 없음</div>';
+
+  if (metaEl) {
+    let meta = '';
+    if (d.ts) {
+      try {
+        const t = new Date(d.ts);
+        meta = '· ' + t.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' 기준';
+      } catch (e) { /* ignore */ }
+    }
+    if (d.stale) meta += ' (지연)';
+    metaEl.textContent = meta;
+  }
+}
+
 // ── 매크로 신호등 띠 ────────────────────────────────────────────────────────
 
 const _MACRO_DEFS = [
@@ -4435,6 +4747,35 @@ const _MACRO_DEFS = [
   { key: 'us_rate', label: '美기준금리',  fixed: 2, invert: false, suffix: '%' },
   { key: 'kr_rate', label: '韓기준금리',  fixed: 2, invert: false, suffix: '%' },
 ];
+
+// ── 점수 신뢰도 배지 (표본외 IC 검증 결과) ───────────────────────────────────
+async function loadScoreEval() {
+  const stat = document.getElementById('score-eval-stat');
+  const badge = document.getElementById('score-eval-badge');
+  if (!stat || !badge) return;  // 스캐너 페이지에만 존재
+  try {
+    const res = await fetch('/api/score-eval?market=' + encodeURIComponent(currentMarket));
+    const d = await res.json();
+    const b = (d && d.badge) ? d.badge : { level: 'none', label: '검증 데이터 없음' };
+    badge.className = 'score-eval-badge ' + (b.level || 'none');
+    if (!b || b.level === 'none' || b.ic == null) {
+      badge.textContent = (b && b.label) ? b.label : '데이터 없음';
+      badge.removeAttribute('title');
+      stat.hidden = false;
+      return;
+    }
+    const icTxt = (b.ic > 0 ? '+' : '') + Number(b.ic).toFixed(2);
+    badge.textContent = 'IC ' + icTxt + ' · ' + b.label;
+    const tTxt = (b.t_stat == null) ? '—' : ((b.t_stat > 0 ? '+' : '') + Number(b.t_stat).toFixed(2));
+    badge.title = b.horizon + '거래일 포워드 IC ' + icTxt + ' (t ' + tTxt + ', 표본 ' + b.n_dates + '일). ' +
+      (b.level === 'valid' ? '통계적으로 유의한 예측력.' :
+       b.level === 'negative' ? '점수와 미래수익이 역방향 — 주의.' :
+       '표본이 작아 아직 검증 중(통계적 유의성 부족).');
+    stat.hidden = false;
+  } catch (e) {
+    console.warn('loadScoreEval failed', e);
+  }
+}
 
 async function loadMacro() {
   const strip = document.getElementById('macro-strip');

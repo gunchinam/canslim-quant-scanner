@@ -183,7 +183,7 @@ _SCAN_STRIP_FIELDS: frozenset = frozenset({"Breakdown", "Scores", "Reason", "Abo
 _ENTRY_PLAN_KEEP: frozenset = frozenset({
     "entry", "entry_discount", "atr_pct", "as_of_ts", "headline_action",
     "current", "stop", "t1", "t2", "rr", "rr_now", "vol_regime", "drawdown_pct",
-    "mdd_current", "mdd_risk", "mdd_recovery", "size_suggestion", "cvar_95",
+    "mdd_current", "mdd_risk", "mdd_recovery", "size_suggestion", "cvar_95", "worst_day",
     "dd_velocity_5d", "dd_velocity_20d", "underwater_days", "calmar_ratio",
     "skewness", "excess_kurtosis", "downside_beta",
     "stress_2008", "stress_2020", "stress_2022",
@@ -1277,6 +1277,67 @@ def api_macro():
                            ("vix", "sp500", "kospi", "usdkrw", "kr_rate")},
             "ts": None, "stale": True,
         })
+
+
+@app.route("/api/index-meta")
+def api_index_meta():
+    """GET /api/index-meta → 지수 명단 기준일·신선도. UI '명단 기준일' 표시용."""
+    try:
+        import engine_adapter
+        return jsonify(engine_adapter.index_membership_meta())
+    except Exception as e:
+        logging.warning("api_index_meta failed: %s", e)
+        return jsonify({"generated": None, "stale_days": None, "is_stale": False})
+
+
+@app.route("/api/etf")
+def api_etf():
+    """GET /api/etf → 미국·한국 인기 ETF 현황. /api/scan 과 완전 분리."""
+    try:
+        import etf
+        force = request.args.get("force") in ("1", "true", "yes")
+        return jsonify(etf.get_etfs(force=force))
+    except Exception as e:
+        logging.warning("api_etf failed: %s", e)
+        return jsonify({"us": [], "kr": [], "ts": None, "stale": True})
+
+
+@app.route("/api/etf-sectors/<path:ticker>")
+def api_etf_sectors(ticker: str):
+    """GET /api/etf-sectors/SPY → ETF 섹터 비중(지연 로딩). /api/etf 와 분리."""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"ticker": "", "sectors": [], "stale": True}), 400
+    try:
+        import etf
+        return jsonify(etf.get_etf_sectors(ticker))
+    except Exception as e:
+        logging.warning("api_etf_sectors failed: %s", e)
+        return jsonify({"ticker": ticker, "sectors": [], "stale": True})
+
+
+@app.route("/api/score-eval")
+def api_score_eval():
+    """GET /api/score-eval?market=US → 점수 신호 표본외 검증 캐시(배지용).
+
+    실제 IC 계산은 무거우므로(yfinance) score_eval.py 가 주기적으로 생성한
+    web_app/score_eval_{MARKET}.json 캐시만 읽어 가볍게 서빙. 없으면 no_data.
+    """
+    market = (request.args.get("market") or "US").upper()
+    if market not in ("US", "KR"):
+        market = "US"
+    _webapp_dir = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(_webapp_dir, f"score_eval_{market}.json")
+    try:
+        if not os.path.exists(path):
+            return jsonify({"market": market, "status": "no_data",
+                            "badge": {"level": "none", "label": "검증 데이터 없음"}})
+        with open(path, encoding="utf-8") as f:
+            return jsonify(json.load(f))
+    except Exception as e:
+        logging.warning("api_score_eval failed: %s", e)
+        return jsonify({"market": market, "status": "error",
+                        "badge": {"level": "none", "label": "검증 데이터 없음"}})
 
 
 # ── 워치리스트 영속화 ─────────────────────────────────────────────────────

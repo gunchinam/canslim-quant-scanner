@@ -340,6 +340,70 @@ html, body {
 }
 .chip.active .chip-count { background: rgba(255,255,255,0.25); }
 
+/* ── 지수별 보기 바 ─────────────────────────────────────────────────────── */
+.index-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  margin: 0 0 2px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.index-bar[hidden] { display: none; }
+.index-bar-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
+.index-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 100px;
+  background: var(--card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--duration-fast), color var(--duration-fast),
+              background var(--duration-fast);
+}
+.index-chip:hover { border-color: #2563EB; color: #2563EB; }
+.index-chip.active {
+  background: #2563EB;
+  color: #fff;
+  border-color: #2563EB;
+}
+.ix-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 100px;
+  background: rgba(0,0,0,0.08);
+  font-size: 10px;
+  font-weight: 700;
+}
+.ix-count:empty { display: none; }
+.index-chip.active .ix-count { background: rgba(255,255,255,0.25); }
+.index-bar-meta {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  cursor: help;
+}
+.index-bar-meta:empty { display: none; }
+
 /* Star button (워치리스트) */
 .star-btn {
   background: none;
@@ -603,9 +667,9 @@ td.score-col {
   white-space: nowrap;
 }
 
-/* Day Change */
-.chg-up   { color: var(--destructive); font-weight: 600; }
-.chg-down { color: var(--info); font-weight: 600; }
+/* Day Change — 주가 방향 전용 색 토큰 (위험/점수 색과 의미 분리: pre-attentive 충돌 제거) */
+.chg-up   { color: #E03131; font-weight: 600; }  /* 한국식 상승=빨강 */
+.chg-down { color: #1971C2; font-weight: 600; }  /* 하락=파랑 */
 .chg-flat { color: var(--text-tertiary); }
 
 /* Target price + upside (table column) */
@@ -628,9 +692,9 @@ td.score-col {
   padding: 1px 6px;
   margin-left: 4px;
   border-radius: 4px;
-  background: #FFF3CD;
-  color: #856404;
-  border: 1px solid #FFE69C;
+  background: #FDE2E2;          /* 경고 신호가 긍정 신호에 묻히지 않도록 강조 (회색→경고색) */
+  color: #B91C1C;
+  border: 1px solid #F5A3A3;
   vertical-align: middle;
   cursor: help;
 }
@@ -660,6 +724,58 @@ td.score-col {
   vertical-align: middle;
   cursor: help;
 }
+/* GreedZone v2 — "🟡 45pt" 의 방향 오해 제거: ⚠ 경고 아이콘 + 분모(/100) + 강도 게이지바.
+   높을수록 위험(역추세 경고)이라는 의미를 색·형식으로 직접 전달. */
+.greed-badge-v2 {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  margin-left: 4px;
+  border-radius: 4px;
+  background: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FCD34D;
+  vertical-align: middle;
+  cursor: help;
+  line-height: 1.25;
+}
+.greed-badge-v2 .gz-label { white-space: nowrap; }
+.greed-badge-v2 .gz-denom { opacity: .55; font-weight: 600; }
+.gz-bar-track {
+  height: 2px;
+  width: 42px;
+  margin-top: 2px;
+  background: rgba(0,0,0,0.12);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.gz-bar-fill { height: 100%; border-radius: 1px; display: block; transition: width .3s; }
+
+/* RSI 미니바 — 테이블 RSI 맨숫자에 과매수(빨강)/과매도(파랑) 직관 추가 */
+.rsi-cell { min-width: 64px; }
+.rsi-cell .rsi-num { font-size: 13px; font-weight: 700; display: block; text-align: right; line-height: 1.2; }
+.rsi-seg-track {
+  height: 3px;
+  background: var(--surface-muted, #EDEFF2);
+  border-radius: 2px;
+  margin-top: 3px;
+  overflow: hidden;
+}
+.rsi-seg-fill { height: 100%; border-radius: 2px; display: block; transition: width .3s; }
+
+/* RS Rating 도넛 게이지 (상세 패널) — 큰 숫자 단독 → 0~99 스케일 시각화 */
+.dp-rs-donut { display: inline-flex; align-items: center; justify-content: center; }
+
+/* 위험 퀵필터 칩 — 긍정 필터와 시각적으로 구분 (선택지처럼 평평하게 나열되지 않도록) */
+.chip[data-filter="laggard"] { border-color: #FCA5A5; color: #B91C1C; }
+.chip[data-filter="laggard"].active { background: #B91C1C; border-color: #B91C1C; color: #fff; }
+
+/* 노이즈 제거 — "설명" 컬럼은 종목명 hover 팝업(showStockPopup)과 완전 중복이라 기본 숨김.
+   정보 손실 없음(팝업에 동일 내용). 되살리려면 아래 두 줄 제거. */
+.desc-col, .desc-cell { display: none; }
 .moat-conf {
   display: inline-block;
   font-size: 10px;
@@ -2626,6 +2742,15 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   .chip { min-height: 44px; padding: 0 14px; font-size: 13px; }
   /* .chip:active click effect removed */
 
+  .index-bar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .index-bar::-webkit-scrollbar { display: none; }
+  .index-chip { min-height: 38px; flex: 0 0 auto; }
+
   .content { grid-template-columns: 1fr; }
   .sidebar {
     display: none;
@@ -3017,4 +3142,265 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 }
 @media (hover: none), (max-width: 768px) {
   #hover-sparkline-tip { display: none !important; }
+}
+
+/* ── ETF 현황 탭 (미국 + 한국) ─────────────────────────────────────── */
+/* 필터칩 줄 오른쪽에 종목 필터와 구분되는 뷰 전환 탭 */
+.chip-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 2px;
+  flex: none;
+}
+.chip-etf {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1.5px solid var(--brand);
+  border-radius: 14px;
+  background: var(--brand-tint);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity .15s;
+}
+.chip-etf:hover { opacity: 0.82; }
+
+/* 어제 대비 변동 필터 (점수급등·신규진입) — 청록 액센트로 "변동" 의미 구분 */
+.chip-delta { border-color: #0CA678; color: #0CA678; }
+.chip-delta:hover { border-color: #0CA678; color: #0CA678; background: rgba(12,166,120,0.08); }
+.chip-delta.active { background: #0CA678; border-color: #0CA678; color: #fff; }
+
+/* 점수 신뢰도 배지 (표본외 IC 검증) */
+.score-eval-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 1px 8px;
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: help;
+}
+.score-eval-badge.valid    { background: rgba(0,168,98,0.14);   color: #00A862; }
+.score-eval-badge.testing  { background: rgba(255,176,32,0.16); color: #C77700; }
+.score-eval-badge.negative { background: rgba(224,49,49,0.13);  color: #E03131; }
+.score-eval-badge.none     { background: var(--surface-2, rgba(0,0,0,0.05)); color: var(--text-tertiary); font-weight: 600; }
+
+/* 인라인 탭 — 종목 표 자리에 들어가는 카드 블록 (전체화면 팝업 아님) */
+.etf-view {
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  animation: etfFadeIn .18s ease;
+}
+.etf-view[hidden] { display: none; }   /* display:flex 가 hidden 속성을 덮지 않도록 */
+@keyframes etfFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.etf-view-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.etf-view-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.etf-view-meta { font-size: 12px; font-weight: 500; color: var(--text-tertiary); }
+.etf-view-close {
+  flex: none;
+  height: 34px;
+  padding: 0 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.etf-view-close:hover { border-color: var(--destructive); color: var(--destructive); }
+
+.etf-view-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 20px;
+}
+.etf-col { min-width: 0; }
+.etf-col-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+  padding: 6px 2px;
+}
+.etf-list { display: flex; flex-direction: column; gap: 10px; }
+.etf-empty { padding: 24px; text-align: center; color: var(--text-tertiary); font-size: 13px; }
+
+.etf-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.etf-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.etf-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.etf-ticker { font-size: 11px; font-weight: 600; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.etf-card-mid {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+.etf-price { font-size: 18px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.etf-chg { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.etf-chg.up   { color: #E03131; }   /* 한국식 상승=빨강 */
+.etf-chg.down { color: #1971C2; }   /* 하락=파랑 */
+.etf-chg.flat { color: var(--text-tertiary); }
+
+.etf-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.etf-volbadge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+.etf-volbadge.hot  { background: rgba(245,63,63,0.13);  color: #E03131; }
+.etf-volbadge.warm { background: rgba(255,176,32,0.16); color: #C77700; }
+
+.etf-52w { margin-top: 10px; }
+.etf-52w-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #1971C2 0%, var(--border) 50%, #E03131 100%);
+  opacity: 0.55;
+}
+.etf-52w-marker {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  border: 2px solid var(--card);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 1px var(--border);
+}
+.etf-52w-marker.high { background: #E03131; }
+.etf-52w-marker.low  { background: #1971C2; }
+.etf-52w-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.etf-52w-pos { font-weight: 700; color: var(--text-secondary); }
+
+/* ── ETF 섹터 비중 아코디언 ──────────────────────────────────────────── */
+.etf-card-clickable {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.12s ease;
+}
+.etf-card-clickable:hover { background: var(--surface-subtle); }
+.etf-expand-chevron {
+  display: inline-block;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  transition: transform 0.18s ease;
+}
+.etf-card.expanded .etf-expand-chevron { transform: rotate(180deg); }
+
+.etf-sectors {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.etf-sectors-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 7px;
+}
+.etf-sectors-loading,
+.etf-sectors-empty {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 4px 0;
+}
+.etf-sector-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.etf-sector-label {
+  flex: 0 0 72px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.etf-sector-track {
+  flex: 1 1 auto;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--surface-subtle);
+  overflow: hidden;
+}
+.etf-sector-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  /* 한국식 톤 — 빨강 계열(상승색) 막대로 비중 강조 */
+  background: linear-gradient(90deg, #E03131 0%, #F06595 100%);
+}
+.etf-sector-pct {
+  flex: 0 0 42px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+  .etf-view-body { grid-template-columns: 1fr; gap: 16px; padding: 14px; }
+  .capture-label { display: none; }
 }

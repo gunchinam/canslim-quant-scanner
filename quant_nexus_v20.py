@@ -930,6 +930,11 @@ COLUMN_TOOLTIPS = {
     "MomScore": "[N+S] 모멘텀+거래량 확인 점수\n컵앤핸들 피벗 돌파 시 가산.",
     "Value":    "[A] 연간 실적 점수\nROE 17%+ 기준 Fama-French 팩터.",
     "Quality":  "[C+A] 실적 품질 점수\nEPS 가속도·ROE·이익률 기반.",
+    "병목":     "공급망 병목 ∩ 진입타이밍\n"
+                "🟢 병목+진입: 상류 희소층 + 들어갈 자리(과열·약세 아님)\n"
+                "🟡 조정대기: 병목이나 폭등 꼭대기/과매수 → 추격 금지\n"
+                "⚪ 병목-약세: 병목이나 모멘텀·진입 신호 부재\n"
+                "셀 표기: 신호 이모지 + 병목근접도(0~100). '-'=병목 후보 아님",
     "FinValue": "재무가치 등급 (0~100, 전체종목 백분위)\n"
                 "분기 성장(매출·영업이익·순이익 QoQ) + ROE + PBR·PSR(저평가).\n"
                 "• 높을수록 성장+저평가 우위 (PBR·PSR은 낮을수록 가점)\n"
@@ -4240,7 +4245,7 @@ class QuantNexusApp:
         tf = self.main_tree_frame
 
         cols = ("Sector","Name","Desc","Price","Target","Score","Conv","SRank","Day%","Mom12M","MomScore",
-                "Value","Quality","FinValue","RSI","VWAP","ATR%","Regime","Cmte","Signal","Reason")
+                "Value","Quality","FinValue","병목","RSI","VWAP","ATR%","Regime","Cmte","Signal","Reason")
         self.tree = ttk.Treeview(tf, columns=cols, show="tree headings")
 
         # ── 컬럼 비율 정의 ──────────────────────────────────────────────
@@ -4264,6 +4269,7 @@ class QuantNexusApp:
             "Value":    (2,      55,       "center"),
             "Quality":  (2,      58,       "center"),
             "FinValue": (2,      62,       "center"),  # 재무가치 등급(전체 백분위)
+            "병목":     (2,      66,       "center"),  # 공급망 병목 진입 신호
             "RSI":      (1,      48,       "center"),
             "VWAP":     (2,      55,       "center"),
             "ATR%":     (1,      52,       "center"),
@@ -6937,6 +6943,9 @@ class QuantNexusApp:
             _desc = _desc_map.get(d['Ticker'], "")
             _fv = d.get("FinValue")
             fv_str = f"{_fv:.0f}" if _fv is not None else "-"
+            _bscore = d.get("BottleneckScore", 0) or 0
+            _bentry = d.get("BottleneckEntry") or ""
+            bn_str = f"{_bentry.split()[0]}{_bscore:.0f}" if (_bscore >= 60 and _bentry) else "-"
             vals = (
                 d.get("Sector", "")[:18],
                 d['Name'], _desc, price_str, target_str, sc_viz,
@@ -6947,6 +6956,7 @@ class QuantNexusApp:
                 f"{d['ValueScore']:.0f}",
                 f"{d['QualityScore']:.0f}",
                 fv_str,
+                bn_str,
                 rsi_viz,
                 f"{d['VWAPDistance']:+.1%}",
                 f"{d['ATRPercent']:.1f}%",
@@ -7325,11 +7335,11 @@ class QuantNexusApp:
             sc = d['TotalScore']
             _desc_map = self.KR_DESC if is_kr else self.US_DESC
             _desc = _desc_map.get(d['Ticker'], "")
-            # 최종 렌더와 컬럼 수(21) 일치
+            # 최종 렌더와 컬럼 수(22) 일치
             vals = (
                 d.get("Sector", "")[:18],
                 d["Name"], _desc, price_str, "-",
-                f"{sc:.0f}", "", "", "", "", "", "", "", "", "", "", "", "",
+                f"{sc:.0f}", "", "", "", "", "", "", "", "", "", "", "", "", "",
                 "",
                 d.get("Signal", ""),
                 d.get("TopReason", "-"),

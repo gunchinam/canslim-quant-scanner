@@ -36,49 +36,82 @@ _CACHE_TS: float = 0.0              # 캐시 적재 시각(epoch sec)
 # ── 인기 ETF 목록 (티커, 한글 라벨) ───────────────────────────────────
 # 리테일이 실제로 많이 거래하는 레버리지·테마(반도체·AI·빅테크) 중심 + 핵심 지수.
 # ⚠ 3X/2X/인버스는 고위험 파생 상품 — 라벨에 배수 명시.
-# 미국 — 레버리지(2X·3X)·인버스 중심 + 핵심
-_US_ETFS: list[tuple[str, str]] = [
-    ("SOXL", "반도체 3X"),         # Direxion 반도체 불 3배 — 서학개미 최애
-    ("SOXS", "반도체 -3X"),        # 반도체 베어 3배(인버스)
-    ("TQQQ", "나스닥 3X"),         # 나스닥100 3배
-    ("SQQQ", "나스닥 -3X"),        # 나스닥100 -3배(인버스)
-    ("SPXL", "S&P 3X"),           # S&P500 3배
-    ("TNA",  "러셀2000 3X"),       # 미국 중소형 3배
-    ("FNGU", "빅테크 3X"),         # FANG+ 3배
-    ("MSTU", "마이크로스트래티지 2X"),  # MSTR 2배 — 2024~25 초인기
-    ("NVDL", "엔비디아 2X"),
-    ("TSLL", "테슬라 2X"),
-    ("PLTU", "팔란티어 2X"),
-    ("AMDL", "AMD 2X"),
-    ("CONL", "코인베이스 2X"),
-    ("BITX", "비트코인 2X"),
-    ("ETHU", "이더리움 2X"),
-    ("SMH",  "반도체"),            # 비레버리지 반도체 대표
-    ("QQQ",  "나스닥 100"),
-    ("SPY",  "S&P 500"),
-    ("IBIT", "비트코인 현물"),
-    ("ARKK", "혁신성장(ARK)"),
+# 미국 — 여러 종목이 섞인 바스켓(지수·섹터·테마·해외·채권)만. 단일종목 추종(NVDL 등)·
+# 단일자산(비트코인·금 등)은 제외. 레버리지/인버스도 '지수' 기반이면 바스켓이므로 포함.
+# 카테고리별 그룹 → 프론트 소제목으로 묶임.
+_US_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
+    ("핵심 지수", [
+        ("SPY", "S&P 500"), ("QQQ", "나스닥 100"), ("DIA", "다우존스"),
+        ("IWM", "러셀2000 (중소형)"), ("VTI", "美 전체시장"), ("RSP", "S&P 동일가중"),
+    ]),
+    ("반도체", [("SMH", "반도체"), ("SOXX", "반도체 (필라델피아)")]),
+    ("레버리지 (지수 기반)", [
+        ("SOXL", "반도체 3X"), ("SOXS", "반도체 -3X"), ("TQQQ", "나스닥 3X"),
+        ("SQQQ", "나스닥 -3X"), ("SPXL", "S&P 3X"), ("TNA", "러셀2000 3X"),
+        ("FNGU", "빅테크 3X"), ("TECL", "기술주 3X"),
+    ]),
+    ("섹터", [
+        ("XLK", "기술"), ("XLF", "금융"), ("XLE", "에너지"), ("XLV", "헬스케어"),
+        ("XLY", "경기소비재"), ("XLP", "필수소비재"), ("XLI", "산업재"),
+        ("XLU", "유틸리티"), ("XLB", "소재"), ("XLRE", "부동산"), ("XLC", "커뮤니케이션"),
+    ]),
+    ("스타일·배당", [
+        ("VUG", "성장주"), ("VTV", "가치주"), ("SCHD", "배당성장"),
+        ("VYM", "고배당"), ("JEPI", "커버드콜 인컴"),
+    ]),
+    ("테마", [
+        ("ARKK", "혁신성장 (ARK)"), ("BOTZ", "로봇·AI"), ("AIQ", "AI"),
+        ("SKYY", "클라우드"), ("IGV", "소프트웨어"), ("HACK", "사이버보안"),
+        ("XBI", "바이오"), ("KWEB", "중국 인터넷"), ("JETS", "항공"), ("LIT", "리튬·배터리"),
+    ]),
+    ("해외", [("VEA", "선진국"), ("VWO", "신흥국"), ("INDA", "인도"), ("MCHI", "중국")]),
+    ("채권", [("TLT", "美 국채 20년+"), ("HYG", "하이일드 회사채"), ("LQD", "투자등급 회사채")]),
 ]
 
-# 한국: KOSPI 상장 인기 ETF (.KS) — 레버리지/곱버스 + 반도체·AI 테마
-_KR_ETFS: list[tuple[str, str]] = [
-    ("122630.KS", "KODEX 레버리지"),              # 코스피 2배 — 거래대금 최상위
-    ("252670.KS", "KODEX 인버스2X"),              # 코스피 -2배(곱버스)
-    ("233740.KS", "KODEX 코스닥150 레버리지"),
-    ("418660.KS", "TIGER 미국나스닥100 레버리지"),  # 서학개미 인기 레버리지
-    ("409820.KS", "KODEX 미국나스닥100 레버리지"),
-    ("465610.KS", "ACE 미국빅테크TOP7 레버리지"),
-    ("267770.KS", "TIGER 200선물 레버리지"),
-    ("396500.KS", "TIGER Fn반도체TOP10"),         # 국내 반도체 TOP10
-    ("091160.KS", "KODEX 반도체"),
-    ("390390.KS", "KODEX 미국반도체MV"),
-    ("381180.KS", "TIGER 미국필라델피아반도체"),
-    ("465580.KS", "ACE 미국빅테크TOP7"),
-    ("305720.KS", "KODEX 2차전지산업"),
-    ("466920.KS", "SOL 조선TOP3"),                # 2024~25 주도 테마
-    ("133690.KS", "TIGER 미국나스닥100"),
-    ("069500.KS", "KODEX 200"),                   # 핵심 지수
+# 한국: 네이버 ETF 순위(시총·거래대금) 상위 다종목 ETF만 (.KS).
+# 제외: 단일종목 추종(삼성전자·SK하이닉스 직접), MMF/채권/금리·금 등 단일자산.
+_KR_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
+    ("국내 지수", [
+        ("069500.KS", "KODEX 200"), ("102110.KS", "TIGER 200"),
+        ("229200.KS", "KODEX 코스닥150"),
+    ]),
+    ("레버리지·인버스", [
+        ("122630.KS", "KODEX 레버리지"), ("252670.KS", "KODEX 인버스2X"),
+        ("233740.KS", "KODEX 코스닥150 레버리지"), ("114800.KS", "KODEX 인버스"),
+    ]),
+    ("반도체·AI", [
+        ("396500.KS", "TIGER Fn반도체TOP10"), ("0167A0.KS", "SOL AI반도체TOP2 Plus"),
+        ("091160.KS", "KODEX 반도체"), ("395160.KS", "KODEX AI반도체핵심장비"),
+        ("139260.KS", "TIGER 200 IT"),
+    ]),
+    ("미국 지수", [
+        ("360750.KS", "TIGER 미국S&P500"), ("133690.KS", "TIGER 미국나스닥100"),
+        ("381180.KS", "TIGER 미국필라델피아반도체"),
+    ]),
+    ("테마", [("102780.KS", "KODEX 삼성그룹")]),
 ]
+
+# 평탄화 → (ticker, label, category) 3-튜플 리스트
+_US_ETFS: list[tuple[str, str, str]] = [
+    (t, l, cat) for cat, items in _US_GROUPS for (t, l) in items
+]
+_KR_ETFS: list[tuple[str, str, str]] = [
+    (t, l, cat) for cat, items in _KR_GROUPS for (t, l) in items
+]
+
+
+# ── 레버리지/인버스 판별 (G) ──────────────────────────────────────────
+# 라벨에 아래 토큰이 있으면 일일 리밸런싱 파생형으로 간주 → 장기보유 경고.
+_LEV_TOKENS = ("3X", "2X", "-3X", "-2X", "-1X", "레버리지", "인버스", "곱버스", "선물")
+
+
+def _is_leveraged(label: str) -> bool:
+    """라벨 기반 레버리지/인버스 판별. 절대 예외 안 던짐."""
+    try:
+        s = (label or "").upper().replace(" ", "")
+        return any(tok.upper() in s for tok in _LEV_TOKENS)
+    except Exception:
+        return False
 
 
 def _ttl_now() -> int:
@@ -90,7 +123,7 @@ def _ttl_now() -> int:
     return _TTL_TRADING_SEC if trading else _TTL_OFF_SEC
 
 
-def _row_from_sub(ticker: str, label: str, sub) -> dict | None:
+def _row_from_sub(ticker: str, label: str, sub, category: str = "") -> dict | None:
     """yfinance 종목 서브프레임 → ETF 카드 1개 dict. 데이터 부족 시 None."""
     try:
         closes = sub["Close"].dropna()
@@ -136,6 +169,8 @@ def _row_from_sub(ticker: str, label: str, sub) -> dict | None:
             "high52": round(hi52, 2),
             "low52": round(lo52, 2),
             "pos52": round(pos52, 1),
+            "is_leveraged": _is_leveraged(label),
+            "category": category or "",
         }
     except Exception as e:
         _LOG.warning("etf: row parse %s failed: %s", ticker, e)
@@ -147,8 +182,9 @@ def _fetch() -> dict:
     us_out: list[dict] = []
     kr_out: list[dict] = []
 
-    all_pairs = [("US", t, l) for t, l in _US_ETFS] + [("KR", t, l) for t, l in _KR_ETFS]
-    symbols = [t for _, t, _ in all_pairs]
+    all_pairs = ([("US", t, l, cat) for t, l, cat in _US_ETFS]
+                 + [("KR", t, l, cat) for t, l, cat in _KR_ETFS])
+    symbols = [p[1] for p in all_pairs]
 
     try:
         import yfinance as yf
@@ -164,12 +200,12 @@ def _fetch() -> dict:
         raise
 
     level0 = set(df.columns.get_level_values(0)) if hasattr(df.columns, "get_level_values") else set()
-    for region, ticker, label in all_pairs:
+    for region, ticker, label, cat in all_pairs:
         try:
             sub = df[ticker] if ticker in level0 else None
             if sub is None:
                 continue
-            row = _row_from_sub(ticker, label, sub)
+            row = _row_from_sub(ticker, label, sub, cat)
             if row is None:
                 continue
             (us_out if region == "US" else kr_out).append(row)
@@ -271,30 +307,113 @@ _KR_SECTOR_KR = {
 }
 
 
-def _us_sectors(ticker: str) -> list[dict]:
-    """yfinance funds_data.sector_weightings → [{label, weight_pct}] 내림차순."""
+# ── 상세 메타(meta) 기본 골격 ─────────────────────────────────────────
+# KR/US 가 채울 수 있는 것만 채우고 나머지는 None → 프론트는 None이면 숨김.
+def _empty_meta() -> dict:
+    return {
+        "fee_pct": None,            # A. 총보수 %
+        "returns": {"m1": None, "m3": None, "y1": None},  # B. 기간 수익률 %
+        "deviation_pct": None,      # C. 괴리율 %(KR만)
+        "tracking_err_pct": None,   # C. 추적오차 %(KR만)
+        "net_inflow": None,         # D. 최근 순유입 {text, positive}(KR best-effort)
+    }
+
+
+def _safe_float(v):
+    """문자열/숫자 → float, 실패 시 None. 절대 예외 안 던짐."""
+    try:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = v.replace("%", "").replace(",", "").strip()
+            if not v:
+                return None
+        f = float(v)
+        if f != f:  # NaN
+            return None
+        return f
+    except Exception:
+        return None
+
+
+def _us_detail(ticker: str) -> dict:
+    """yfinance funds_data → {"sectors":[...], "holdings":[...], "meta":{...}}.
+    한 번의 Ticker 조회로 섹터 비중 + 상위 보유종목 + 메타를 동시에 추출."""
     import yfinance as yf
-    fd = yf.Ticker(ticker).funds_data
-    raw = fd.sector_weightings or {}
-    out = []
-    for key, w in raw.items():
+    tk = yf.Ticker(ticker)
+    fd = tk.funds_data
+    meta = _empty_meta()
+    # A. 총보수 — fund_operations 의 'Annual Report Expense Ratio' 행 × 100
+    try:
+        fo = fd.fund_operations
+        if fo is not None and "Annual Report Expense Ratio" in fo.index:
+            col = ticker if ticker in fo.columns else fo.columns[0]
+            er = _safe_float(fo.loc["Annual Report Expense Ratio", col])
+            if er is not None and er >= 0:
+                meta["fee_pct"] = round(er * 100.0, 2)
+    except Exception as e:
+        _LOG.debug("etf us fee %s: %s", ticker, e)
+    # B. 기간 수익률 — history(1y) 종가에서 거래일 기준 계산
+    try:
+        hist = tk.history(period="1y", interval="1d", auto_adjust=True)
+        closes = hist["Close"].dropna() if hist is not None and "Close" in hist else None
+        if closes is not None and len(closes) >= 2:
+            last = float(closes.iloc[-1])
+            def _ret(days):
+                if last <= 0 or len(closes) <= days:
+                    return None
+                base = float(closes.iloc[-1 - days])
+                if base <= 0:
+                    return None
+                return round((last - base) / base * 100.0, 2)
+            meta["returns"]["m1"] = _ret(21)
+            meta["returns"]["m3"] = _ret(63)
+            meta["returns"]["y1"] = _ret(252)
+            # 1년 데이터가 252봉 미만이면 가장 오래된 봉 대비를 y1 로
+            if meta["returns"]["y1"] is None and len(closes) >= 2:
+                base = float(closes.iloc[0])
+                if base > 0:
+                    meta["returns"]["y1"] = round((last - base) / base * 100.0, 2)
+    except Exception as e:
+        _LOG.debug("etf us returns %s: %s", ticker, e)
+    # C. 괴리율/추적오차 — US 생략(None)
+    # 섹터 비중
+    sectors = []
+    for key, w in (fd.sector_weightings or {}).items():
         try:
             pct = float(w) * 100.0
         except (TypeError, ValueError):
             continue
         if pct <= 0:
             continue
-        label = _US_SECTOR_KR.get(str(key).lower(), str(key))
-        out.append({"label": label, "weight_pct": round(pct, 1)})
-    out.sort(key=lambda r: r["weight_pct"], reverse=True)
-    return out
+        sectors.append({"label": _US_SECTOR_KR.get(str(key).lower(), str(key)),
+                        "weight_pct": round(pct, 1)})
+    sectors.sort(key=lambda r: r["weight_pct"], reverse=True)
+    # 상위 보유종목 (Name + Holding Percent)
+    holdings = []
+    try:
+        th = fd.top_holdings
+        if th is not None and len(th):
+            for sym, row in th.iterrows():
+                try:
+                    pct = float(row["Holding Percent"]) * 100.0
+                except (TypeError, ValueError, KeyError):
+                    continue
+                if pct <= 0:
+                    continue
+                holdings.append({"name": str(row.get("Name") or sym),
+                                 "ticker": str(sym), "weight_pct": round(pct, 2)})
+    except Exception as e:
+        _LOG.debug("etf us holdings %s: %s", ticker, e)
+    return {"sectors": sectors, "holdings": holdings, "meta": meta}
 
 
-def _kr_sectors(ticker: str) -> list[dict]:
-    """네이버 ETF 분석 API sectorPortfolioList → [{label, weight_pct}] 내림차순."""
+def _kr_detail(ticker: str) -> dict:
+    """네이버 ETF 분석 API → {"sectors":[...], "holdings":[...]}.
+    sectorPortfolioList(섹터) + etfTop10MajorConstituentAssets(상위 종목)를 한 호출로."""
     code = ticker.split(".")[0]
     if not code.isdigit():
-        return []
+        return {"sectors": [], "holdings": []}
     url = "https://m.stock.naver.com/api/stock/%s/etfAnalysis" % code
     req = urllib.request.Request(
         url,
@@ -305,9 +424,40 @@ def _kr_sectors(ticker: str) -> list[dict]:
     )
     with urllib.request.urlopen(req, timeout=6) as resp:
         data = json.loads(resp.read().decode("utf-8", "ignore"))
-    rows = data.get("sectorPortfolioList") or []
-    out = []
-    for r in rows:
+    meta = _empty_meta()
+    # A. 총보수
+    meta["fee_pct"] = _safe_float(data.get("totalFee"))
+    # C. 괴리율 / 추적오차 (KR만)
+    meta["deviation_pct"] = _safe_float(data.get("deviationRate"))
+    meta["tracking_err_pct"] = _safe_float(data.get("chaseErrorRate"))
+    # B. 기간 수익률 — returnPerformanceList: [{periodTypeCode, value}]
+    try:
+        rmap = {}
+        for r in (data.get("returnPerformanceList") or []):
+            code_ = str(r.get("periodTypeCode") or "")
+            rmap[code_] = _safe_float(r.get("value"))
+        meta["returns"]["m1"] = rmap.get("M1")
+        meta["returns"]["m3"] = rmap.get("M3")
+        meta["returns"]["y1"] = rmap.get("Y1")
+    except Exception as e:
+        _LOG.debug("etf kr returns %s: %s", code, e)
+    # D. 자금 순유입(best-effort) — cumulativeNetInflowList dict, 최근 1개월(1m) 사용.
+    #    값은 "1조 9,645억" / "-230억" 같은 한글 포맷 문자열 → 부호만 신뢰해 표기.
+    try:
+        ni = data.get("cumulativeNetInflowList")
+        if isinstance(ni, dict):
+            txt = ni.get("cumulativeNetInflow1m") or ni.get("cumulativeNetInflow1w") \
+                or ni.get("cumulativeNetInflow1d")
+            if txt:
+                s = str(txt).strip()
+                positive = not s.lstrip().startswith("-")
+                meta["net_inflow"] = {"text": s, "positive": positive,
+                                      "period": "1개월"}
+    except Exception as e:
+        _LOG.debug("etf kr netinflow %s: %s", code, e)
+    # 섹터
+    sectors = []
+    for r in (data.get("sectorPortfolioList") or []):
         try:
             pct = float(r.get("weight"))
         except (TypeError, ValueError):
@@ -315,40 +465,63 @@ def _kr_sectors(ticker: str) -> list[dict]:
         if pct <= 0:
             continue
         code_ = str(r.get("detailTypeCode") or "")
-        label = _KR_SECTOR_KR.get(code_, code_ or "기타")
-        out.append({"label": label, "weight_pct": round(pct, 1)})
-    out.sort(key=lambda r: r["weight_pct"], reverse=True)
-    return out
+        sectors.append({"label": _KR_SECTOR_KR.get(code_, code_ or "기타"),
+                        "weight_pct": round(pct, 1)})
+    sectors.sort(key=lambda r: r["weight_pct"], reverse=True)
+    # 상위 보유종목
+    holdings = []
+    for r in (data.get("etfTop10MajorConstituentAssets") or []):
+        try:
+            # etfWeight 는 "35.32%" 형태 문자열 — % / 콤마 제거 후 파싱
+            pct = float(str(r.get("etfWeight") or "").replace("%", "").replace(",", "").strip())
+        except (TypeError, ValueError):
+            continue
+        if pct <= 0:
+            continue
+        nm = str(r.get("itemName") or r.get("itemCode") or "").strip()
+        if not nm:
+            continue
+        holdings.append({"name": nm, "ticker": str(r.get("itemCode") or ""),
+                         "weight_pct": round(pct, 2)})
+    holdings.sort(key=lambda r: r["weight_pct"], reverse=True)
+    return {"sectors": sectors, "holdings": holdings, "meta": meta}
 
 
 def get_etf_sectors(ticker: str) -> dict:
     """
-    ETF 한 종목의 섹터 비중 반환. per-ticker TTL 캐시.
+    ETF 한 종목의 구성 정보(섹터 비중 + 상위 보유종목) 반환. per-ticker TTL 캐시.
 
-    절대 예외를 던지지 않는다 — 실패 시 {"sectors": [], "stale": True}.
-    반환: {"ticker", "sectors": [{label, weight_pct}], "stale": bool}
+    절대 예외를 던지지 않는다 — 실패 시 빈 리스트 + stale.
+    반환: {"ticker", "sectors":[{label,weight_pct}], "holdings":[{name,ticker,weight_pct}], "stale"}
     """
     ticker = (ticker or "").strip()
+    empty = {"ticker": ticker, "sectors": [], "holdings": [],
+             "meta": _empty_meta(), "stale": True}
     if not ticker:
-        return {"ticker": ticker, "sectors": [], "stale": True}
+        return empty
+
+    def _pack(d, stale):
+        return {"ticker": ticker, "sectors": d.get("sectors", []),
+                "holdings": d.get("holdings", []),
+                "meta": d.get("meta") or _empty_meta(), "stale": stale}
 
     now = time.time()
     with _SECTOR_LOCK:
         hit = _SECTOR_CACHE.get(ticker)
         if hit is not None and (now - hit[0]) < _SECTOR_TTL_SEC:
-            return {"ticker": ticker, "sectors": hit[1], "stale": False}
+            return _pack(hit[1], False)
 
     is_kr = ticker.upper().endswith(".KS") or ticker.upper().endswith(".KQ")
     try:
-        sectors = _kr_sectors(ticker) if is_kr else _us_sectors(ticker)
+        detail = _kr_detail(ticker) if is_kr else _us_detail(ticker)
     except Exception as e:
-        _LOG.warning("etf: sectors %s failed: %s", ticker, e)
+        _LOG.warning("etf: detail %s failed: %s", ticker, e)
         # stale-while-error: 직전 캐시가 있으면 그대로 반환
         with _SECTOR_LOCK:
             hit = _SECTOR_CACHE.get(ticker)
             if hit is not None:
-                return {"ticker": ticker, "sectors": hit[1], "stale": True}
-        return {"ticker": ticker, "sectors": [], "stale": True}
+                return _pack(hit[1], True)
+        return empty
 
     with _SECTOR_LOCK:
         # FIFO eviction — 캐시 무한 증가 방지
@@ -358,5 +531,107 @@ def get_etf_sectors(ticker: str) -> dict:
                 _SECTOR_CACHE.pop(oldest, None)
             except ValueError:
                 pass
-        _SECTOR_CACHE[ticker] = (now, sectors)
-    return {"ticker": ticker, "sectors": sectors, "stale": False}
+        _SECTOR_CACHE[ticker] = (now, detail)
+    return _pack(detail, False)
+
+
+# ── F. 섹터 로테이션 히트맵 ──────────────────────────────────────────────
+# 미국 섹터 SPDR + 한국 테마 ETF 의 M1/M3 수익률을 1회 배치로 모아 색 강도용
+# 숫자만 제공. B 의 수익률 로직(거래일 기준)을 재사용한다.
+# 신규 데이터 소스 없음(yfinance history 배치). 자체 TTL 캐시 + stale.
+_ROTATION_US: list[tuple[str, str]] = [
+    ("XLK", "기술"), ("XLF", "금융"), ("XLE", "에너지"), ("XLV", "헬스케어"),
+    ("XLY", "경기소비재"), ("XLP", "필수소비재"), ("XLI", "산업재"),
+    ("XLB", "소재"), ("XLU", "유틸리티"), ("XLRE", "부동산"),
+    ("XLC", "커뮤니케이션"), ("SMH", "반도체"),
+]
+_ROTATION_KR: list[tuple[str, str]] = [
+    ("091160.KS", "반도체"), ("305720.KS", "2차전지"), ("466920.KS", "조선"),
+    ("396500.KS", "Fn반도체"), ("465580.KS", "빅테크TOP7"), ("069500.KS", "코스피200"),
+]
+
+_ROTATION_TTL_SEC = 60 * 60          # 1시간(수익률은 자주 안 변함)
+_ROTATION_LOCK = threading.Lock()
+_ROTATION_CACHE: dict | None = None
+_ROTATION_CACHE_TS: float = 0.0
+
+
+def _rotation_returns_from_sub(sub) -> dict:
+    """yfinance 서브프레임 종가 → {m1, m3} 거래일 기준 수익률%. 실패 시 None."""
+    out = {"m1": None, "m3": None}
+    try:
+        closes = sub["Close"].dropna()
+        if len(closes) < 2:
+            return out
+        last = float(closes.iloc[-1])
+        if last <= 0:
+            return out
+        def _ret(days):
+            if len(closes) <= days:
+                return None
+            base = float(closes.iloc[-1 - days])
+            if base <= 0:
+                return None
+            return round((last - base) / base * 100.0, 2)
+        out["m1"] = _ret(21)
+        out["m3"] = _ret(63)
+    except Exception:
+        pass
+    return out
+
+
+def _build_rotation() -> dict:
+    pairs = [("US", t, l) for t, l in _ROTATION_US] + \
+            [("KR", t, l) for t, l in _ROTATION_KR]
+    symbols = [t for _, t, _ in pairs]
+    import yfinance as yf
+    df = yf.download(symbols, period="6mo", interval="1d", progress=False,
+                     group_by="ticker", threads=True, auto_adjust=True)
+    level0 = set(df.columns.get_level_values(0)) if hasattr(df.columns, "get_level_values") else set()
+    us_out, kr_out = [], []
+    for region, ticker, label in pairs:
+        try:
+            sub = df[ticker] if ticker in level0 else None
+            if sub is None:
+                continue
+            r = _rotation_returns_from_sub(sub)
+            if r["m1"] is None and r["m3"] is None:
+                continue
+            (us_out if region == "US" else kr_out).append(
+                {"ticker": ticker, "label": label, "m1": r["m1"], "m3": r["m3"]})
+        except Exception as e:
+            _LOG.debug("etf rotation %s: %s", ticker, e)
+    return {
+        "us": us_out, "kr": kr_out,
+        "ts": datetime.now(_KST).isoformat(timespec="seconds"),
+        "stale": False,
+    }
+
+
+def get_etf_rotation(force: bool = False) -> dict:
+    """섹터 로테이션 히트맵 데이터. TTL 캐시 + stale-while-error. 절대 예외 안 던짐."""
+    global _ROTATION_CACHE, _ROTATION_CACHE_TS
+    now = time.time()
+    with _ROTATION_LOCK:
+        cached = _ROTATION_CACHE
+        fresh = cached is not None and (now - _ROTATION_CACHE_TS) < _ROTATION_TTL_SEC
+        if fresh and not force:
+            return cached
+    try:
+        payload = _build_rotation()
+        if not payload["us"] and not payload["kr"]:
+            raise RuntimeError("empty rotation")
+        with _ROTATION_LOCK:
+            _ROTATION_CACHE = payload
+            _ROTATION_CACHE_TS = time.time()
+        return payload
+    except Exception as e:
+        _LOG.warning("etf: rotation build failed, serving stale: %s", e)
+        with _ROTATION_LOCK:
+            if _ROTATION_CACHE is not None:
+                stale = dict(_ROTATION_CACHE)
+                stale["stale"] = True
+                return stale
+        return {"us": [], "kr": [],
+                "ts": datetime.now(_KST).isoformat(timespec="seconds"),
+                "stale": True}

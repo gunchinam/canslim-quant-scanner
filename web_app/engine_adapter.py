@@ -53,10 +53,25 @@ def _attach_bottleneck(rows: list[dict]) -> None:
             r["BottleneckScore"] = bp["score"]
             r["BottleneckLayers"] = bp["layers"]
             r["BottleneckTop"] = bp["top_layer"]
+            # 병목 ∩ 진입타이밍 게이트 — 폭등 꼭대기/과매수 분리
+            sig = _bottleneck.bottleneck_entry_signal(
+                bottleneck_score=bp["score"],
+                entry_score=r.get("EntryScore"),
+                rsi=r.get("RSI"),
+                rs_rating=r.get("RSRating"),
+                mom_3m=r.get("_Mom3M"),
+                regime=r.get("Regime"),
+            )
+            r["BottleneckEntry"] = sig["label"]
+            r["BottleneckEntryPass"] = sig["pass_gate"]
+            r["BottleneckEntryReasons"] = sig["reasons"]
         except Exception:
             r.setdefault("BottleneckScore", 0)
             r.setdefault("BottleneckLayers", [])
             r.setdefault("BottleneckTop", None)
+            r.setdefault("BottleneckEntry", None)
+            r.setdefault("BottleneckEntryPass", False)
+            r.setdefault("BottleneckEntryReasons", [])
 try:
     # web_app 디렉토리 보장 (engine_adapter 가 외부에서 import 될 때 대비)
     _WEB_APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -525,6 +540,15 @@ class ScanAdapter:
         _attach_bottleneck(results)
         _attach_index_membership(results)
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
+        # forward IC 추적: BOTTLENECK_SNAPSHOT=1 일 때만 오늘 병목 등급 스냅샷 적재
+        if os.environ.get("BOTTLENECK_SNAPSHOT") == "1":
+            try:
+                import datetime as _dt
+                import bottleneck_ic as _bic
+                n = _bic.record_snapshot(results, date=_dt.date.today())
+                logging.info("[bottleneck_ic] 스냅샷 %d건 적재", n)
+            except Exception as e:
+                logging.debug("[bottleneck_ic] 스냅샷 실패: %s", e)
         return results
 
     @staticmethod

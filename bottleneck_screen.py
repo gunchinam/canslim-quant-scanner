@@ -59,6 +59,12 @@ SCARCE_LAYERS: dict[str, dict[str, Any]] = {
         "keywords": ["cpo", "co-packaged", "silicon photonics", "실리콘 포토닉스",
                      "광트랜시버", "transceiver", "optical", "광모듈", "광통신", "광소자"],
     },
+    "화합물반도체/기판·에피·레이저": {
+        "weight": 5,
+        "keywords": ["inp", "gaas", "화합물반도체", "화합물 반도체", "compound semi",
+                     "epiwafer", "에피웨이퍼", "에피택시", "mocvd", "dfb", "eml",
+                     "광원", "cw 레이저", "laser diode", "사파이어 기판", "soi 웨이퍼"],
+    },
     "전력/냉각 인프라": {
         "weight": 4,
         "keywords": ["전력반도체", "sic", "gan", "전력기기", "변압기", "액침냉각",
@@ -202,3 +208,75 @@ def build_bottleneck_brief(result: dict[str, Any]) -> dict[str, Any]:
     )
 
     return {"ticker": ticker, "scorecard_skeleton": skeleton, "research_prompt": research_prompt}
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 병목 ∩ 진입타이밍 게이트
+# ──────────────────────────────────────────────────────────────────────────
+#
+# 병목 방법론은 '무엇이 희소한가'만 알 뿐 '언제 사야 하나/이미 비싼가'를 모른다.
+# 그래서 병목성이 높아도 이미 폭등(파라볼릭)했거나 과매수면 추격 매수가 된다.
+# 이 게이트는 병목성과 스캐너의 타이밍 신호(진입점수·RS·과매수·최근 급등)를 결합해
+# "병목 + 진입 자리"만 통과시키고, 폭등 꼭대기/과매수는 '조정대기'로 분리한다.
+
+BOTTLENECK_GATE_MIN = 60      # 병목 근접도 하한
+PARABOLA_3M_PCT = 80.0        # 3개월 급등 임계 — 이상이면 이미 폭등(추격 금지)
+OVERBOUGHT_RSI = 72.0         # 과매수 임계
+LAGGARD_RS = 40               # 약세 RS 임계
+ENTRY_OK = 50                 # 진입점수 양호 하한
+
+
+def bottleneck_entry_signal(
+    *,
+    bottleneck_score: float | None,
+    entry_score: float | None = None,
+    rsi: float | None = None,
+    rs_rating: float | None = None,
+    mom_3m: float | None = None,
+    regime: str | None = None,
+) -> dict[str, Any]:
+    """병목성 + 진입 타이밍을 결합한 신호.
+
+    Args:
+        bottleneck_score: 0~100 병목 근접도.
+        entry_score: 스캐너 진입타이밍 점수(0~100).
+        rsi: RSI(0~100).
+        rs_rating: 상대강도 등급(1~99).
+        mom_3m: 최근 3개월 수익률(%) — 파라볼릭(추격) 판별용.
+        regime: 시장 국면 문자열(선택).
+
+    Returns:
+        ``{"applicable": bool, "pass_gate": bool, "label": str|None, "reasons": [str]}``
+        - 🟢 병목+진입: 통과(병목 + 들어갈 자리)
+        - 🟡 조정대기: 병목이나 이미 폭등/과매수 → 추격 금지, 대기
+        - ⚪ 병목-약세: 병목이나 모멘텀/진입 신호 부재 → 관망
+    """
+    bs = bottleneck_score or 0
+    if bs < BOTTLENECK_GATE_MIN:
+        return {"applicable": False, "pass_gate": False, "label": None, "reasons": []}
+
+    reasons: list[str] = []
+    parabola = mom_3m is not None and mom_3m >= PARABOLA_3M_PCT
+    overbought = rsi is not None and rsi >= OVERBOUGHT_RSI
+    laggard = rs_rating is not None and rs_rating < LAGGARD_RS
+    bearish = bool(regime) and any(k in str(regime).upper() for k in ("BEAR", "DOWN", "약세", "하락"))
+    timing_ok = entry_score is not None and entry_score >= ENTRY_OK
+
+    if parabola or overbought:
+        if parabola:
+            reasons.append(f"3M +{mom_3m:.0f}% 폭등 — 추격 금지")
+        if overbought:
+            reasons.append(f"RSI {rsi:.0f} 과매수")
+        return {"applicable": True, "pass_gate": False, "label": "🟡 조정대기", "reasons": reasons}
+
+    if laggard or bearish or not timing_ok:
+        if laggard:
+            reasons.append(f"RS {rs_rating} 약세")
+        if bearish:
+            reasons.append("시장 국면 비우호")
+        if not timing_ok:
+            reasons.append("진입점수 부족")
+        return {"applicable": True, "pass_gate": False, "label": "⚪ 병목-약세", "reasons": reasons}
+
+    reasons.append("병목성 + 진입 자리(과열/약세 아님)")
+    return {"applicable": True, "pass_gate": True, "label": "🟢 병목+진입", "reasons": reasons}

@@ -18,7 +18,24 @@
 """
 from __future__ import annotations
 
+import re
 from typing import Any
+
+# 짧은 영문 키워드(gan/sic/inp 등)가 단어 내부(Morgan·ASIC·input)에 박혀 생기는
+# 오탐 방지를 위해, ASCII 키워드는 영숫자 경계 매칭한다. 한글 키워드는 부분일치 유지
+# (한글은 단어 경계 개념이 약하고 복합어 매칭이 필요 — 예: '패키지기판'의 '기판').
+_KW_PAT_CACHE: dict[str, "re.Pattern[str]"] = {}
+
+
+def _kw_in(kw: str, blob: str) -> bool:
+    """키워드가 텍스트에 의미있게 등장하는가. ASCII는 영숫자 경계, 한글은 부분일치."""
+    if kw.isascii():
+        pat = _KW_PAT_CACHE.get(kw)
+        if pat is None:
+            pat = re.compile(r"(?<![a-z0-9])" + re.escape(kw) + r"(?![a-z0-9])")
+            _KW_PAT_CACHE[kw] = pat
+        return pat.search(blob) is not None
+    return kw in blob
 
 # 레이어명 → {weight(1~5, 클수록 희소·상류), keywords(소문자/한글)}
 SCARCE_LAYERS: dict[str, dict[str, Any]] = {
@@ -99,7 +116,7 @@ def bottleneck_proximity(text: str, sector: str = "") -> dict[str, Any]:
 
     matched: list[tuple[str, int]] = []
     for layer, spec in SCARCE_LAYERS.items():
-        if any(kw in blob for kw in spec["keywords"]):
+        if any(_kw_in(kw, blob) for kw in spec["keywords"]):
             matched.append((layer, int(spec["weight"])))
 
     if not matched:

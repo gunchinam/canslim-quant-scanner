@@ -132,6 +132,37 @@ class TestBrief(unittest.TestCase):
         self.assertTrue(brief["research_prompt"])
 
 
+class TestKeywordBoundary(unittest.TestCase):
+    """짧은 영문 키워드(gan/sic/inp 등)가 단어 내부에 박혀 생기는 오탐 방지."""
+
+    def test_morgan_not_gan(self):
+        # "Morgan Stanley"의 gan 이 GaN 으로 오탐되면 안 됨
+        r = bottleneck_proximity("Morgan Stanley investment bank", sector="금융")
+        self.assertEqual(r["score"], 0)
+
+    def test_asic_not_sic(self):
+        # "ASIC"의 sic 이 SiC(전력반도체)로 오탐되면 안 됨
+        r = bottleneck_proximity("AI 네트워크 칩 ASIC 설계", sector="반도체")
+        self.assertNotIn("전력/냉각 인프라", r["layers"])
+
+    def test_organic_input_not_matched(self):
+        r = bottleneck_proximity("organic food company input logistics", sector="")
+        self.assertEqual(r["score"], 0)
+
+    def test_real_sic_still_matches(self):
+        # 진짜 SiC 는 여전히 매칭돼야
+        r = bottleneck_proximity("SiC 전력반도체 웨이퍼", sector="반도체")
+        self.assertGreater(r["score"], 0)
+
+    def test_real_gan_still_matches(self):
+        r = bottleneck_proximity("GaN 트랜지스터 전력 반도체", sector="반도체")
+        self.assertGreater(r["score"], 0)
+
+    def test_real_inp_still_matches(self):
+        r = bottleneck_proximity("InP 화합물반도체 기판", sector="반도체")
+        self.assertGreater(r["score"], 0)
+
+
 class TestEntryGate(unittest.TestCase):
     """병목 ∩ 진입타이밍 게이트 — 폭등 꼭대기/과매수는 빼고, 병목+진입자리만 통과."""
 

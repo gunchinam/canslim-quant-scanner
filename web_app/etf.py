@@ -36,45 +36,67 @@ _CACHE_TS: float = 0.0              # 캐시 적재 시각(epoch sec)
 # ── 인기 ETF 목록 (티커, 한글 라벨) ───────────────────────────────────
 # 리테일이 실제로 많이 거래하는 레버리지·테마(반도체·AI·빅테크) 중심 + 핵심 지수.
 # ⚠ 3X/2X/인버스는 고위험 파생 상품 — 라벨에 배수 명시.
-# 미국 — 여러 종목이 섞인 바스켓(지수·섹터·테마)만. 단일종목 추종(NVDL 등)·단일자산
-# (비트코인 등)은 제외. 레버리지/인버스도 '지수' 기반이면 바스켓이므로 포함.
-_US_ETFS: list[tuple[str, str]] = [
-    ("SOXL", "반도체 3X"),         # 반도체 지수 3배 (필라델피아 반도체)
-    ("SOXS", "반도체 -3X"),        # 반도체 지수 -3배(인버스)
-    ("TQQQ", "나스닥 3X"),         # 나스닥100 3배
-    ("SQQQ", "나스닥 -3X"),        # 나스닥100 -3배(인버스)
-    ("SPXL", "S&P 3X"),           # S&P500 3배
-    ("TNA",  "러셀2000 3X"),       # 미국 중소형 3배
-    ("FNGU", "빅테크 3X"),         # FANG+ 지수 3배
-    ("SMH",  "반도체"),            # 반도체 대표 (비레버리지)
-    ("QQQ",  "나스닥 100"),
-    ("SPY",  "S&P 500"),
-    ("DIA",  "다우존스"),
-    ("IWM",  "러셀2000 (중소형)"),
-    ("ARKK", "혁신성장(ARK)"),
-    ("SCHD", "美 배당성장"),
+# 미국 — 여러 종목이 섞인 바스켓(지수·섹터·테마·해외·채권)만. 단일종목 추종(NVDL 등)·
+# 단일자산(비트코인·금 등)은 제외. 레버리지/인버스도 '지수' 기반이면 바스켓이므로 포함.
+# 카테고리별 그룹 → 프론트 소제목으로 묶임.
+_US_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
+    ("핵심 지수", [
+        ("SPY", "S&P 500"), ("QQQ", "나스닥 100"), ("DIA", "다우존스"),
+        ("IWM", "러셀2000 (중소형)"), ("VTI", "美 전체시장"), ("RSP", "S&P 동일가중"),
+    ]),
+    ("반도체", [("SMH", "반도체"), ("SOXX", "반도체 (필라델피아)")]),
+    ("레버리지 (지수 기반)", [
+        ("SOXL", "반도체 3X"), ("SOXS", "반도체 -3X"), ("TQQQ", "나스닥 3X"),
+        ("SQQQ", "나스닥 -3X"), ("SPXL", "S&P 3X"), ("TNA", "러셀2000 3X"),
+        ("FNGU", "빅테크 3X"), ("TECL", "기술주 3X"),
+    ]),
+    ("섹터", [
+        ("XLK", "기술"), ("XLF", "금융"), ("XLE", "에너지"), ("XLV", "헬스케어"),
+        ("XLY", "경기소비재"), ("XLP", "필수소비재"), ("XLI", "산업재"),
+        ("XLU", "유틸리티"), ("XLB", "소재"), ("XLRE", "부동산"), ("XLC", "커뮤니케이션"),
+    ]),
+    ("스타일·배당", [
+        ("VUG", "성장주"), ("VTV", "가치주"), ("SCHD", "배당성장"),
+        ("VYM", "고배당"), ("JEPI", "커버드콜 인컴"),
+    ]),
+    ("테마", [
+        ("ARKK", "혁신성장 (ARK)"), ("BOTZ", "로봇·AI"), ("AIQ", "AI"),
+        ("SKYY", "클라우드"), ("IGV", "소프트웨어"), ("HACK", "사이버보안"),
+        ("XBI", "바이오"), ("KWEB", "중국 인터넷"), ("JETS", "항공"), ("LIT", "리튬·배터리"),
+    ]),
+    ("해외", [("VEA", "선진국"), ("VWO", "신흥국"), ("INDA", "인도"), ("MCHI", "중국")]),
+    ("채권", [("TLT", "美 국채 20년+"), ("HYG", "하이일드 회사채"), ("LQD", "투자등급 회사채")]),
 ]
 
 # 한국: 네이버 ETF 순위(시총·거래대금) 상위 다종목 ETF만 (.KS).
 # 제외: 단일종목 추종(삼성전자·SK하이닉스 직접), MMF/채권/금리·금 등 단일자산.
-# 포함: 국내지수·레버리지/인버스(지수기반)·반도체/AI 섹터·테마·미국지수.
-_KR_ETFS: list[tuple[str, str]] = [
-    ("069500.KS", "KODEX 200"),                   # 시총 1위
-    ("122630.KS", "KODEX 레버리지"),              # 거래대금 1위 (코스피 2배)
-    ("252670.KS", "KODEX 인버스2X"),              # 곱버스 (코스피 -2배)
-    ("233740.KS", "KODEX 코스닥150 레버리지"),
-    ("114800.KS", "KODEX 인버스"),
-    ("102110.KS", "TIGER 200"),
-    ("229200.KS", "KODEX 코스닥150"),
-    ("396500.KS", "TIGER Fn반도체TOP10"),         # 시총 3위 · 거래대금 상위
-    ("0167A0.KS", "SOL AI반도체TOP2 Plus"),        # 거래대금 100만↑
-    ("091160.KS", "KODEX 반도체"),
-    ("395160.KS", "KODEX AI반도체핵심장비"),
-    ("139260.KS", "TIGER 200 IT"),
-    ("360750.KS", "TIGER 미국S&P500"),            # 시총 2위
-    ("133690.KS", "TIGER 미국나스닥100"),         # 시총 5위
-    ("381180.KS", "TIGER 미국필라델피아반도체"),
-    ("102780.KS", "KODEX 삼성그룹"),               # 삼성 계열 바스켓
+_KR_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
+    ("국내 지수", [
+        ("069500.KS", "KODEX 200"), ("102110.KS", "TIGER 200"),
+        ("229200.KS", "KODEX 코스닥150"),
+    ]),
+    ("레버리지·인버스", [
+        ("122630.KS", "KODEX 레버리지"), ("252670.KS", "KODEX 인버스2X"),
+        ("233740.KS", "KODEX 코스닥150 레버리지"), ("114800.KS", "KODEX 인버스"),
+    ]),
+    ("반도체·AI", [
+        ("396500.KS", "TIGER Fn반도체TOP10"), ("0167A0.KS", "SOL AI반도체TOP2 Plus"),
+        ("091160.KS", "KODEX 반도체"), ("395160.KS", "KODEX AI반도체핵심장비"),
+        ("139260.KS", "TIGER 200 IT"),
+    ]),
+    ("미국 지수", [
+        ("360750.KS", "TIGER 미국S&P500"), ("133690.KS", "TIGER 미국나스닥100"),
+        ("381180.KS", "TIGER 미국필라델피아반도체"),
+    ]),
+    ("테마", [("102780.KS", "KODEX 삼성그룹")]),
+]
+
+# 평탄화 → (ticker, label, category) 3-튜플 리스트
+_US_ETFS: list[tuple[str, str, str]] = [
+    (t, l, cat) for cat, items in _US_GROUPS for (t, l) in items
+]
+_KR_ETFS: list[tuple[str, str, str]] = [
+    (t, l, cat) for cat, items in _KR_GROUPS for (t, l) in items
 ]
 
 
@@ -101,7 +123,7 @@ def _ttl_now() -> int:
     return _TTL_TRADING_SEC if trading else _TTL_OFF_SEC
 
 
-def _row_from_sub(ticker: str, label: str, sub) -> dict | None:
+def _row_from_sub(ticker: str, label: str, sub, category: str = "") -> dict | None:
     """yfinance 종목 서브프레임 → ETF 카드 1개 dict. 데이터 부족 시 None."""
     try:
         closes = sub["Close"].dropna()
@@ -148,6 +170,7 @@ def _row_from_sub(ticker: str, label: str, sub) -> dict | None:
             "low52": round(lo52, 2),
             "pos52": round(pos52, 1),
             "is_leveraged": _is_leveraged(label),
+            "category": category or "",
         }
     except Exception as e:
         _LOG.warning("etf: row parse %s failed: %s", ticker, e)
@@ -159,8 +182,9 @@ def _fetch() -> dict:
     us_out: list[dict] = []
     kr_out: list[dict] = []
 
-    all_pairs = [("US", t, l) for t, l in _US_ETFS] + [("KR", t, l) for t, l in _KR_ETFS]
-    symbols = [t for _, t, _ in all_pairs]
+    all_pairs = ([("US", t, l, cat) for t, l, cat in _US_ETFS]
+                 + [("KR", t, l, cat) for t, l, cat in _KR_ETFS])
+    symbols = [p[1] for p in all_pairs]
 
     try:
         import yfinance as yf
@@ -176,12 +200,12 @@ def _fetch() -> dict:
         raise
 
     level0 = set(df.columns.get_level_values(0)) if hasattr(df.columns, "get_level_values") else set()
-    for region, ticker, label in all_pairs:
+    for region, ticker, label, cat in all_pairs:
         try:
             sub = df[ticker] if ticker in level0 else None
             if sub is None:
                 continue
-            row = _row_from_sub(ticker, label, sub)
+            row = _row_from_sub(ticker, label, sub, cat)
             if row is None:
                 continue
             (us_out if region == "US" else kr_out).append(row)

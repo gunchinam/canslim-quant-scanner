@@ -23,6 +23,7 @@ from bottleneck_screen import (  # noqa: E402
     SCARCE_LAYERS,
     SCORECARD_FACTORS,
     SCORECARD_PENALTIES,
+    bottleneck_entry_signal,
     bottleneck_proximity,
     build_bottleneck_brief,
 )
@@ -129,6 +130,48 @@ class TestBrief(unittest.TestCase):
         self.assertEqual(brief["scorecard_skeleton"]["ticker"], "X")
         self.assertIsInstance(brief["research_prompt"], str)
         self.assertTrue(brief["research_prompt"])
+
+
+class TestEntryGate(unittest.TestCase):
+    """병목 ∩ 진입타이밍 게이트 — 폭등 꼭대기/과매수는 빼고, 병목+진입자리만 통과."""
+
+    def test_low_bottleneck_not_applicable(self):
+        r = bottleneck_entry_signal(bottleneck_score=30, entry_score=70,
+                                    rsi=50, rs_rating=80, mom_3m=10)
+        self.assertFalse(r["applicable"])
+        self.assertFalse(r["pass_gate"])
+
+    def test_parabola_is_wait_not_buy(self):
+        # AXTI류: 병목 만점이나 3M +175% 폭등 → 조정대기(게이트 불통과)
+        r = bottleneck_entry_signal(bottleneck_score=100, entry_score=60,
+                                    rsi=60, rs_rating=90, mom_3m=175)
+        self.assertTrue(r["applicable"])
+        self.assertFalse(r["pass_gate"])
+        self.assertIn("조정", r["label"])
+
+    def test_overbought_is_wait(self):
+        r = bottleneck_entry_signal(bottleneck_score=90, entry_score=70,
+                                    rsi=78, rs_rating=85, mom_3m=20)
+        self.assertFalse(r["pass_gate"])
+
+    def test_good_timing_passes(self):
+        # 병목 높음 + 모멘텀 과하지 않음 + 과매수 아님 + 진입점수 양호 → 통과
+        r = bottleneck_entry_signal(bottleneck_score=85, entry_score=65,
+                                    rsi=55, rs_rating=70, mom_3m=18)
+        self.assertTrue(r["pass_gate"])
+        self.assertIn("진입", r["label"])
+
+    def test_laggard_does_not_pass(self):
+        r = bottleneck_entry_signal(bottleneck_score=85, entry_score=30,
+                                    rsi=45, rs_rating=25, mom_3m=5)
+        self.assertFalse(r["pass_gate"])
+
+    def test_missing_fields_safe(self):
+        r = bottleneck_entry_signal(bottleneck_score=80, entry_score=None,
+                                    rsi=None, rs_rating=None, mom_3m=None)
+        self.assertTrue(r["applicable"])
+        self.assertIn("label", r)
+        self.assertIsInstance(r["pass_gate"], bool)
 
 
 if __name__ == "__main__":

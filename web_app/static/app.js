@@ -654,6 +654,7 @@ function _matchesFilter(s, f) {
     case 'pullback':    return s.RSI != null && s.RSI <= 40;
     case 'greedzone':   return !!s.GreedZone;
     case 'bottleneck':  return (s.BottleneckScore ?? 0) >= 60;   // 공급망 병목 후보(상류 희소층 근접)
+    case 'bottleneck_entry': return s.BottleneckEntryPass === true;  // 병목 ∩ 진입타이밍(폭등꼭대기·과매수 제외)
     case 'score_surge': return (s.ScoreDelta ?? -Infinity) >= 3;   // 어제 대비 점수 +3 이상 급등
     case 'new_entry':   return !!s.IsNew;                          // 기준일 이후 새로 진입
     case 'laggard':     return (s.RSRating ?? 99) < 40 || _signalTier(s.Signal) === 'sell';
@@ -4909,8 +4910,8 @@ function renderEtfData(d) {
 
   const us = Array.isArray(d.us) ? d.us : [];
   const kr = Array.isArray(d.kr) ? d.kr : [];
-  usEl.innerHTML = us.length ? us.map(_etfCardHtml).join('') : '<div class="etf-empty">데이터 없음</div>';
-  krEl.innerHTML = kr.length ? kr.map(_etfCardHtml).join('') : '<div class="etf-empty">데이터 없음</div>';
+  usEl.innerHTML = _renderEtfGroups(us);
+  krEl.innerHTML = _renderEtfGroups(kr);
 
   if (metaEl) {
     let meta = '';
@@ -4924,6 +4925,39 @@ function renderEtfData(d) {
     metaEl.textContent = meta;
   }
 }
+
+// 카테고리별 그룹화(등장 순서 유지) + 접이식 헤더
+function _renderEtfGroups(rows) {
+  if (!Array.isArray(rows) || !rows.length) return '<div class="etf-empty">데이터 없음</div>';
+  const order = [];
+  const groups = {};
+  rows.forEach(function (r) {
+    const c = (r && r.category) ? r.category : '기타';
+    if (!groups[c]) { groups[c] = []; order.push(c); }
+    groups[c].push(r);
+  });
+  return order.map(function (c) {
+    const cards = groups[c].map(_etfCardHtml).join('');
+    return '<div class="etf-group">' +
+      '<button class="etf-group-head" type="button" aria-expanded="true">' +
+        '<span class="etf-group-chevron">▾</span>' +
+        '<span class="etf-group-name">' + esc(c) + '</span>' +
+        '<span class="etf-group-count">' + groups[c].length + '</span>' +
+      '</button>' +
+      '<div class="etf-group-body">' + cards + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ETF 그룹 헤더 클릭 → 접기/펴기 (카드 data-action 과 분리된 클래스 기반 위임)
+document.addEventListener('click', function (e) {
+  const head = e.target.closest('.etf-group-head');
+  if (!head) return;
+  const grp = head.closest('.etf-group');
+  if (!grp) return;
+  const collapsed = grp.classList.toggle('collapsed');
+  head.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+});
 
 // ── 매크로 신호등 띠 ────────────────────────────────────────────────────────
 

@@ -53,10 +53,25 @@ def _attach_bottleneck(rows: list[dict]) -> None:
             r["BottleneckScore"] = bp["score"]
             r["BottleneckLayers"] = bp["layers"]
             r["BottleneckTop"] = bp["top_layer"]
+            # 병목 ∩ 진입타이밍 게이트 — 폭등 꼭대기/과매수 분리
+            sig = _bottleneck.bottleneck_entry_signal(
+                bottleneck_score=bp["score"],
+                entry_score=r.get("EntryScore"),
+                rsi=r.get("RSI"),
+                rs_rating=r.get("RSRating"),
+                mom_3m=r.get("_Mom3M"),
+                regime=r.get("Regime"),
+            )
+            r["BottleneckEntry"] = sig["label"]
+            r["BottleneckEntryPass"] = sig["pass_gate"]
+            r["BottleneckEntryReasons"] = sig["reasons"]
         except Exception:
             r.setdefault("BottleneckScore", 0)
             r.setdefault("BottleneckLayers", [])
             r.setdefault("BottleneckTop", None)
+            r.setdefault("BottleneckEntry", None)
+            r.setdefault("BottleneckEntryPass", False)
+            r.setdefault("BottleneckEntryReasons", [])
 try:
     # web_app 디렉토리 보장 (engine_adapter 가 외부에서 import 될 때 대비)
     _WEB_APP_DIR = os.path.dirname(os.path.abspath(__file__))

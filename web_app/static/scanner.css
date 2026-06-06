@@ -3259,8 +3259,37 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   color: var(--text-primary);
   padding: 6px 2px;
 }
-.etf-list { display: flex; flex-direction: column; gap: 10px; }
+.etf-list { display: flex; flex-direction: column; gap: 12px; }
 .etf-empty { padding: 24px; text-align: center; color: var(--text-tertiary); font-size: 13px; }
+
+/* ETF 카테고리 그룹 (접이식 소제목) */
+.etf-group { display: flex; flex-direction: column; gap: 8px; }
+.etf-group-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 4px 2px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.etf-group-head:hover { color: var(--brand); }
+.etf-group-chevron { font-size: 10px; color: var(--text-tertiary); transition: transform .15s; }
+.etf-group.collapsed .etf-group-chevron { transform: rotate(-90deg); }
+.etf-group-name { flex: 1; }
+.etf-group-count {
+  font-size: 11px; font-weight: 700; color: var(--text-tertiary);
+  background: var(--surface-2, rgba(0,0,0,0.05));
+  border-radius: 8px; padding: 0 7px;
+}
+.etf-group-body { display: flex; flex-direction: column; gap: 10px; }
+.etf-group.collapsed .etf-group-body { display: none; }
 
 .etf-card {
   background: var(--card);
@@ -3275,6 +3304,14 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   gap: 8px;
 }
 .etf-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+/* 미국 ETF 티커 — 이름 줄에 굵게 앞세워 식별 (예: SOXL) */
+.etf-tk {
+  font-weight: 800;
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+  margin-right: 1px;
+}
 .etf-ticker { font-size: 11px; font-weight: 600; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 .etf-card-mid {
   display: flex;

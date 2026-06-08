@@ -1527,6 +1527,46 @@ def api_ticker(ticker: str):
         from speculative_themes import apply_to_row as _spec_reeval
         _spec_reeval(result)
 
+        # ── MECE 분석 프레임워크 부착 (Phase 1/2/3) ──
+        try:
+            from web_app.valuation_context import attach_valuation_context as _mece_val
+            # 캐시된 스캔 결과에서 동일 섹터 종목 조회
+            _mece_peers = []
+            _mece_sector = (result.get("Sector") or "").strip()
+            if _mece_sector:
+                with _scan_results_cache_lock:
+                    for _mk in ("BALANCED", "AGGRESSIVE", "CONSERVATIVE"):
+                        _mc = _scan_results_cache.get((market_arg, _mk, ""))
+                        if _mc and _mc.get("data"):
+                            _mece_peers = [r for r in _mc["data"]
+                                           if (r.get("Sector") or "").strip() == _mece_sector]
+                            break
+            _mece_val(result, _mece_peers)
+        except Exception as _mece_e:
+            logging.debug("MECE valuation context failed: %s", _mece_e)
+            result.setdefault("ValPctile", None)
+            result.setdefault("SectorRelPE", None)
+            result.setdefault("PriceInLevel", None)
+
+        try:
+            from web_app.scenario_engine import build_scenario_table as _mece_scenario
+            result["Scenarios"] = _mece_scenario(result)
+        except Exception as _mece_e2:
+            logging.debug("MECE scenario failed: %s", _mece_e2)
+            result.setdefault("Scenarios", None)
+
+        # ATR top-level 필드 추출
+        result['ATR'] = result.get('volatility', {}).get('details', {}).get('atr', 0)
+        result['ATR_pct'] = result.get('volatility', {}).get('details', {}).get('atr_pct', 0)
+
+        try:
+            from web_app.price_levels import build_price_strategy as _mece_price
+            _mece_scenarios = result.get("Scenarios", {}).get("scores") if result.get("Scenarios") else None
+            result["PriceLevels"] = _mece_price(result, _mece_scenarios)
+        except Exception as _mece_e3:
+            logging.debug("MECE price levels failed: %s", _mece_e3)
+            result.setdefault("PriceLevels", None)
+
         # ── 응답 캐시 저장 ──
         with _ticker_detail_cache_lock:
             if len(_ticker_detail_cache) >= _TICKER_DETAIL_MAX:

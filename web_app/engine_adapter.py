@@ -36,6 +36,35 @@ try:
 except Exception:
     _bottleneck = None  # type: ignore
 
+try:
+    from web_app.valuation_context import attach_valuation_context as _attach_val_ctx
+except Exception:
+    try:
+        from valuation_context import attach_valuation_context as _attach_val_ctx
+    except Exception:
+        _attach_val_ctx = None  # type: ignore
+
+
+def _attach_valuation_context(rows: list[dict]) -> None:
+    """각 종목에 밸류에이션 맥락 지표(ValPctile, SectorRelPE, PriceInLevel)를 부착."""
+    if _attach_val_ctx is None:
+        return
+    # 섹터별 피어 그룹 구성
+    sector_groups: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        s = r.get("Sector") or ""
+        if s:
+            sector_groups[s].append(r)
+    for r in rows:
+        try:
+            s = r.get("Sector") or ""
+            peers = sector_groups.get(s, [])
+            _attach_val_ctx(r, peers)
+        except Exception:
+            r.setdefault("ValPctile", None)
+            r.setdefault("SectorRelPE", None)
+            r.setdefault("PriceInLevel", None)
+
 
 def _attach_bottleneck(rows: list[dict]) -> None:
     """각 종목에 공급망 병목 근접도(BottleneckScore/Layers/Top)를 부착.
@@ -580,6 +609,7 @@ class ScanAdapter:
         _attach_bottleneck(results)
         _attach_index_membership(results, compute_bucket=False)  # 섹터 스캔: 소표본 백분위 왜곡 방지
         _attach_midcap_alpha(results)
+        _attach_valuation_context(results)
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         return results
 
@@ -617,6 +647,7 @@ class ScanAdapter:
         _attach_bottleneck(results)
         _attach_index_membership(results)
         _attach_midcap_alpha(results)
+        _attach_valuation_context(results)
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         # forward IC 추적: BOTTLENECK_SNAPSHOT=1 일 때만 오늘 병목 등급 스냅샷 적재
         if os.environ.get("BOTTLENECK_SNAPSHOT") == "1":

@@ -144,6 +144,8 @@ def save_snapshot(results: list[dict], market: str, universe: list[str] | set[st
             "score": round(float(r.get("TotalScore", 0) or 0), 1),
             "rank": i + 1,
             "entry": r.get("EntryStatus"),
+            "_PER": r.get("_PER"),
+            "_PBR": r.get("_PBR"),
         }
         for i, r in enumerate(sorted_by_score)
         if r.get("Ticker")

@@ -1342,6 +1342,8 @@ function renderStockTable(stocks) {
 
   // 지수 보기 카운트 갱신 + 지수/퀵필터 적용
   _updateIndexBar(_currentResults);
+  // _updateIndexBar가 _activeIndex를 리셋할 수 있으므로 헤더 가시성을 항상 동기화
+  _toggleMidcapCol(_activeIndex === 'SP400');
   const indexScoped   = _applyIndexFilter(_currentResults);
   const quickFiltered = _applyQuickFilter(indexScoped);
   _renderOneLinerFilterChip(quickFiltered);
@@ -3058,6 +3060,11 @@ function _populatePanelDetail(d, skipFourAxis) {
   // 미드캡 알파 시그널 (SP400 전용)
   _renderMidcapDetail(d);
 
+  // MECE 분석 프레임워크 카드 (Phase 1/2/3)
+  _renderValuationContext(d);
+  _renderScenarioTable(d);
+  _renderPriceLevels(d);
+
   // 투자자 동향 카드
   _renderInvestorCard(d);
 
@@ -3478,6 +3485,188 @@ function _renderRiskGauge(d) {
 // (정리됨) _renderRiskSummary·_renderFactorWaterfall·_renderACCard·_renderLiquidityCard 4개 함수 제거.
 // 중복/저신호로 컨테이너(dp-risk-summary·dp-factor-waterfall·dp-ac-card·dp-liquidity-card)와 호출부를 삭제.
 // 데이터 필드(composite_risk·factor_contrib·ac1·liquidity_score)는 백엔드에 보존 — 되돌리기 가능.
+
+// ── MECE 분석 프레임워크 렌더 함수 (Phase 1/2/3) ──────────────────────
+
+function _renderValuationContext(d) {
+  const card = document.getElementById('valuation-context-card');
+  if (!card) return;
+  const vp = d.ValPctile, srpe = d.SectorRelPE, pil = d.PriceInLevel;
+  if (vp == null && srpe == null && pil == null) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  let html = '<div class="mece-inner">';
+  html += '<div class="mece-header"><span class="mece-title">밸류에이션 맥락</span><span class="mece-badge">참고용 시뮬레이션</span></div>';
+
+  // ValPctile 게이지 바
+  if (vp != null) {
+    const per = d._PER != null ? `PER ${fmt(d._PER, 1)}` : '';
+    const zone = vp <= 30 ? '저평가 구간' : vp >= 70 ? '고평가 구간' : '적정 구간';
+    const zoneCol = vp <= 30 ? 'var(--success)' : vp >= 70 ? 'var(--destructive)' : 'var(--text-secondary)';
+    html += `<div class="val-gauge-wrap">`;
+    html += `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">${esc(per)} &gt; 과거 1년 중 하위 ${Math.round(vp)}% <span style="color:${zoneCol};font-weight:700;">(${zone})</span></div>`;
+    html += `<div class="val-gauge"><div class="val-gauge-fill" style="width:${Math.min(100, Math.max(0, vp))}%;"></div><div class="val-gauge-marker" style="left:${Math.min(100, Math.max(0, vp))}%;"></div></div>`;
+    html += `<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-tertiary);margin-top:2px;"><span>0%</span><span>${Math.round(vp)}%</span><span>100%</span></div>`;
+    html += `</div>`;
+  } else {
+    html += `<div style="font-size:12px;color:var(--text-tertiary);padding:8px 0;">ValPctile 데이터 수집 중 (약 2주 후 활성화)</div>`;
+  }
+
+  // SectorRelPE
+  if (srpe != null) {
+    const label = srpe > 0 ? '프리미엄' : srpe < 0 ? '할인' : '적정';
+    const col = srpe > 10 ? 'var(--destructive)' : srpe < -10 ? 'var(--success)' : 'var(--text-secondary)';
+    html += `<div style="font-size:13px;margin-top:8px;">섹터 대비 <span style="color:${col};font-weight:700;">${srpe > 0 ? '+' : ''}${fmt(srpe, 1)}%</span> <span style="color:var(--text-tertiary);">(${label})</span></div>`;
+  }
+
+  // PriceInLevel
+  if (pil != null) {
+    const pilLabel = pil <= 30 ? '저반영' : pil >= 60 ? '과반영' : '적정';
+    const pilCol = pil <= 30 ? 'var(--success)' : pil >= 60 ? 'var(--destructive)' : 'var(--text-secondary)';
+    html += `<div style="font-size:13px;margin-top:4px;">선반영도 <span style="color:${pilCol};font-weight:700;">${Math.round(pil)}/100</span> <span style="color:var(--text-tertiary);">(${pilLabel})</span></div>`;
+  }
+
+  html += '</div>';
+  card.innerHTML = html;
+}
+
+function _renderScenarioTable(d) {
+  const card = document.getElementById('scenario-table-card');
+  if (!card) return;
+  const sc = d.Scenarios;
+  if (!sc || !sc.scores) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const scores = sc.scores;
+  const triggers = sc.triggers || {};
+  const responses = sc.responses || {};
+  const keyVars = scores.key_variables || [];
+
+  let html = '<div class="mece-inner">';
+  html += '<div class="mece-header"><span class="mece-title">시나리오 시그널 강도</span><span class="mece-badge">참고용 시뮬레이션</span></div>';
+
+  // 3-way 바
+  html += `<div class="scenario-bar-wrap">`;
+  html += `<div class="scenario-bar">`;
+  html += `<div class="scenario-bar-seg scenario-bull" style="width:${scores.bull}%;" title="강세 ${scores.bull}%"></div>`;
+  html += `<div class="scenario-bar-seg scenario-neutral" style="width:${scores.neutral}%;" title="중립 ${scores.neutral}%"></div>`;
+  html += `<div class="scenario-bar-seg scenario-bear" style="width:${scores.bear}%;" title="약세 ${scores.bear}%"></div>`;
+  html += `</div>`;
+  html += `<div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px;">`;
+  html += `<span style="color:#16A34A;font-weight:700;">강세 ${scores.bull}%</span>`;
+  html += `<span style="color:#6B7280;font-weight:700;">중립 ${scores.neutral}%</span>`;
+  html += `<span style="color:#DC2626;font-weight:700;">약세 ${scores.bear}%</span>`;
+  html += `</div></div>`;
+
+  // 시나리오 테이블
+  html += `<table class="scenario-table"><thead><tr><th>시나리오</th><th>충족 조건</th><th>대응</th></tr></thead><tbody>`;
+  const scenarioData = [
+    { key: 'bull', label: '강세', pct: scores.bull, color: '#16A34A' },
+    { key: 'neutral', label: '중립', pct: scores.neutral, color: '#6B7280' },
+    { key: 'bear', label: '약세', pct: scores.bear, color: '#DC2626' },
+  ];
+  for (const s of scenarioData) {
+    const trigs = (triggers[s.key] || []).map(t => esc(t)).join('<br>') || '-';
+    const resp = esc(responses[s.key] || '-');
+    html += `<tr><td style="color:${s.color};font-weight:700;">${s.label} ${s.pct}%</td><td>${trigs}</td><td>${resp}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+
+  // 핵심 변수
+  if (keyVars.length) {
+    html += `<div style="margin-top:8px;font-size:12px;color:var(--text-secondary);">핵심 변수: `;
+    html += keyVars.map((v, i) => {
+      const sign = v.impact > 0 ? '+' : '';
+      const col = v.impact > 0 ? '#16A34A' : '#DC2626';
+      return `<span style="color:${col};font-weight:600;">(${i + 1}) ${esc(v.name)} ${sign}${v.impact}</span>`;
+    }).join(' &nbsp; ');
+    html += `</div>`;
+  }
+
+  html += '</div>';
+  card.innerHTML = html;
+}
+
+function _renderPriceLevels(d) {
+  const card = document.getElementById('price-levels-card');
+  if (!card) return;
+  const pl = d.PriceLevels;
+  if (!pl || !pl.price_levels) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const levels = pl.price_levels;
+  const action = pl.action_plan || {};
+  const atr = d.ATR || levels.atr || 0;
+  const atrPct = d.ATR_pct || levels.atr_pct || 0;
+
+  let html = '<div class="mece-inner">';
+  html += '<div class="mece-header"><span class="mece-title">가격대별 대응 전략</span><span class="mece-badge">참고용 시뮬레이션</span></div>';
+
+  // 가격 맵
+  const pricePoints = [];
+  if (levels.target_52w_high) pricePoints.push({ price: levels.target_52w_high, label: '52주 고가', cls: 'pm-target' });
+  if (levels.target_analyst) pricePoints.push({ price: levels.target_analyst, label: '애널리스트 목표가', cls: 'pm-target' });
+  pricePoints.push({ price: levels.price, label: '현재가', cls: 'pm-current' });
+  pricePoints.push({ price: levels.entry_1, label: '1차 (ATR 1x)', cls: 'pm-entry' });
+  pricePoints.push({ price: levels.entry_2, label: '2차 (ATR 2x)', cls: 'pm-entry' });
+  pricePoints.push({ price: levels.entry_3, label: '3차 (ATR 3x)', cls: 'pm-entry' });
+  pricePoints.push({ price: levels.stop_loss, label: '손절 (ATR 4x)', cls: 'pm-stop' });
+
+  // 피보나치 추가
+  if (levels.fib_382) pricePoints.push({ price: levels.fib_382, label: 'Fib 38.2%', cls: 'pm-fib' });
+  if (levels.fib_500) pricePoints.push({ price: levels.fib_500, label: 'Fib 50%', cls: 'pm-fib' });
+  if (levels.fib_618) pricePoints.push({ price: levels.fib_618, label: 'Fib 61.8%', cls: 'pm-fib' });
+
+  // 가격 높은 순 정렬
+  pricePoints.sort((a, b) => b.price - a.price);
+
+  html += `<div class="price-map">`;
+  for (const pt of pricePoints) {
+    html += `<div class="price-map-row ${pt.cls}">`;
+    html += `<span class="price-map-val">${fmtPrice(pt.price)}</span>`;
+    html += `<span class="price-map-line"></span>`;
+    html += `<span class="price-map-label">${esc(pt.label)}${pt.cls === 'pm-current' ? ' *' : ''}</span>`;
+    html += `</div>`;
+  }
+  html += `</div>`;
+
+  // ATR 정보
+  const volLabel = atrPct >= 4 ? '고변동' : atrPct >= 2 ? '보통' : '저변동';
+  html += `<div style="font-size:12px;color:var(--text-secondary);margin-top:8px;">ATR: ${fmtPrice(atr)} (${fmt(atrPct, 1)}%) &middot; 변동성: ${volLabel}</div>`;
+
+  // 신규 진입자 / 기존 보유자 분기 카드
+  const newInv = action.new_investor || {};
+  const holder = action.holder || {};
+  html += `<div class="action-cards">`;
+  // 신규 진입자
+  html += `<div class="action-card action-new">`;
+  html += `<div class="action-card-title">신규 진입자</div>`;
+  html += `<div class="action-card-action">${esc(newInv.action || '-')}</div>`;
+  if (newInv.details && newInv.details.length) {
+    html += `<ul class="action-card-list">`;
+    for (const det of newInv.details) html += `<li>${esc(det)}</li>`;
+    html += `</ul>`;
+  }
+  html += `</div>`;
+  // 기존 보유자
+  html += `<div class="action-card action-holder">`;
+  html += `<div class="action-card-title">기존 보유자</div>`;
+  html += `<div class="action-card-action">${esc(holder.action || '-')}</div>`;
+  if (holder.details && holder.details.length) {
+    html += `<ul class="action-card-list">`;
+    for (const det of holder.details) html += `<li>${esc(det)}</li>`;
+    html += `</ul>`;
+  }
+  html += `</div>`;
+  html += `</div>`; // .action-cards
+
+  html += '</div>';
+  card.innerHTML = html;
+
+  // 디스클레이머 표시
+  const disc = document.getElementById('mece-disclaimer');
+  if (disc) disc.style.display = '';
+}
 
 function _renderFinanceTab(d) {
   const el = document.getElementById('dp-finance-content');

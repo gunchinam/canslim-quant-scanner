@@ -4,10 +4,11 @@ html, body {
   height: 100%;
   max-width: 100vw;
   overflow-x: hidden;
-  font-family: -apple-system, 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
+  font-family: "SF Pro Text", "SF Pro Icons", -apple-system, BlinkMacSystemFont, "Helvetica Neue", 'Pretendard', 'Noto Sans KR', sans-serif;
   background: var(--surface-page);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
 }
 
 /* ── App Shell ─────────────────────────────────────────────── */
@@ -549,7 +550,8 @@ html, body {
   border-radius: var(--radius);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-card);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 table.stock-table {
@@ -1506,7 +1508,7 @@ td.score-col {
 }
 .oneliner-data {
   display: block;
-  font-family: -apple-system, 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
+  font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Helvetica Neue", 'Pretendard', sans-serif;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -1879,7 +1881,7 @@ td.score-col {
   margin: 14px 20px;
   padding: 24px 20px;
   min-height: 90px;
-  font-family: 'Noto Sans KR', 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Helvetica Neue", 'Pretendard', sans-serif;
   font-size: clamp(28px, 5.5vw, 46px);
   font-weight: 800;
   line-height: 1.16;
@@ -3101,9 +3103,9 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   box-shadow:
     0 10px 28px rgba(0, 0, 0, 0.32),
     0 0 0 1px rgba(255, 255, 255, 0.02),
-    0 0 24px rgba(49, 130, 246, 0.08);
+    0 0 24px rgba(0, 113, 227, 0.08);
   color: #E4E9F2;
-  font-family: -apple-system, 'Pretendard', system-ui, sans-serif;
+  font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
   opacity: 0;
   transform: translateY(4px) scale(0.98);
   transition: opacity 140ms var(--ease-out, ease-out), transform 140ms var(--ease-out, ease-out);
@@ -3744,4 +3746,227 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
 @media (max-width: 768px) {
   .mc-mobile-chip { font-size: 9px; padding: 0 4px; }
+}
+
+/* ── MECE 분석 프레임워크 카드 ─────────────────────────────────────────── */
+.mece-card {
+  margin-bottom: 4px;
+}
+.mece-inner {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  padding: 16px;
+}
+.mece-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.mece-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.mece-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  background: var(--surface-subtle, #F1F3F5);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  letter-spacing: -0.2px;
+}
+
+/* ValPctile 게이지 바 */
+.val-gauge-wrap {
+  margin: 8px 0;
+}
+.val-gauge {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  background: var(--surface-muted, #EDEFF2);
+  border-radius: 4px;
+  overflow: visible;
+}
+.val-gauge-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #16A34A 0%, #F59E0B 50%, #DC2626 100%);
+  transition: width 0.3s ease;
+}
+.val-gauge-marker {
+  position: absolute;
+  top: -3px;
+  width: 4px;
+  height: 14px;
+  background: var(--text-primary);
+  border-radius: 2px;
+  transform: translateX(-50%);
+}
+
+/* 시나리오 3-way 바 */
+.scenario-bar-wrap {
+  margin: 8px 0;
+}
+.scenario-bar {
+  display: flex;
+  width: 100%;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.scenario-bar-seg {
+  height: 100%;
+  min-width: 4px;
+  transition: width 0.3s ease;
+}
+.scenario-bull    { background: #16A34A; }
+.scenario-neutral { background: #9CA3AF; }
+.scenario-bear    { background: #DC2626; }
+
+/* 시나리오 테이블 */
+.scenario-table {
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.6;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+.scenario-table th {
+  text-align: left;
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border);
+  padding: 4px 8px 4px 0;
+}
+.scenario-table td {
+  padding: 6px 8px 6px 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--text-secondary);
+}
+.scenario-table tr:last-child td { border-bottom: none; }
+
+/* 가격 맵 시각화 */
+.price-map {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 8px 0;
+  position: relative;
+}
+.price-map-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+.price-map-val {
+  min-width: 72px;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.price-map-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.price-map-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+/* 가격 맵 라인 색상 */
+.pm-current .price-map-val  { color: var(--brand, #6366F1); }
+.pm-current .price-map-line { background: var(--brand, #6366F1); height: 2px; }
+.pm-current .price-map-label { color: var(--brand, #6366F1); font-weight: 700; }
+.pm-target .price-map-val   { color: #16A34A; }
+.pm-target .price-map-line  { background: #16A34A; opacity: 0.5; }
+.pm-target .price-map-label { color: #16A34A; }
+.pm-entry .price-map-val    { color: #2563EB; }
+.pm-entry .price-map-line   { background: #2563EB; opacity: 0.4; }
+.pm-entry .price-map-label  { color: #2563EB; }
+.pm-stop .price-map-val     { color: #DC2626; }
+.pm-stop .price-map-line    { background: #DC2626; opacity: 0.5; }
+.pm-stop .price-map-label   { color: #DC2626; font-weight: 600; }
+.pm-fib .price-map-val      { color: #7C3AED; }
+.pm-fib .price-map-line     { background: #7C3AED; opacity: 0.3; border-style: dashed; }
+.pm-fib .price-map-label    { color: #7C3AED; font-size: 10px; }
+
+/* 신규/보유자 분기 카드 */
+.action-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+.action-card {
+  background: var(--surface-subtle, #F8F9FA);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  padding: 12px;
+}
+.action-card-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 6px;
+}
+.action-card-action {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+.action-card-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.action-card-list li {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  padding-left: 12px;
+  position: relative;
+}
+.action-card-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.action-new .action-card-action { color: #2563EB; }
+.action-holder .action-card-action { color: #16A34A; }
+
+/* MECE 디스클레이머 */
+.mece-disclaimer {
+  margin-bottom: 4px;
+}
+.mece-disclaimer p {
+  background: var(--surface-subtle, #F8F9FA);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  padding: 10px 14px;
+}
+
+@media (max-width: 768px) {
+  .action-cards { grid-template-columns: 1fr; }
+  .mece-inner { padding: 12px; }
+  .price-map-val { min-width: 60px; font-size: 11px; }
 }

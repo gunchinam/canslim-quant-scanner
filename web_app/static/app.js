@@ -3,6 +3,27 @@
  * scanner.html (데스크탑 테이블) / detail.html 공용 스크립트
  */
 
+// ── 세이프 모드 (공공장소용 — 로고 클릭으로 토글) ─────────────────────
+const SafeMode = (() => {
+  const KEY = 'safeMode';
+  const SAFE = '종목 스캐너';
+  const REAL = '(.)(.) 분석기';
+  let on = localStorage.getItem(KEY) === '1';
+  function name() { return on ? SAFE : REAL; }
+  function toggle() { on = !on; localStorage.setItem(KEY, on ? '1' : '0'); apply(); }
+  function apply() {
+    const logo = document.querySelector('.topbar-logo');
+    if (logo) logo.innerHTML = on ? `<span>${SAFE}</span>` : `(.)(.) <span>분석기</span>`;
+    document.title = document.title.replace(on ? REAL : SAFE, name());
+  }
+  return { name, toggle, apply, on: () => on };
+})();
+document.addEventListener('DOMContentLoaded', () => {
+  SafeMode.apply();
+  const logo = document.querySelector('.topbar-logo');
+  if (logo) logo.addEventListener('click', SafeMode.toggle);
+});
+
 // ── 상태 ─────────────────────────────────────────────────────────────────
 let currentMarket   = 'US';
 let currentStrategy = 'BALANCED';
@@ -5478,7 +5499,7 @@ async function generateShareCard() {
     <div style="background:linear-gradient(135deg,#3182F6,#1B64DA);padding:20px 20px 16px;">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div>
-          <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">(.)(.) 분석기</div>
+          <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">${SafeMode.name()}</div>
           <div style="font-size:12px;color:rgba(255,255,255,0.75);margin-top:4px;">${mkt} · ${dateStr}</div>
         </div>
         <div style="background:rgba(255,255,255,0.2);border-radius:8px;padding:6px 12px;">
@@ -5577,7 +5598,7 @@ async function captureStockList() {
       <div style="background:linear-gradient(135deg,#7C3AED,#3182F6);padding:16px 20px;color:#fff;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
           <div>
-            <div style="font-size:16px;font-weight:800;letter-spacing:-0.4px;">(.)(.) 분석기 — 종목 목록</div>
+            <div style="font-size:16px;font-weight:800;letter-spacing:-0.4px;">${SafeMode.name()} — 종목 목록</div>
             <div style="font-size:11px;opacity:0.85;margin-top:3px;">${mkt} · ${esc(sectorLbl)} · ${dateStr}</div>
           </div>
           <div style="background:rgba(255,255,255,0.2);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;">${total}종목</div>

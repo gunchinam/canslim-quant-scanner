@@ -127,6 +127,17 @@ except Exception:
     _NAVER_HTTP = None
 import valuation_engine
 from entry_pricing import strong_entry_floor as _strong_entry_floor
+
+# ── 세이프 모드 (공공장소용 — config.json "safe_mode": true) ──────────────
+def _read_safe_mode() -> bool:
+    try:
+        _cfg_path = os.path.join(os.path.dirname(__file__), "config.json")
+        with open(_cfg_path, encoding="utf-8") as f:
+            return bool(json.load(f).get("safe_mode"))
+    except Exception:
+        return False
+_SAFE_MODE = _read_safe_mode()
+_APP_NAME = "종목 스캐너" if _SAFE_MODE else "(.)(.)스캐너"
 from us_company_info import US_COMPANY_INFO as _US_COMPANY_INFO
 from kr_company_info import KR_COMPANY_INFO as _KR_COMPANY_INFO
 from greedzone import calc_greedzone as _calc_greedzone
@@ -3656,9 +3667,9 @@ class QuantNexusApp:
     """
 
     def __init__(self, root: tk.Tk):
-        logging.info("(.)(.)스캐너 시작")
+        logging.info(f"{_APP_NAME} 시작")
         self.root = root
-        self.root.title("(.)(.)스캐너")
+        self.root.title(_APP_NAME)
 
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
         w, h   = min(int(sw * 0.88), 1650), min(int(sh * 0.90), 960)
@@ -4066,7 +4077,7 @@ class QuantNexusApp:
         # ─ 왼쪽: 타이틀
         left = tk.Frame(inner, bg=C["HEADER_BG"])
         left.pack(side=tk.LEFT, fill=tk.Y)
-        tk.Label(left, text="(.)(.)스캐너", font=F["TITLE"],
+        tk.Label(left, text=_APP_NAME, font=F["TITLE"],
                  bg=C["HEADER_BG"], fg=C["ACCENT"]).pack(side=tk.LEFT)
         tk.Label(left, text="  주식 스캐너",
                  font=F["BODY"], bg=C["HEADER_BG"], fg=C["GOLD"]).pack(side=tk.LEFT)
@@ -8523,10 +8534,10 @@ class QuantNexusApp:
     # ─────────────────────────────────────────────────────────────────────
     def _show_guide(self):
         win = tk.Toplevel(self.root)
-        win.title("📘 (.)(.)스캐너 가이드")
+        win.title(f"📘 {_APP_NAME} 가이드")
         win.geometry("900x960")
         win.configure(bg=C["PANEL"])
-        tk.Label(win, text="⭐  (.)(.)스캐너",
+        tk.Label(win, text=f"⭐  {_APP_NAME}",
                  font=F["POPUP_SUB"], bg=C["PANEL"], fg=C["ACCENT"], pady=14).pack()
         tk.Label(win, text="윌리엄 오닐(William O'Neil) 7원칙 + 월가 퀀트 19전략 융합",
                  font=F["BODY"], bg=C["PANEL"], fg=C["GOLD"]).pack()
@@ -8706,7 +8717,7 @@ class QuantNexusApp:
             messagebox.showwarning("데이터 없음", "먼저 스캔을 실행해 주세요.")
             return
         try:
-            fname = f"(.)(.)스캐너_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            fname = f"{_APP_NAME}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
             wb    = xlsxwriter.Workbook(fname)
             ws    = wb.add_worksheet("분석_결과")
 
@@ -13652,7 +13663,7 @@ class QuantNexusApp:
 # ============================================================
 if __name__ == "__main__":
     try:
-        logging.info("(.)(.)스캐너 시작")
+        logging.info(f"{_APP_NAME} 시작")
         root = tk.Tk()
         app  = QuantNexusApp(root)
         root.mainloop()

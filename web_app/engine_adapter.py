@@ -154,6 +154,58 @@ def _load_index_membership() -> dict[str, list[str]]:
         return rev
 
 
+def _attach_midcap_alpha(rows: list[dict]) -> None:
+    """SP400 편입 종목에 미드캡 알파 시그널을 부착한다.
+
+    기존 row dict 필드(TotalScore, RSRating, _VolRatio, _MarketCap 등)에서
+    경량 파생하여 SEC EDGAR 호출 없이 빠르게 계산한다.
+    """
+    for r in rows:
+        indices = r.get("Indices") or []
+        if "SP400" not in indices:
+            continue
+
+        ts = r.get("TotalScore") or 0
+        rs = r.get("RSRating") or 0
+        mcap = r.get("_MarketCap") or 0
+        vol_ratio = r.get("_VolRatio") or 1.0
+        eps = r.get("_EPS")
+        moat = r.get("MoatBonus") or 0
+
+        # 1) 승격 충족도: 시총 접근도 + 수익성 + RS 모멘텀
+        sp500_floor = 18e9
+        mcap_prox = min(40, max(0, (mcap / sp500_floor) * 40)) if mcap > 0 else 0
+        profit = 30 if (eps is not None and eps > 0) else (10 if eps is None else 0)
+        rs_part = min(15, rs / 100 * 15) if rs > 0 else 0
+        promo = min(100, round(mcap_prox + profit + rs_part + min(15, moat * 5)))
+
+        # 2) 매집 패턴: 거래량 배수 + 점수 기반 프록시
+        if vol_ratio > 1.5 and ts > 55:
+            accum = min(100, round(30 + (vol_ratio - 1) * 30 + (ts - 50) * 0.5))
+        elif vol_ratio > 1.2:
+            accum = min(80, round(20 + (vol_ratio - 1) * 25 + (ts - 40) * 0.3))
+        else:
+            accum = min(60, round(max(0, (vol_ratio - 0.8) * 50 + (ts - 40) * 0.2)))
+
+        # 3) 복합 점수
+        alpha = round(promo * 0.4 + accum * 0.3 + min(100, ts) * 0.3)
+
+        # 4) 라벨
+        labels = []
+        if promo >= 70:
+            labels.append("승격 임박")
+        if accum >= 60:
+            labels.append("매집 초기")
+        if rs >= 80 and ts >= 65:
+            labels.append("성장 가속")
+        label = " + ".join(labels) if labels else "모니터링"
+
+        r["MidcapAlpha"] = alpha
+        r["MidcapPromotion"] = promo
+        r["MidcapAccum"] = accum
+        r["MidcapLabel"] = label
+
+
 def _attach_index_membership(rows: list[dict], *, compute_bucket: bool = True) -> None:
     """각 종목 row 에 Indices(편입 지수) + RSBucket(버킷 내 size-중립 상대강도)을 부착.
 
@@ -527,6 +579,7 @@ class ScanAdapter:
         _annotate_micro_outlier(results)
         _attach_bottleneck(results)
         _attach_index_membership(results, compute_bucket=False)  # 섹터 스캔: 소표본 백분위 왜곡 방지
+        _attach_midcap_alpha(results)
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         return results
 
@@ -563,6 +616,7 @@ class ScanAdapter:
         _annotate_micro_outlier(results)
         _attach_bottleneck(results)
         _attach_index_membership(results)
+        _attach_midcap_alpha(results)
         results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
         # forward IC 추적: BOTTLENECK_SNAPSHOT=1 일 때만 오늘 병목 등급 스냅샷 적재
         if os.environ.get("BOTTLENECK_SNAPSHOT") == "1":

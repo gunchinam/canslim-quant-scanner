@@ -193,6 +193,14 @@ _ENTRY_PLAN_KEEP: frozenset = frozenset({
 # MoatData 서브필드 중 리스트 뷰 미사용 (scores=111B/종목, 상세 패널에서만 사용)
 _MOAT_DATA_STRIP: frozenset = frozenset({"scores", "evidence_source", "story_risk"})
 
+def _apply_moat_bonus(rows: list) -> None:
+    """MoatBonus를 TotalScore에 반영한다. 모든 캐시 저장 경로에서 호출."""
+    for r in rows:
+        bonus = r.get("MoatBonus", 0)
+        if bonus and isinstance(r.get("TotalScore"), (int, float)):
+            r["TotalScore"] = min(100.0, r["TotalScore"] + bonus)
+
+
 def _strip_heavy(rows: list) -> list:
     if not rows:
         return rows
@@ -487,11 +495,7 @@ def _refresh_scan_background(market: str, strategy: str, sector: str) -> None:
                 results = _annotate_one_liners(results, force=True)
             except Exception as oe:
                 logging.warning("background one_liner annotate failed: %s", oe)
-            # 해자(Moat) 가산점 → TotalScore 반영
-            for r in results:
-                bonus = r.get("MoatBonus", 0)
-                if bonus and isinstance(r.get("TotalScore"), (int, float)):
-                    r["TotalScore"] = min(100.0, r["TotalScore"] + bonus)
+            _apply_moat_bonus(results)
             # Phase-3: moat 주입 후 투기주 졸업 재평가
             from speculative_themes import apply_speculative_correction as _spec_reeval_batch
             _spec_reeval_batch(results)
@@ -736,6 +740,7 @@ def _warmup_fill_cache(market: str) -> None:
             except Exception as _e:
                 logging.debug("silent except (app.py): %s", _e)
             # 캐시 즉시 저장 — 네이버 오버레이/GreedZone 없이도 첫 API 응답 즉시 가능
+            _apply_moat_bonus(results)
             results = _strip_heavy(results)
             ts = int(time.time())
             _store_scan_cache((market, "BALANCED", ""), ts, results)
@@ -757,6 +762,7 @@ def _warmup_fill_cache(market: str) -> None:
                     except Exception as _e:
                         logging.warning("%s GreedZone bg failed: %s", _mkt, _e)
                     if _res:
+                        _apply_moat_bonus(_res)
                         _s = _strip_heavy(_res)
                         _t = int(time.time())
                         _store_scan_cache((_mkt, "BALANCED", ""), _t, _s)
@@ -828,6 +834,7 @@ def _kr_warmup_loop(interval_sec: int = 1800, initial_delay: float = 0.0) -> Non
                             results = _enrich_greedzone_batch(results)
                         except Exception as _e:
                             logging.warning("KR slow-refresh GreedZone enrichment failed: %s", _e)
+                        _apply_moat_bonus(results)
                         results = _strip_heavy(results)
                         ts = int(time.time())
                         _store_scan_cache(("KR", "BALANCED", ""), ts, results)
@@ -932,6 +939,7 @@ def _us_warmup_loop(interval_sec: int = 1800) -> None:
                         results = _enrich_greedzone_batch(results)
                     except Exception as _e:
                         logging.warning("US slow-refresh GreedZone enrichment failed: %s", _e)
+                    _apply_moat_bonus(results)
                     results = _strip_heavy(results)
                     ts = int(time.time())
                     _store_scan_cache(("US", "BALANCED", ""), ts, results)
@@ -1224,11 +1232,7 @@ def api_scan():
             results = _annotate_one_liners(results)
         except Exception as oe:
             logging.warning("one_liner annotate failed: %s", oe)
-        # 해자(Moat) 가산점 → TotalScore 반영
-        for r in results:
-            bonus = r.get("MoatBonus", 0)
-            if bonus and isinstance(r.get("TotalScore"), (int, float)):
-                r["TotalScore"] = min(100.0, r["TotalScore"] + bonus)
+        _apply_moat_bonus(results)
         # Phase-3: moat 주입 후 투기주 졸업 재평가
         from speculative_themes import apply_speculative_correction as _spec_reeval_sync
         _spec_reeval_sync(results)
@@ -1517,10 +1521,7 @@ def api_ticker(ticker: str):
             result = _annotate_one_liners([result])[0]
         except Exception as oe:
             logging.warning("one_liner annotate (ticker) failed: %s", oe)
-        # 해자 가산점
-        bonus = result.get("MoatBonus", 0)
-        if bonus and isinstance(result.get("TotalScore"), (int, float)):
-            result["TotalScore"] = min(100.0, result["TotalScore"] + bonus)
+        _apply_moat_bonus([result])
         # Phase-3: moat 주입 후 투기주 졸업 재평가
         # (engine_adapter에서 moat 없이 1차 평가 → moat 주입 후 2차 재평가)
         from speculative_themes import apply_to_row as _spec_reeval
@@ -2982,6 +2983,7 @@ def _cold_start_live_scan(market: str) -> None:
             results = _annotate_one_liners(results)
         except Exception:
             pass
+        _apply_moat_bonus(results)
         results = _strip_heavy(results)
         ts = int(time.time())
         _store_scan_cache((market, "BALANCED", ""), ts, results)

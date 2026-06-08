@@ -1448,19 +1448,21 @@ function _deltaBadge(stock) {
   return `<span class="score-delta flat" title="${days}일 전 대비 변동 없음${rdTxt}">—</span>`;
 }
 
-// GreedZone 뱃지 — "🟡 45pt" 의 방향 오해 제거.
+// GreedZone 뱃지 — 한 줄 pill: 🔥 + 5단 도트 게이지 + 점수.
 // GreedZone(greedzone.py)은 역추세 경고: 점수↑ = 저점 대비 더 오래·깊게 과열 = 추격매수 위험.
-// ⚠ 아이콘 + 분모(/100) + 강도별 색(40↑주황·70↑빨강) + 게이지바로 "위험"임을 직접 전달.
+// 강도별 틴트색(40↑경고·70↑고위험) + 도트 개수(20점당 1칸)로 위험도를 한눈에. 라이트·다크 모두 대응.
 function _greedBadge(stock) {
   if (!stock || !stock.GreedZone) return '';
-  const gz  = stock.GreedZoneScore || 0;
-  const w   = Math.min(100, Math.max(0, gz));
-  const col = gz >= 70 ? '#DC2626' : gz >= 40 ? '#D97706' : '#F59E0B';
+  const gz   = stock.GreedZoneScore || 0;
+  const tier = gz >= 70 ? 'hi' : gz >= 40 ? 'mid' : 'lo';
+  const on   = gz <= 0 ? 0 : Math.min(5, Math.max(1, Math.ceil(gz / 20)));
+  let segs = '';
+  for (let i = 0; i < 5; i++) segs += `<i class="${i < on ? 'on' : ''}"></i>`;
   const tip = `저점 대비 과열 ${gz}/100 · ${stock.GreedZoneDays || 0}일 연속`
             + `${stock.GreedZoneEntry ? ' · 오늘 신규 진입!' : ''} — 추격매수 주의 (역추세 경고)`;
-  return ` <span class="greed-badge-v2" title="${esc(tip)}">`
-       + `<span class="gz-label">⚠ 과열 ${gz}<span class="gz-denom">/100</span></span>`
-       + `<span class="gz-bar-track"><span class="gz-bar-fill" style="width:${w}%;background:${col}"></span></span>`
+  return ` <span class="gz-badge ${tier}" title="${esc(tip)}">`
+       + `🔥<span class="gz-seg">${segs}</span>`
+       + `<span class="gz-val">${gz}</span>`
        + `</span>`;
 }
 
@@ -1473,6 +1475,96 @@ function _rsiCellHtml(stock) {
   const bw  = Math.min(100, Math.max(0, v));
   return `<span class="rsi-num">${txt}</span>`
        + `<div class="rsi-seg-track"><div class="rsi-seg-fill" style="width:${bw}%;background:${col}"></div></div>`;
+}
+
+// 공급망 병목 배지 — 종목명 옆 인라인 표시 (🔩+근접도, 진입신호별 색상)
+function _bottleneckBadge(stock) {
+  const s = stock.BottleneckScore || 0;
+  if (s < 60) return '';
+  const entry = stock.BottleneckEntry || '';
+  const pass  = stock.BottleneckEntryPass === true;
+  const emoji = entry ? entry.split(' ')[0] : '🔩';
+  const cls   = pass ? 'bn-pass' : (entry.indexOf('조정') !== -1 ? 'bn-wait' : 'bn-weak');
+  const layer = stock.BottleneckTop || '';
+  const why   = (stock.BottleneckEntryReasons || []).join(', ');
+  const title = `공급망 병목 ${s}/100 · ${layer}` + (entry ? ` · ${entry}` : '') + (why ? ` (${why})` : '');
+  return ` <span class="bn-badge ${cls}" title="${esc(title)}">${emoji} ${s}</span>`;
+}
+
+// yfinance 영문 업종 → 한글. 설명(Desc)이 빈 종목(지수보강 신규 편입 등)의 설명란 폴백용.
+// 매핑에 없으면 영문 그대로 표시(빈칸보다 나음).
+const _INDUSTRY_KO = {
+  'Semiconductors': '반도체', 'Semiconductor Equipment & Materials': '반도체 장비·소재',
+  'Software - Infrastructure': '인프라 소프트웨어', 'Software - Application': '응용 소프트웨어',
+  'Information Technology Services': 'IT 서비스', 'Communication Equipment': '통신장비',
+  'Computer Hardware': '컴퓨터 하드웨어', 'Consumer Electronics': '가전·전자제품',
+  'Electronic Components': '전자부품', 'Electronics & Computer Distribution': '전자·컴퓨터 유통',
+  'Scientific & Technical Instruments': '과학·기술기기', 'Solar': '태양광',
+  'Internet Content & Information': '인터넷 콘텐츠', 'Internet Retail': '인터넷 소매',
+  'Electronic Gaming & Multimedia': '게임·멀티미디어', 'Entertainment': '엔터테인먼트',
+  'Telecom Services': '통신서비스', 'Advertising Agencies': '광고',
+  'Banks - Regional': '지방은행', 'Banks - Diversified': '종합은행',
+  'Asset Management': '자산운용', 'Capital Markets': '자본시장',
+  'Financial Data & Stock Exchanges': '금융데이터·거래소', 'Credit Services': '여신·신용서비스',
+  'Insurance - Property & Casualty': '손해보험', 'Insurance - Life': '생명보험',
+  'Insurance - Diversified': '종합보험', 'Insurance - Specialty': '특수보험',
+  'Insurance - Reinsurance': '재보험', 'Insurance Brokers': '보험중개',
+  'Mortgage Finance': '모기지금융', 'Financial Conglomerates': '금융복합',
+  'Biotechnology': '바이오테크', 'Drug Manufacturers - General': '제약(대형)',
+  'Drug Manufacturers - Specialty & Generic': '제약(특수·제네릭)', 'Medical Devices': '의료기기',
+  'Medical Instruments & Supplies': '의료기구·소모품', 'Diagnostics & Research': '진단·연구',
+  'Healthcare Plans': '건강보험', 'Medical Care Facilities': '의료시설',
+  'Health Information Services': '헬스 IT', 'Medical Distribution': '의약품 유통',
+  'Pharmaceutical Retailers': '약국·의약품 소매',
+  'Oil & Gas E&P': '석유·가스 탐사생산', 'Oil & Gas Integrated': '종합 석유·가스',
+  'Oil & Gas Midstream': '석유·가스 중류', 'Oil & Gas Equipment & Services': '유전 장비·서비스',
+  'Oil & Gas Refining & Marketing': '정유·판매', 'Oil & Gas Drilling': '시추',
+  'Uranium': '우라늄', 'Thermal Coal': '석탄',
+  'Aerospace & Defense': '항공우주·방산', 'Specialty Industrial Machinery': '특수 산업기계',
+  'Industrial Distribution': '산업재 유통', 'Building Products & Equipment': '건축자재·장비',
+  'Engineering & Construction': '엔지니어링·건설', 'Farm & Heavy Construction Machinery': '농기계·중장비',
+  'Electrical Equipment & Parts': '전기장비·부품', 'Tools & Accessories': '공구·액세서리',
+  'Pollution & Treatment Controls': '환경·정화설비', 'Security & Protection Services': '보안서비스',
+  'Staffing & Employment Services': '인력·고용서비스', 'Consulting Services': '컨설팅',
+  'Specialty Business Services': '전문 비즈니스 서비스', 'Rental & Leasing Services': '렌탈·리스',
+  'Waste Management': '폐기물 관리', 'Conglomerates': '복합기업',
+  'Metal Fabrication': '금속 가공', 'Steel': '철강', 'Aluminum': '알루미늄',
+  'Copper': '구리', 'Gold': '금', 'Silver': '은',
+  'Other Industrial Metals & Mining': '산업금속·광업', 'Other Precious Metals & Mining': '귀금속·광업',
+  'Specialty Chemicals': '특수화학', 'Chemicals': '화학', 'Agricultural Inputs': '농업자재',
+  'Building Materials': '건축소재', 'Lumber & Wood Production': '목재',
+  'Paper & Paper Products': '제지', 'Packaging & Containers': '포장·용기',
+  'Specialty Retail': '전문소매', 'Apparel Retail': '의류소매', 'Apparel Manufacturing': '의류 제조',
+  'Footwear & Accessories': '신발·액세서리', 'Luxury Goods': '명품',
+  'Restaurants': '외식', 'Auto Manufacturers': '자동차 제조', 'Auto Parts': '자동차 부품',
+  'Auto & Truck Dealerships': '자동차 딜러', 'Recreational Vehicles': '레저용 차량',
+  'Travel Services': '여행서비스', 'Lodging': '숙박', 'Resorts & Casinos': '리조트·카지노',
+  'Leisure': '레저', 'Gambling': '게이밍',
+  'Packaged Foods': '포장식품', 'Beverages - Non-Alcoholic': '음료(비주류)',
+  'Beverages - Wineries & Distilleries': '주류', 'Beverages - Brewers': '맥주',
+  'Confectioners': '제과', 'Farm Products': '농축산물', 'Food Distribution': '식품 유통',
+  'Grocery Stores': '식료품점', 'Discount Stores': '할인점', 'Department Stores': '백화점',
+  'Household & Personal Products': '생활용품', 'Tobacco': '담배',
+  'Furnishings, Fixtures & Appliances': '가구·가전', 'Home Improvement Retail': '홈인테리어 소매',
+  'Residential Construction': '주택건설', 'Real Estate Services': '부동산 서비스',
+  'Real Estate - Development': '부동산 개발', 'Real Estate - Diversified': '부동산(종합)',
+  'REIT - Specialty': '리츠(특수)', 'REIT - Residential': '리츠(주거)', 'REIT - Retail': '리츠(소매)',
+  'REIT - Industrial': '리츠(산업)', 'REIT - Office': '리츠(오피스)', 'REIT - Mortgage': '리츠(모기지)',
+  'REIT - Healthcare Facilities': '리츠(헬스케어)', 'REIT - Hotel & Motel': '리츠(호텔)',
+  'REIT - Diversified': '리츠(종합)',
+  'Utilities - Regulated Electric': '전력 유틸리티', 'Utilities - Regulated Gas': '가스 유틸리티',
+  'Utilities - Regulated Water': '수도 유틸리티', 'Utilities - Diversified': '종합 유틸리티',
+  'Utilities - Renewable': '재생에너지 유틸리티', 'Utilities - Independent Power Producers': '독립발전',
+  'Airlines': '항공', 'Railroads': '철도', 'Trucking': '운송(트럭)',
+  'Integrated Freight & Logistics': '물류', 'Marine Shipping': '해운', 'Airports & Air Services': '공항·항공서비스',
+  'Education & Training Services': '교육·훈련', 'Broadcasting': '방송', 'Publishing': '출판',
+  'Textile Manufacturing': '섬유 제조', 'Business Equipment & Supplies': '사무기기·소모품',
+  'Personal Services': '개인 서비스',
+};
+
+function _industryKo(ind) {
+  if (!ind) return '';
+  return _INDUSTRY_KO[ind] || ind;   // 매핑 없으면 영문 그대로
 }
 
 function renderStockRow(stock, rank) {
@@ -1527,10 +1619,10 @@ function renderStockRow(stock, rank) {
   <td class="center"><input type="checkbox" ${checked ? 'checked' : ''} onclick="toggleSelectStock('${t}', event)" style="cursor:pointer;width:16px;height:16px;accent-color:#3182F6;"></td>
   <td class="center"><span class="rank-cell ${rankClass}">${rank}</span></td>
   <td class="name-cell" onmouseenter="showStockPopup('${t}', event)" onmouseleave="hideStockPopup()">
-    <span class="stock-name">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}${_greedBadge(stock)}</span>
+    <span class="stock-name">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}${_greedBadge(stock)}${_bottleneckBadge(stock)}${_midcapLabelBadge(stock)}</span>
     <span class="stock-code">${t}</span>
   </td>
-  <td class="desc-cell">${esc(stock.Desc || '')}</td>
+  <td class="desc-cell">${esc(stock.Desc || _industryKo(stock.Industry) || '')}</td>
   <td><span class="sector-tag">${esc(stock.Sector || '—')}</span></td>
   <td class="score-col">
     <div class="score-line"><span class="score-num ${sc}">${score}</span>${_deltaBadge(stock)}</div>
@@ -1547,7 +1639,7 @@ function renderStockRow(stock, rank) {
   <td class="right">${marketCap}</td>
   <td class="right" title="${stock.BrokerTargetSource ? esc(stock.BrokerTargetSource) : '증권사 컨센서스 없음'}">${brokerHtml}</td>
   <td class="reason-cell">${reasonHtml}</td>
-</tr>`;
+</tr>${_midcapSubBar(stock)}`;
 }
 
 function _updateMobileList(view, emptyMsg, renderToken) {
@@ -1589,6 +1681,7 @@ function renderMobileCard(stock, rank) {
     ${_renderSignalHtml(stock.Signal, stock)}
     ${stock.RSI != null ? `<span class="stock-card-rsi" style="font-size:11px;font-weight:700;color:${Number(stock.RSI) > 70 ? '#E03131' : Number(stock.RSI) < 30 ? '#1971C2' : '#9CA3AF'}">RSI ${fmt(stock.RSI, 0)}</span>` : ''}
     ${_greedBadge(stock)}
+    ${_midcapLabelBadge(stock)}
   </div>
 </div>`;
 }
@@ -1630,8 +1723,70 @@ function hideStockPopup() {
 }
 
 function _colCount() {
-  const ths = document.querySelectorAll('.stock-table thead th');
-  return ths.length || 11;
+  const all = document.querySelectorAll('.stock-table thead th');
+  return all.length || 11;
+}
+
+// ── 미드캡 알파 — L1 라벨 배지 (종목명 셀 인라인) ──────────────────────
+function _midcapLabelBadge(stock) {
+  if (_activeIndex !== 'SP400') return '';
+  const label = stock.MidcapLabel;
+  if (!label || label === '모니터링') return '';
+  const colorMap = { '승격 임박': 'promo', '매집 초기': 'accum', '성장 가속': 'growth' };
+  let cls = 'mc-neutral';
+  for (const [k, v] of Object.entries(colorMap)) { if (label.includes(k)) { cls = 'mc-' + v; break; } }
+  return ` <span class="midcap-label-badge ${cls}" title="미드캡알파 ${Math.round(stock.MidcapAlpha || 0)} · ${esc(label)}">${esc(label.split(' + ')[0])}</span>`;
+}
+
+// ── 미드캡 알파 — L2 서브바 (행 아래 한 줄) ────────────────────────────
+function _midcapSubBar(stock) {
+  if (_activeIndex !== 'SP400') return '';
+  const alpha = stock.MidcapAlpha;
+  if (alpha == null) return '';
+  const a = Math.round(alpha);
+  const p = Math.round(stock.MidcapPromotion || 0);
+  const ac = Math.round(stock.MidcapAccum || 0);
+  const label = stock.MidcapLabel || '모니터링';
+  const scoreColor = (v) => v >= 70 ? 'var(--midcap-score-high)' : v >= 40 ? 'var(--midcap-score-mid)' : 'var(--midcap-score-low)';
+  return `<tr class="midcap-sub-row"><td colspan="${_colCount()}"><div class="midcap-sub-bar">`
+    + `<span class="midcap-sub-icon">◆</span>`
+    + `<span class="midcap-sub-score" style="color:${scoreColor(a)}">${a}</span>`
+    + `<span class="midcap-sub-sep">·</span>`
+    + `<span class="midcap-sub-detail">승격 <b style="color:${scoreColor(p)}">${p}</b></span>`
+    + `<span class="midcap-sub-sep">·</span>`
+    + `<span class="midcap-sub-detail">매집 <b style="color:${scoreColor(ac)}">${ac}</b></span>`
+    + `<span class="midcap-sub-sep">·</span>`
+    + `<span class="midcap-sub-label">${esc(label)}</span>`
+    + `</div></td></tr>`;
+}
+
+// ── 미드캡 알파 — L3 디테일 패널 렌더링 ────────────────────────────────
+function _renderMidcapDetail(d) {
+  const card = document.getElementById('dp-midcap-card');
+  if (!card) return;
+  const indices = d.Indices || [];
+  if (!indices.includes('SP400') || d.MidcapAlpha == null) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const labelEl = document.getElementById('dp-midcap-label');
+  const barsEl  = document.getElementById('dp-midcap-bars');
+  const label = d.MidcapLabel || '모니터링';
+  const colorMap = { '승격 임박': 'promo', '매집 초기': 'accum', '성장 가속': 'growth' };
+  let cls = 'mc-neutral';
+  for (const [k, v] of Object.entries(colorMap)) { if (label.includes(k)) { cls = 'mc-' + v; break; } }
+  if (labelEl) labelEl.innerHTML = `<span class="midcap-label-badge ${cls} lg">${esc(label)}</span>`;
+  if (barsEl) {
+    const items = [
+      { name: '종합 알파', val: Math.round(d.MidcapAlpha || 0), key: 'alpha' },
+      { name: '승격 준비도', val: Math.round(d.MidcapPromotion || 0), key: 'promo' },
+      { name: '매집 신호', val: Math.round(d.MidcapAccum || 0), key: 'accum' },
+    ];
+    barsEl.innerHTML = items.map(it => {
+      const tier = it.val >= 70 ? 'high' : it.val >= 40 ? 'mid' : 'low';
+      return `<div class="midcap-bar-row"><span class="midcap-bar-name">${it.name}</span>`
+        + `<div class="midcap-bar-track"><div class="midcap-bar-fill midcap-bar-${tier}" style="width:${it.val}%"></div></div>`
+        + `<span class="midcap-bar-val midcap-bar-${tier}">${it.val}</span></div>`;
+    }).join('');
+  }
 }
 
 function setStockListMsg(msg) {
@@ -2733,7 +2888,7 @@ function _populatePanelDetail(d, skipFourAxis) {
   setText('dp-name',    d.Name   || d.Ticker || '—');
   setText('dp-ticker',  d.Ticker || '—');
   setText('dp-sector',  d.Sector || '—');
-  const aboutText = d.Desc || '';
+  const aboutText = d.Desc || d.About || _industryKo(d.Industry) || '';
   const aboutEl   = document.getElementById('dp-about');
   const aboutBox  = document.getElementById('dp-about-box');
   if (aboutEl)  aboutEl.textContent = aboutText;
@@ -2877,6 +3032,9 @@ function _populatePanelDetail(d, skipFourAxis) {
   const usBtn = document.getElementById('dp-btn-usinsight');
   if (usBtn) usBtn.style.display = currentMarket === 'US' ? '' : 'none';
   _dpUSInsightLoaded = false;
+
+  // 미드캡 알파 시그널 (SP400 전용)
+  _renderMidcapDetail(d);
 
   // 투자자 동향 카드
   _renderInvestorCard(d);
@@ -4231,6 +4389,7 @@ function initIndexBar() {
   });
 }
 
+
 function _syncIndexBarUI() {
   document.querySelectorAll('#index-bar .index-chip').forEach(c => {
     c.classList.toggle('active', (c.dataset.index || 'all') === _activeIndex);
@@ -4926,6 +5085,9 @@ function renderEtfData(d) {
   }
 }
 
+// 기본 접힘 카테고리 — 첫 화면을 핵심(지수·반도체·레버리지) 위주로 깔끔하게
+const _ETF_COLLAPSED_DEFAULT = ['해외', '채권'];
+
 // 카테고리별 그룹화(등장 순서 유지) + 접이식 헤더
 function _renderEtfGroups(rows) {
   if (!Array.isArray(rows) || !rows.length) return '<div class="etf-empty">데이터 없음</div>';
@@ -4938,8 +5100,9 @@ function _renderEtfGroups(rows) {
   });
   return order.map(function (c) {
     const cards = groups[c].map(_etfCardHtml).join('');
-    return '<div class="etf-group">' +
-      '<button class="etf-group-head" type="button" aria-expanded="true">' +
+    const collapsed = _ETF_COLLAPSED_DEFAULT.indexOf(c) !== -1;
+    return '<div class="etf-group' + (collapsed ? ' collapsed' : '') + '">' +
+      '<button class="etf-group-head" type="button" aria-expanded="' + (collapsed ? 'false' : 'true') + '">' +
         '<span class="etf-group-chevron">▾</span>' +
         '<span class="etf-group-name">' + esc(c) + '</span>' +
         '<span class="etf-group-count">' + groups[c].length + '</span>' +

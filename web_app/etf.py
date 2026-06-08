@@ -13,6 +13,7 @@ etf.py — 인기 ETF 현황 수집 모듈 (미국 + 한국 동시)
 """
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import threading
@@ -102,7 +103,9 @@ _KR_ETFS: list[tuple[str, str, str]] = [
 
 # ── 레버리지/인버스 판별 (G) ──────────────────────────────────────────
 # 라벨에 아래 토큰이 있으면 일일 리밸런싱 파생형으로 간주 → 장기보유 경고.
-_LEV_TOKENS = ("3X", "2X", "-3X", "-2X", "-1X", "레버리지", "인버스", "곱버스", "선물")
+# "선물"은 단독으로 레버리지가 아님(원유선물·금선물 등 비레버리지 다수) → 제외.
+# 레버리지/인버스는 배수(2X·3X) 또는 명시 키워드로만 판별.
+_LEV_TOKENS = ("3X", "2X", "-3X", "-2X", "-1X", "레버리지", "인버스", "곱버스")
 
 
 def _is_leveraged(label: str) -> bool:
@@ -237,7 +240,7 @@ def get_etfs(force: bool = False) -> dict:
         cached = _CACHE
         fresh = cached is not None and (now - _CACHE_TS) < _ttl_now()
         if fresh and not force:
-            return cached
+            return copy.deepcopy(cached)   # 캐시 별칭 차단 — 호출부 변형이 캐시 오염 못함
 
     try:
         payload = _build()
@@ -247,12 +250,12 @@ def get_etfs(force: bool = False) -> dict:
         with _CACHE_LOCK:
             _CACHE = payload
             _CACHE_TS = time.time()
-        return payload
+        return copy.deepcopy(payload)
     except Exception as e:
         _LOG.warning("etf: build failed, serving stale: %s", e)
         with _CACHE_LOCK:
             if _CACHE is not None:
-                stale = dict(_CACHE)
+                stale = copy.deepcopy(_CACHE)
                 stale["stale"] = True
                 return stale
         return {
@@ -411,8 +414,10 @@ def _us_detail(ticker: str) -> dict:
 def _kr_detail(ticker: str) -> dict:
     """네이버 ETF 분석 API → {"sectors":[...], "holdings":[...]}.
     sectorPortfolioList(섹터) + etfTop10MajorConstituentAssets(상위 종목)를 한 호출로."""
-    code = ticker.split(".")[0]
-    if not code.isdigit():
+    code = ticker.split(".")[0].upper()
+    # 한국 ETF 종목코드는 6자리 영숫자 — 신규 ETF는 0167A0 처럼 알파벳 포함.
+    # (이전 isdigit() 가드는 알파벳 코드를 잘못 막아 상세가 비었음)
+    if not (len(code) == 6 and code.isalnum()):
         return {"sectors": [], "holdings": []}
     url = "https://m.stock.naver.com/api/stock/%s/etfAnalysis" % code
     req = urllib.request.Request(
@@ -501,9 +506,12 @@ def get_etf_sectors(ticker: str) -> dict:
         return empty
 
     def _pack(d, stale):
-        return {"ticker": ticker, "sectors": d.get("sectors", []),
-                "holdings": d.get("holdings", []),
-                "meta": d.get("meta") or _empty_meta(), "stale": stale}
+        # 캐시 별칭 차단 — 내부 리스트/딕트를 깊은 복사해서 반환
+        return {"ticker": ticker,
+                "sectors": copy.deepcopy(d.get("sectors", [])),
+                "holdings": copy.deepcopy(d.get("holdings", [])),
+                "meta": copy.deepcopy(d.get("meta") or _empty_meta()),
+                "stale": stale}
 
     now = time.time()
     with _SECTOR_LOCK:

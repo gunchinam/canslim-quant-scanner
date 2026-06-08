@@ -724,35 +724,38 @@ td.score-col {
   vertical-align: middle;
   cursor: help;
 }
-/* GreedZone v2 — "🟡 45pt" 의 방향 오해 제거: ⚠ 경고 아이콘 + 분모(/100) + 강도 게이지바.
-   높을수록 위험(역추세 경고)이라는 의미를 색·형식으로 직접 전달. */
-.greed-badge-v2 {
+/* GreedZone 배지 — 한 줄 pill: 🔥 + 5단 도트 게이지 + 점수.
+   강도별 틴트색(40↑경고·70↑고위험) + 도트 개수로 위험도를 한눈에. 라이트·다크 분리. */
+.gz-badge {
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
   margin-left: 4px;
-  border-radius: 4px;
-  background: #FEF3C7;
-  color: #B45309;
-  border: 1px solid #FCD34D;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
   vertical-align: middle;
   cursor: help;
-  line-height: 1.25;
 }
-.greed-badge-v2 .gz-label { white-space: nowrap; }
-.greed-badge-v2 .gz-denom { opacity: .55; font-weight: 600; }
-.gz-bar-track {
-  height: 2px;
-  width: 42px;
-  margin-top: 2px;
-  background: rgba(0,0,0,0.12);
-  border-radius: 1px;
-  overflow: hidden;
+.gz-badge .gz-seg { display: inline-flex; gap: 2px; }
+.gz-badge .gz-seg i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .20;
 }
-.gz-bar-fill { height: 100%; border-radius: 1px; display: block; transition: width .3s; }
+.gz-badge .gz-seg i.on { opacity: 1; }
+.gz-badge.lo  { background: rgba(217,119,6,.14); color: #B45309; }
+.gz-badge.mid { background: rgba(234,88,12,.16); color: #C2410C; }
+.gz-badge.hi  { background: rgba(220,38,38,.16); color: #DC2626; }
+.dark .gz-badge.lo  { background: rgba(245,158,11,.18); color: #FBBF24; }
+.dark .gz-badge.mid { background: rgba(249,115,22,.20); color: #FB923C; }
+.dark .gz-badge.hi  { background: rgba(248,113,113,.20); color: #F87171; }
 
 /* RSI 미니바 — 테이블 RSI 맨숫자에 과매수(빨강)/과매도(파랑) 직관 추가 */
 .rsi-cell { min-width: 64px; }
@@ -3569,4 +3572,185 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   .etf-view-body { grid-template-columns: 1fr; gap: 16px; padding: 14px; }
   .etf-rot-grid { grid-template-columns: 1fr; gap: 14px; }
   .capture-label { display: none; }
+}
+
+/* 공급망 병목 배지 (종목명 옆 인라인) */
+.bn-badge{display:inline-block;margin-left:4px;padding:1px 6px;border-radius:8px;
+  font-size:11px;font-weight:700;vertical-align:middle;white-space:nowrap;border:1px solid transparent;}
+.bn-badge.bn-pass{background:rgba(22,163,74,.12);color:#16A34A;border-color:rgba(22,163,74,.35);}
+.bn-badge.bn-wait{background:rgba(245,158,11,.12);color:#D97706;border-color:rgba(245,158,11,.35);}
+.bn-badge.bn-weak{background:var(--surface-subtle,#F1F3F5);color:#6B7280;border-color:rgba(107,114,128,.25);}
+
+/* ── 미드캡 알파 시그널 ─────────────────────────────────────────────── */
+/* CSS 변수 — 미드캡 전용 토큰 */
+:root {
+  --midcap-accent: #0A84FF;
+  --midcap-sub-bg: rgba(0,122,255,0.05);
+  --midcap-sub-border: rgba(10,132,255,0.35);
+  --midcap-score-high: #16A34A;
+  --midcap-score-mid: #D97706;
+  --midcap-score-low: #9CA3AF;
+  --midcap-track-bg: rgba(0,0,0,0.07);
+  --midcap-promo: #16A34A;
+  --midcap-accum: #2563EB;
+  --midcap-growth: #7C3AED;
+}
+.dark {
+  --midcap-sub-bg: rgba(10,132,255,0.10);
+  --midcap-sub-border: rgba(10,132,255,0.45);
+  --midcap-score-high: #4ADE80;
+  --midcap-score-mid: #FBBF24;
+  --midcap-score-low: #6B7280;
+  --midcap-track-bg: rgba(255,255,255,0.10);
+  --midcap-promo: #4ADE80;
+  --midcap-accum: #60A5FA;
+  --midcap-growth: #A78BFA;
+}
+
+/* L1: 종목명 셀 인라인 라벨 배지 */
+.midcap-label-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  margin-left: 4px;
+  border-radius: 4px;
+  vertical-align: middle;
+  cursor: help;
+  letter-spacing: -0.2px;
+  line-height: 1.4;
+  border: 1px solid transparent;
+}
+.midcap-label-badge.mc-promo  { background: rgba(22,163,74,0.12); color: var(--midcap-promo);  border-color: rgba(22,163,74,0.30); }
+.midcap-label-badge.mc-accum  { background: rgba(37,99,235,0.10); color: var(--midcap-accum);  border-color: rgba(37,99,235,0.25); }
+.midcap-label-badge.mc-growth { background: rgba(124,58,237,0.10);color: var(--midcap-growth); border-color: rgba(124,58,237,0.25); }
+.midcap-label-badge.mc-neutral{ background: var(--surface-subtle,#F1F3F5); color: #6B7280; }
+.midcap-label-badge.lg { font-size: 12px; padding: 3px 10px; }
+
+/* L2: 서브바 행 */
+.midcap-sub-row td { padding: 0 !important; border-top: none !important; }
+.midcap-sub-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 16px 0 54px;
+  background: var(--midcap-sub-bg);
+  border-left: 3px solid var(--midcap-accent);
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  animation: midcapSlideIn 200ms ease-out both;
+}
+@keyframes midcapSlideIn {
+  from { opacity: 0; max-height: 0; }
+  to   { opacity: 1; max-height: 26px; }
+}
+.midcap-sub-icon {
+  color: var(--midcap-accent);
+  font-size: 10px;
+  font-weight: 700;
+}
+.midcap-sub-score {
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.midcap-sub-sep {
+  color: var(--text-tertiary);
+  font-size: 9px;
+}
+.midcap-sub-detail {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.midcap-sub-detail b {
+  font-weight: 700;
+}
+.midcap-sub-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--midcap-accent);
+  letter-spacing: -0.2px;
+}
+
+/* L3: 디테일 패널 미드캡 카드 */
+.midcap-detail-card {
+  padding: 0;
+  overflow: hidden;
+}
+.midcap-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  letter-spacing: 0.03em;
+}
+.midcap-detail-icon {
+  color: var(--midcap-accent);
+  font-size: 11px;
+}
+.midcap-detail-sub {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(10,132,255,0.10);
+  color: var(--midcap-accent);
+}
+.midcap-detail-label {
+  padding: 0 16px 8px;
+}
+.midcap-detail-bars {
+  padding: 0 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.midcap-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.midcap-bar-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 64px;
+  flex-shrink: 0;
+}
+.midcap-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--midcap-track-bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.midcap-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 600ms cubic-bezier(0.34,1.56,0.64,1);
+}
+.midcap-bar-fill.midcap-bar-high { background: var(--midcap-score-high); }
+.midcap-bar-fill.midcap-bar-mid  { background: var(--midcap-score-mid);  }
+.midcap-bar-fill.midcap-bar-low  { background: var(--midcap-score-low);  }
+.midcap-bar-val {
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 28px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.midcap-bar-val.midcap-bar-high { color: var(--midcap-score-high); }
+.midcap-bar-val.midcap-bar-mid  { color: var(--midcap-score-mid);  }
+.midcap-bar-val.midcap-bar-low  { color: var(--midcap-score-low);  }
+
+@media (max-width: 768px) {
+  .midcap-sub-bar { padding-left: 16px; gap: 6px; height: 24px; font-size: 10px; }
+  .midcap-sub-score { font-size: 12px; }
+  .midcap-label-badge { font-size: 9px; padding: 0 4px; }
 }

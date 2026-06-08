@@ -277,6 +277,8 @@ def get_quarter_metrics(code: str) -> Dict[str, Any]:
 
     out: Dict[str, Any] = {"source": "Naver-Q", "available": False,
                            "rev_qoq": None, "op_qoq": None, "ni_qoq": None,
+                           "rev_yoy": None, "op_yoy": None, "ni_yoy": None,
+                           "streak": 0,
                            "roe": None, "pbr": None, "fiscal_q": ""}
     try:
         raw = _fetch_raw(code6)
@@ -310,6 +312,27 @@ def get_quarter_metrics(code: str) -> Dict[str, Any]:
         out["roe"] = _cell(rows, m_roe, latest_k)
         out["pbr"] = _cell(rows, m_pbr, latest_k)
         out["fiscal_q"] = str(latest_k)
+
+        # ── Phase 2a: YoY 성장률 (전년도 동분기 대비, 4분기 전) ──
+        if len(actual_keys) >= 5:
+            yoy_k = actual_keys[-5]
+            out["rev_yoy"] = _qoq_growth(
+                _cell(rows, m_rev, latest_k), _cell(rows, m_rev, yoy_k))
+            out["op_yoy"] = _qoq_growth(
+                _cell(rows, m_op, latest_k), _cell(rows, m_op, yoy_k))
+            out["ni_yoy"] = _qoq_growth(_ni_cell(latest_k), _ni_cell(yoy_k))
+
+        # ── Phase 2a: 연속 성장 분기 수 (순이익 QoQ 기준) ──
+        streak = 0
+        for idx in range(len(actual_keys) - 1, 0, -1):
+            curr = _ni_cell(actual_keys[idx])
+            prev = _ni_cell(actual_keys[idx - 1])
+            if curr is not None and prev is not None and prev > 0 and curr > prev:
+                streak += 1
+            else:
+                break
+        out["streak"] = streak
+
         out["available"] = any(out[k] is not None
                                for k in ("rev_qoq", "op_qoq", "ni_qoq", "roe", "pbr"))
         with _lock:

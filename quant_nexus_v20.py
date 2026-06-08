@@ -5044,6 +5044,7 @@ class QuantNexusApp:
                     results,
                     quarter_fetch=_naver_q.get_quarter_metrics,
                     ttm_fetch=_naver_q.get_ttm_financials,
+                    dart_fetch=_dart_api.get_financials_cached if _DART_OK and _dart_api else None,
                     log=lambda m: self.root.after(0, lambda _m=m: self._log(_m)),
                 )
             except Exception as _e:
@@ -13418,6 +13419,7 @@ class QuantNexusApp:
             "Industrials": "산업재",
             "Transportation": "운송",
             "Oil & Gas Majors": "석유·가스 메이저",
+            "Oil Services": "유전 서비스",
             "Midstream & Pipeline": "미드스트림·파이프라인",
             "Clean Energy": "청정에너지",
             "Nuclear & Uranium": "원전·우라늄",

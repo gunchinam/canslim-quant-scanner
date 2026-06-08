@@ -1640,7 +1640,7 @@ function renderStockRow(stock, rank) {
   <td class="center"><input type="checkbox" ${checked ? 'checked' : ''} onclick="toggleSelectStock('${t}', event)" style="cursor:pointer;width:16px;height:16px;accent-color:#3182F6;"></td>
   <td class="center"><span class="rank-cell ${rankClass}">${rank}</span></td>
   <td class="name-cell" onmouseenter="showStockPopup('${t}', event)" onmouseleave="hideStockPopup()">
-    <span class="stock-name">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}${_greedBadge(stock)}${_bottleneckBadge(stock)}${_midcapLabelBadge(stock)}</span>
+    <span class="stock-name">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}${_greedBadge(stock)}${_bottleneckBadge(stock)}</span>
     <span class="stock-code">${t}</span>
   </td>
   <td class="desc-cell">${esc(stock.Desc || _industryKo(stock.Industry) || '')}</td>
@@ -1660,7 +1660,8 @@ function renderStockRow(stock, rank) {
   <td class="right">${marketCap}</td>
   <td class="right" title="${stock.BrokerTargetSource ? esc(stock.BrokerTargetSource) : '증권사 컨센서스 없음'}">${brokerHtml}</td>
   <td class="reason-cell">${reasonHtml}</td>
-</tr>${_midcapSubBar(stock)}`;
+  ${_midcapAlphaCell(stock)}
+</tr>`;
 }
 
 function _updateMobileList(view, emptyMsg, renderToken) {
@@ -1702,7 +1703,7 @@ function renderMobileCard(stock, rank) {
     ${_renderSignalHtml(stock.Signal, stock)}
     ${stock.RSI != null ? `<span class="stock-card-rsi" style="font-size:11px;font-weight:700;color:${Number(stock.RSI) > 70 ? '#E03131' : Number(stock.RSI) < 30 ? '#1971C2' : '#9CA3AF'}">RSI ${fmt(stock.RSI, 0)}</span>` : ''}
     ${_greedBadge(stock)}
-    ${_midcapLabelBadge(stock)}
+    ${_midcapMobileChip(stock)}
   </div>
 </div>`;
 }
@@ -1745,40 +1746,40 @@ function hideStockPopup() {
 
 function _colCount() {
   const all = document.querySelectorAll('.stock-table thead th');
-  return all.length || 11;
+  const hidden = document.querySelectorAll('.stock-table thead th[style*="display: none"], .stock-table thead th[style*="display:none"]');
+  return (all.length - hidden.length) || 11;
 }
 
-// ── 미드캡 알파 — L1 라벨 배지 (종목명 셀 인라인) ──────────────────────
-function _midcapLabelBadge(stock) {
+// ── 미드캡 알파 — 단일 컬럼 셀 (SP400 탭 정렬 가능) ────────────────────
+function _midcapAlphaCell(stock) {
   if (_activeIndex !== 'SP400') return '';
-  const label = stock.MidcapLabel;
-  if (!label || label === '모니터링') return '';
-  const colorMap = { '승격 임박': 'promo', '매집 초기': 'accum', '성장 가속': 'growth' };
-  let cls = 'mc-neutral';
-  for (const [k, v] of Object.entries(colorMap)) { if (label.includes(k)) { cls = 'mc-' + v; break; } }
-  return ` <span class="midcap-label-badge ${cls}" title="미드캡알파 ${Math.round(stock.MidcapAlpha || 0)} · ${esc(label)}">${esc(label.split(' + ')[0])}</span>`;
+  const alpha = stock.MidcapAlpha;
+  if (alpha == null) return '<td class="right midcap-col"><span style="color:var(--text-tertiary)">—</span></td>';
+  const a = Math.round(alpha);
+  const label = stock.MidcapLabel || '모니터링';
+  const tier = a >= 70 ? 'high' : a >= 40 ? 'mid' : 'low';
+  const shortLabel = label !== '모니터링' ? label.split(' + ')[0] : '';
+  const labelHtml = shortLabel ? `<span class="mc-cell-label mc-${_mcLabelCls(shortLabel)}">${esc(shortLabel)}</span>` : '';
+  return `<td class="right midcap-col" title="미드캡알파 ${a} · 승격${Math.round(stock.MidcapPromotion||0)} · 매집${Math.round(stock.MidcapAccum||0)}"><div class="mc-cell"><span class="mc-cell-score mc-${tier}">${a}</span>${labelHtml}</div></td>`;
 }
 
-// ── 미드캡 알파 — L2 서브바 (행 아래 한 줄) ────────────────────────────
-function _midcapSubBar(stock) {
+function _mcLabelCls(label) {
+  if (label.includes('승격')) return 'promo';
+  if (label.includes('매집')) return 'accum';
+  if (label.includes('성장')) return 'growth';
+  return 'neutral';
+}
+
+// ── 미드캡 알파 — 모바일 칩 ────────────────────────────────────────────
+function _midcapMobileChip(stock) {
   if (_activeIndex !== 'SP400') return '';
   const alpha = stock.MidcapAlpha;
   if (alpha == null) return '';
   const a = Math.round(alpha);
-  const p = Math.round(stock.MidcapPromotion || 0);
-  const ac = Math.round(stock.MidcapAccum || 0);
-  const label = stock.MidcapLabel || '모니터링';
-  const scoreColor = (v) => v >= 70 ? 'var(--midcap-score-high)' : v >= 40 ? 'var(--midcap-score-mid)' : 'var(--midcap-score-low)';
-  return `<tr class="midcap-sub-row"><td colspan="${_colCount()}"><div class="midcap-sub-bar">`
-    + `<span class="midcap-sub-icon">◆</span>`
-    + `<span class="midcap-sub-score" style="color:${scoreColor(a)}">${a}</span>`
-    + `<span class="midcap-sub-sep">·</span>`
-    + `<span class="midcap-sub-detail">승격 <b style="color:${scoreColor(p)}">${p}</b></span>`
-    + `<span class="midcap-sub-sep">·</span>`
-    + `<span class="midcap-sub-detail">매집 <b style="color:${scoreColor(ac)}">${ac}</b></span>`
-    + `<span class="midcap-sub-sep">·</span>`
-    + `<span class="midcap-sub-label">${esc(label)}</span>`
-    + `</div></td></tr>`;
+  const label = stock.MidcapLabel || '';
+  const tier = a >= 70 ? 'high' : a >= 40 ? 'mid' : 'low';
+  const short = label && label !== '모니터링' ? label.split(' + ')[0] : '';
+  return ` <span class="mc-mobile-chip mc-${tier}" title="미드캡알파 ${a}">◆${a}${short ? ' ' + esc(short) : ''}</span>`;
 }
 
 // ── 미드캡 알파 — L3 디테일 패널 렌더링 ────────────────────────────────
@@ -4405,8 +4406,15 @@ function initIndexBar() {
     chip.addEventListener('click', () => {
       _activeIndex = chip.dataset.index || 'all';
       _syncIndexBarUI();
+      _toggleMidcapCol(_activeIndex === 'SP400');
       if (_searchBaseStocks().length) _refreshFilteredView();
     });
+  });
+}
+
+function _toggleMidcapCol(show) {
+  document.querySelectorAll('.midcap-col-hdr').forEach(el => {
+    el.style.display = show ? '' : 'none';
   });
 }
 

@@ -242,213 +242,22 @@
         </button>
       </div>
     </div>
-    <div id="dp-about-box" class="dp-about-bar" style="display:none;">
-      <p id="dp-about" class="dp-about-text"></p>
-    </div>
-
     <div class="dp-scroll">
 
       <!-- Section Nav -->
       <nav class="dp-section-nav" id="dp-section-nav">
-        <button class="dp-section-btn active" onclick="dpScrollTo('dp-hero-zone',this)">📋 요약</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-chart-section',this)">📈 차트</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-analysis-section',this)">📊 분석</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-group-company',this)">🏢 기업</button>
+        <button class="dp-section-btn active" onclick="dpScrollTo('dp-section-company',this)">🏢 회사</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-conclusion',this)">🎯 결론</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-timing',this)">📈 타이밍</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-detail',this)">📊 상세</button>
         <button class="dp-section-btn" onclick="dpScrollTo('dp-group-ref',this)">📎 참고</button>
       </nav>
 
-    <!-- Hero Zone -->
-    <section class="dp-hero-zone" id="dp-hero-zone">
-      <!-- 한줄평 포스터 (맨 위 — 첫인상) -->
-      <div id="dp-fa-haiku" class="dp-oneliner-poster" style="display:none;"></div>
-
-      <!-- 판결문 레이아웃: Zone A(결론) + Zone B(수치) + Zone C(RSI 위치) -->
-      <div class="dp-hero-summary">
-        <!-- 좌: 판결 + 수치 -->
-        <div class="dp-hero-left">
-          <!-- Zone A: 종합 판결 -->
-          <div class="dp-verdict-zone">
-            <div class="dp-verdict-score-wrap">
-              <span id="dp-score" class="dp-score-num">—</span>
-              <span class="dp-score-unit">점</span>
-            </div>
-            <div class="dp-verdict-right">
-              <div class="dp-verdict-label">종합 점수</div>
-              <div id="dp-signal" class="dp-signal-badge">—</div>
-              <div class="dp-verdict-badges">
-                <div id="dp-risk-gauge" class="dp-risk-pill"></div>
-                <div id="dp-leader-badge" class="dp-leader-pill"></div>
-              </div>
-            </div>
-          </div>
-          <!-- Zone B: 4개 수치 그리드 -->
-          <div class="dp-hero-stats">
-            <div class="dp-hero-stat-cell">
-              <span class="dp-hero-stat-label">현재가</span>
-              <span id="dp-price" class="dp-hero-stat-value">—</span>
-            </div>
-            <div class="dp-hero-stat-cell">
-              <span class="dp-hero-stat-label">등락률</span>
-              <span id="dp-day-chg" class="dp-hero-stat-value">—</span>
-            </div>
-            <div class="dp-hero-stat-cell">
-              <span class="dp-hero-stat-label">RSI</span>
-              <span id="dp-thermo-label" class="dp-hero-stat-value">—</span>
-              <span id="dp-thermo-action" class="dp-hero-stat-hint">—</span>
-            </div>
-            <div class="dp-hero-stat-cell">
-              <span class="dp-hero-stat-label">RS 등급</span>
-              <div id="dp-rs-value" class="dp-hero-stat-value dp-rs-wrap">—</div>
-              <span id="dp-rs-label" class="dp-hero-stat-hint">/ 99</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 우: 추세 차트 패널 (신규) -->
-        <div class="dp-hero-right" id="dp-spark-panel" style="display:none;">
-          <div class="dp-spark-head">
-            <span class="dp-spark-eyebrow">최근 추세</span>
-            <span id="dp-spark-change" class="dp-spark-change"></span>
-          </div>
-          <div class="dp-spark-chart">
-            <div id="dp-spark"></div>
-            <span id="dp-spark-last" class="dp-spark-last"></span>
-          </div>
-          <div class="dp-spark-facts">
-            <div class="dp-spark-fact dp-spark-fact--wide">
-              <span class="dp-spark-fact-label">52주 고가 대비</span>
-              <div class="dp-wk52-track"><div id="dp-wk52-bar" class="dp-wk52-fill"></div></div>
-              <span id="dp-wk52-label" class="dp-spark-fact-val">—</span>
-            </div>
-            <div class="dp-spark-fact">
-              <span class="dp-spark-fact-label">거래량</span>
-              <span id="dp-volratio" class="dp-spark-fact-val">—</span>
-            </div>
-            <div class="dp-spark-fact">
-              <span class="dp-spark-fact-label">시총</span>
-              <span id="dp-mktcap" class="dp-spark-fact-val">—</span>
-            </div>
-          </div>
-        </div>
-      </div><!-- /dp-hero-summary -->
-
-      <!-- Zone C: RSI 온도계 (full-width) -->
-      <div class="dp-thermo-compact">
-        <div class="dp-thermo-track">
-          <div id="dp-thermo-marker" style="position:absolute;top:-5px;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid #6B7280;transform:translateX(-50%);left:50%;transition:left .4s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 2px 6px rgba(0,0,0,.18);"></div>
-        </div>
-        <div class="dp-thermo-scale"><span>극도공포</span><span>공포</span><span>중립</span><span>탐욕</span><span>극도탐욕</span></div>
+    <!-- ① 🏢 회사 정체성 -->
+    <section id="dp-section-company" class="dp-section-company">
+      <div id="dp-about-box" class="dp-about-bar" style="display:none;">
+        <p id="dp-about" class="dp-about-text"></p>
       </div>
-
-      <!-- News -->
-      <div id="dp-news-bar" class="dp-news-bar" style="display:none;">
-        <span class="dp-news-tag">NEWS</span>
-        <a id="dp-news-bar-link" href="#" target="_blank" rel="noopener" class="dp-news-link">—</a>
-      </div>
-
-      <!-- Earnings -->
-      <div id="dp-earnings-card" class="dp-earnings-card" style="display:none;">
-        <div class="dp-earnings-head">
-          <span class="dp-section-label">실적 한눈에</span>
-          <span class="dp-section-sub">자세히는 재무 탭</span>
-        </div>
-        <div id="dp-earnings-chips" class="dp-earnings-chips"></div>
-      </div>
-    </section>
-
-    <!-- Chart -->
-    <section class="dp-chart-section" id="dp-chart-section">
-      <div id="dp-fouraxis-loading" style="text-align:center;padding:40px;color:var(--text-tertiary);display:none;">분석 불러오는 중...</div>
-      <div id="dp-fouraxis-error"   style="text-align:center;padding:24px;color:var(--destructive);display:none;"></div>
-      <div id="dp-fouraxis-header" style="display:none;padding:14px 16px;margin:14px 20px 8px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border);">
-        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px;font-weight:600;">📈 현재 타이밍 분석 <span style="font-weight:400;color:var(--text-tertiary);">— 별점 = 아래 ‘타이밍 점수’를 별로 표시한 것 (같은 값)</span></div>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
-          <span id="dp-fa-phase" style="font-size:15px;font-weight:700;color:var(--text-primary);"></span>
-          <span id="dp-fa-stars" style="font-size:16px;color:var(--warning);"></span>
-          <span id="dp-fa-stars-meaning" style="font-size:12px;color:var(--text-secondary);font-weight:600;"></span>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
-          <div class="dp-axis-item"><div class="dp-axis-label">추세<div style="font-size:9px;font-weight:500;color:var(--text-tertiary);margin-top:1px;">(이평선 방향·정렬)</div></div><div class="dp-axis-val"><span id="dp-fa-trend-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-trend-verdict"></div></div>
-          <div class="dp-axis-item"><div class="dp-axis-label">모멘텀<div style="font-size:9px;font-weight:500;color:var(--text-tertiary);margin-top:1px;">(가격 탄력)</div></div><div class="dp-axis-val"><span id="dp-fa-mom-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-mom-verdict"></div></div>
-          <div class="dp-axis-item"><div class="dp-axis-label">변동성<div style="font-size:9px;font-weight:500;color:var(--text-tertiary);margin-top:1px;">(BB폭·ATR)</div></div><div class="dp-axis-val"><span id="dp-fa-vol-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-vol-verdict"></div></div>
-          <div class="dp-axis-item"><div class="dp-axis-label">수급<div style="font-size:9px;font-weight:500;color:var(--text-tertiary);margin-top:1px;">(거래량·이격도)</div></div><div class="dp-axis-val"><span id="dp-fa-volm-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-volm-verdict"></div></div>
-        </div>
-      </div>
-      <div id="dp-fouraxis-obs" style="display:none;padding:14px 16px;margin:0 20px 16px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border);">
-        <div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:6px;">핵심 관찰</div>
-        <div id="dp-fa-observation" style="font-size:13px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap;"></div>
-      </div>
-    </section>
-
-    <!-- Analysis -->
-    <section class="dp-analysis-section" id="dp-analysis-section">
-      <div class="dp-disclaimer">
-        ⚠️ 등급·신호·목표가는 <b>알고리즘 스크리닝 결과</b>일 뿐, 투자 조언이 아닙니다. <b>드로다운 리스크</b>를 꼭 함께 확인하세요. 판단과 손익은 본인 책임입니다.
-      </div>
-      <div id="dp-drawdown-risk" class="dp-drawdown-wrap"></div>
-
-      <div id="dp-consensus-card" class="dp-consensus-card" style="display:none;">
-        <div class="dp-consensus-head">
-          <span class="dp-section-label">증권사 컨센서스</span>
-          <span id="dpcons-opinion-badge" class="dp-consensus-badge"></span>
-        </div>
-        <div class="dp-consensus-stats">
-          <span>최저 <strong id="dpcons-low">—</strong></span>
-          <span>평균 <strong id="dpcons-mean">—</strong></span>
-          <span>최고 <strong id="dpcons-high">—</strong></span>
-          <span id="dpcons-count-wrap"></span>
-        </div>
-        <div id="dpcons-reports" class="dp-consensus-reports"></div>
-      </div>
-
-      <div id="dp-midcap-card" style="display:none;">
-        <div class="card midcap-detail-card">
-          <div class="midcap-detail-header">
-            <span class="midcap-detail-icon">◆</span> 미드캡 알파 시그널 <span class="midcap-detail-sub">SP400</span>
-          </div>
-          <div id="dp-midcap-label" class="midcap-detail-label"></div>
-          <div id="dp-midcap-bars" class="midcap-detail-bars"></div>
-        </div>
-      </div>
-
-      <div id="dp-investor-card" style="display:none;">
-        <div class="card" style="padding:0;overflow:hidden;">
-          <div style="padding:12px 16px 8px;font-size:12px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.03em;">투자자 동향</div>
-          <div id="dp-investor-grid" style="display:grid;column-gap:40px;padding:2px 16px 12px;"></div>
-        </div>
-      </div>
-
-      <nav class="dp-tab-nav">
-        <button class="dp-tab-btn active" data-tab="canslim" data-action="switchDpTab" data-arg="canslim">CAN SLIM</button>
-        <button class="dp-tab-btn" data-tab="tech" data-action="switchDpTab" data-arg="tech">기술 지표</button>
-        <button class="dp-tab-btn" data-tab="finance" data-action="switchDpTab" data-arg="finance">재무 지표</button>
-        <button class="dp-tab-btn" data-tab="dartnews" id="dp-btn-dartnews" data-action="switchDpTab" data-arg="dartnews" style="display:none;">공시·뉴스</button>
-        <button class="dp-tab-btn" data-tab="usinsight" id="dp-btn-usinsight" data-action="switchDpTab" data-arg="usinsight" style="display:none;">US 인사이트</button>
-      </nav>
-      <div class="dp-tab-panel active" id="dp-tab-canslim">
-        <div id="dp-breakdown-list"></div>
-      </div>
-      <div class="dp-tab-panel" id="dp-tab-tech">
-        <div id="dp-tech-content" class="dp-tab-content"></div>
-      </div>
-      <div class="dp-tab-panel" id="dp-tab-finance">
-        <div id="dp-finance-content" class="dp-tab-content"></div>
-      </div>
-      <div class="dp-tab-panel" id="dp-tab-dartnews">
-        <div id="dp-dartnews-content" class="dp-tab-content"></div>
-      </div>
-      <div class="dp-tab-panel" id="dp-tab-usinsight">
-        <div id="dp-usinsight-content" class="dp-tab-content"></div>
-      </div>
-    </section>
-
-      <!-- ── 기업 정보 그룹 (접기 가능) ──────────────────────── -->
-      <div class="dp-card-group" id="dp-group-company">
-        <button class="dp-card-group-toggle" onclick="toggleCardGroup(this)">
-          <span>🏢 기업 정보</span>
-          <svg class="dp-cg-chevron open" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="dp-card-group-body open">
 
       <!-- 핵심 경제적 해자 (Economic Moat) -->
       <div id="dp-moat-card" class="dp-moat-card" style="display:none;">
@@ -509,7 +318,6 @@
         </div>
       </div>
 
-
       <div id="dp-segments-card" class="dp-segments-card" style="display:none;">
         <div class="dp-segments-head">
           <span class="dp-segments-icon">📊</span>
@@ -531,9 +339,187 @@
           </div>
         </div>
       </div>
+    </section>
 
-        </div><!-- /기업 정보 body -->
-      </div><!-- /기업 정보 group -->
+    <!-- ② 🎯 결론 -->
+    <section id="dp-section-conclusion" class="dp-section-conclusion">
+      <div id="dp-fa-haiku" class="dp-oneliner-poster" style="display:none;"></div>
+
+      <div class="dp-verdict-zone">
+        <div class="dp-verdict-score-wrap">
+          <span id="dp-score" class="dp-score-num">—</span>
+          <span class="dp-score-unit">점</span>
+        </div>
+        <div class="dp-verdict-right">
+          <div class="dp-verdict-label">종합 점수</div>
+          <div id="dp-signal" class="dp-signal-badge">—</div>
+          <div class="dp-verdict-badges">
+            <div id="dp-risk-gauge" class="dp-risk-pill"></div>
+            <div id="dp-leader-badge" class="dp-leader-pill"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="dp-news-bar" class="dp-news-bar" style="display:none;">
+        <span class="dp-news-tag">NEWS</span>
+        <a id="dp-news-bar-link" href="#" target="_blank" rel="noopener" class="dp-news-link">—</a>
+      </div>
+    </section>
+
+    <!-- ③ 📈 타이밍 -->
+    <section id="dp-section-timing" class="dp-section-timing">
+          <div class="dp-hero-stats">
+            <div class="dp-hero-stat-cell">
+              <span class="dp-hero-stat-label">현재가</span>
+              <span id="dp-price" class="dp-hero-stat-value">—</span>
+            </div>
+            <div class="dp-hero-stat-cell">
+              <span class="dp-hero-stat-label">등락률</span>
+              <span id="dp-day-chg" class="dp-hero-stat-value">—</span>
+            </div>
+            <div class="dp-hero-stat-cell">
+              <span class="dp-hero-stat-label">RSI</span>
+              <span id="dp-thermo-label" class="dp-hero-stat-value">—</span>
+              <span id="dp-thermo-action" class="dp-hero-stat-hint">—</span>
+            </div>
+            <div class="dp-hero-stat-cell">
+              <span class="dp-hero-stat-label">RS 등급</span>
+              <div id="dp-rs-value" class="dp-hero-stat-value dp-rs-wrap">—</div>
+              <span id="dp-rs-label" class="dp-hero-stat-hint">/ 99</span>
+            </div>
+          </div>
+
+      <div id="dp-spark-panel" style="display:none;">
+        <div class="dp-spark-head">
+          <span class="dp-spark-eyebrow">최근 추세</span>
+          <span id="dp-spark-change" class="dp-spark-change"></span>
+        </div>
+        <div class="dp-spark-chart">
+          <div id="dp-spark"></div>
+          <span id="dp-spark-last" class="dp-spark-last"></span>
+        </div>
+        <div class="dp-spark-facts">
+          <div class="dp-spark-fact dp-spark-fact--wide">
+            <span class="dp-spark-fact-label">52주 고가 대비</span>
+            <div class="dp-wk52-track"><div id="dp-wk52-bar" class="dp-wk52-fill"></div></div>
+            <span id="dp-wk52-label" class="dp-spark-fact-val">—</span>
+          </div>
+          <div class="dp-spark-fact">
+            <span class="dp-spark-fact-label">거래량</span>
+            <span id="dp-volratio" class="dp-spark-fact-val">—</span>
+          </div>
+          <div class="dp-spark-fact">
+            <span class="dp-spark-fact-label">시총</span>
+            <span id="dp-mktcap" class="dp-spark-fact-val">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="dp-thermo-compact">
+        <div class="dp-thermo-track">
+          <div id="dp-thermo-marker" style="position:absolute;top:-5px;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid #6B7280;transform:translateX(-50%);left:50%;transition:left .4s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 2px 6px rgba(0,0,0,.18);"></div>
+        </div>
+        <div class="dp-thermo-scale"><span>극도공포</span><span>공포</span><span>중립</span><span>탐욕</span><span>극도탐욕</span></div>
+      </div>
+
+      <div id="dp-fouraxis-loading" style="text-align:center;padding:40px;color:var(--text-tertiary);display:none;">분석 불러오는 중...</div>
+      <div id="dp-fouraxis-error"   style="text-align:center;padding:24px;color:var(--destructive);display:none;"></div>
+      <div id="dp-fouraxis-header" style="display:none;padding:14px 16px;margin:14px 20px 8px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border);">
+        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px;font-weight:600;">📈 현재 타이밍 분석 <span style="font-weight:400;color:var(--text-tertiary);">— 별점 = 아래 ‘타이밍 점수’를 별로 표시한 것 (같은 값)</span></div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+          <span id="dp-fa-phase" style="font-size:15px;font-weight:700;color:var(--text-primary);"></span>
+          <span id="dp-fa-stars" style="font-size:16px;color:var(--warning);"></span>
+          <span id="dp-fa-stars-meaning" style="font-size:12px;color:var(--text-secondary);font-weight:600;"></span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+          <div class="dp-axis-item"><div class="dp-axis-label">추세<div style="font-size:9px;font-weight:500;color:var(--text-tertiary);margin-top:1px;">(이평선 방향·정렬)</div></div><div class="dp-axis-val"><span id="dp-fa-trend-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-trend-verdict"></div></div>
+          <div class="dp-axis-item"><div class="dp-axis-label">모멘텀<div style="font-size:9px;font-weight:500;color:var(--text-tertiary);margin-top:1px;">(가격 탄력)</div></div><div class="dp-axis-val"><span id="dp-fa-mom-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-mom-verdict"></div></div>
+          <div class="dp-axis-item"><div class="dp-axis-label">변동성<div style="font-size:9px;font-weight:500;color:var(--text-tertiary);margin-top:1px;">(BB폭·ATR)</div></div><div class="dp-axis-val"><span id="dp-fa-vol-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-vol-verdict"></div></div>
+          <div class="dp-axis-item"><div class="dp-axis-label">수급<div style="font-size:9px;font-weight:500;color:var(--text-tertiary);margin-top:1px;">(거래량·이격도)</div></div><div class="dp-axis-val"><span id="dp-fa-volm-score">-</span><span style="font-size:13px;color:var(--text-secondary);">/5</span></div><div class="dp-axis-meta" id="dp-fa-volm-verdict"></div></div>
+        </div>
+      </div>
+      <div id="dp-fouraxis-obs" style="display:none;padding:14px 16px;margin:0 20px 16px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border);">
+        <div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:6px;">핵심 관찰</div>
+        <div id="dp-fa-observation" style="font-size:13px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap;"></div>
+      </div>
+
+      <div id="dp-investor-card" style="display:none;">
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div style="padding:12px 16px 8px;font-size:12px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.03em;">투자자 동향</div>
+          <div id="dp-investor-grid" style="display:grid;column-gap:40px;padding:2px 16px 12px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ④ 📊 상세 (접힘) -->
+    <div class="dp-card-group" id="dp-section-detail">
+      <button class="dp-card-group-toggle" onclick="toggleCardGroup(this)">
+        <span>📊 상세 분석</span>
+        <svg class="dp-cg-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="dp-card-group-body">
+      <div class="dp-disclaimer">
+        ⚠️ 등급·신호·목표가는 <b>알고리즘 스크리닝 결과</b>일 뿐, 투자 조언이 아닙니다. <b>드로다운 리스크</b>를 꼭 함께 확인하세요. 판단과 손익은 본인 책임입니다.
+      </div>
+      <div id="dp-drawdown-risk" class="dp-drawdown-wrap"></div>
+
+      <div id="dp-earnings-card" class="dp-earnings-card" style="display:none;">
+        <div class="dp-earnings-head">
+          <span class="dp-section-label">실적 한눈에</span>
+          <span class="dp-section-sub">자세히는 재무 탭</span>
+        </div>
+        <div id="dp-earnings-chips" class="dp-earnings-chips"></div>
+      </div>
+
+      <div id="dp-consensus-card" class="dp-consensus-card" style="display:none;">
+        <div class="dp-consensus-head">
+          <span class="dp-section-label">증권사 컨센서스</span>
+          <span id="dpcons-opinion-badge" class="dp-consensus-badge"></span>
+        </div>
+        <div class="dp-consensus-stats">
+          <span>최저 <strong id="dpcons-low">—</strong></span>
+          <span>평균 <strong id="dpcons-mean">—</strong></span>
+          <span>최고 <strong id="dpcons-high">—</strong></span>
+          <span id="dpcons-count-wrap"></span>
+        </div>
+        <div id="dpcons-reports" class="dp-consensus-reports"></div>
+      </div>
+
+      <div id="dp-midcap-card" style="display:none;">
+        <div class="card midcap-detail-card">
+          <div class="midcap-detail-header">
+            <span class="midcap-detail-icon">◆</span> 미드캡 알파 시그널 <span class="midcap-detail-sub">SP400</span>
+          </div>
+          <div id="dp-midcap-label" class="midcap-detail-label"></div>
+          <div id="dp-midcap-bars" class="midcap-detail-bars"></div>
+        </div>
+      </div>
+
+      <nav class="dp-tab-nav">
+        <button class="dp-tab-btn active" data-tab="canslim" data-action="switchDpTab" data-arg="canslim">CAN SLIM</button>
+        <button class="dp-tab-btn" data-tab="tech" data-action="switchDpTab" data-arg="tech">기술 지표</button>
+        <button class="dp-tab-btn" data-tab="finance" data-action="switchDpTab" data-arg="finance">재무 지표</button>
+        <button class="dp-tab-btn" data-tab="dartnews" id="dp-btn-dartnews" data-action="switchDpTab" data-arg="dartnews" style="display:none;">공시·뉴스</button>
+        <button class="dp-tab-btn" data-tab="usinsight" id="dp-btn-usinsight" data-action="switchDpTab" data-arg="usinsight" style="display:none;">US 인사이트</button>
+      </nav>
+      <div class="dp-tab-panel active" id="dp-tab-canslim">
+        <div id="dp-breakdown-list"></div>
+      </div>
+      <div class="dp-tab-panel" id="dp-tab-tech">
+        <div id="dp-tech-content" class="dp-tab-content"></div>
+      </div>
+      <div class="dp-tab-panel" id="dp-tab-finance">
+        <div id="dp-finance-content" class="dp-tab-content"></div>
+      </div>
+      <div class="dp-tab-panel" id="dp-tab-dartnews">
+        <div id="dp-dartnews-content" class="dp-tab-content"></div>
+      </div>
+      <div class="dp-tab-panel" id="dp-tab-usinsight">
+        <div id="dp-usinsight-content" class="dp-tab-content"></div>
+      </div>
+      </div><!-- /상세 분석 body -->
+    </div><!-- /상세 분석 group -->
+
 
       <!-- ── 참고 정보 그룹 (기본 접힘) ─────────────────────── -->
       <div class="dp-card-group" id="dp-group-ref">

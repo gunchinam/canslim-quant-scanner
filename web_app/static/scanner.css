@@ -1842,44 +1842,49 @@ td.score-col {
 
 .dp-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 /* ── Hero Zone ────────────────────────────────────────────── */
-.dp-hero-zone {
+/* ── ① 회사 정체성 ────────────────────────────────────────── */
+.dp-section-company {
+  padding: 0 20px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.dp-section-company .dp-about-bar {
+  padding: 10px 0 8px;
+}
+
+/* ── ② 결론 ──────────────────────────────────────────────── */
+.dp-section-conclusion {
   padding: 0 20px 16px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
   position: relative;
   overflow: hidden;
 }
-.dp-hero-zone > *:not(.dp-hero-watermark) { position: relative; z-index: 1; }
+.dp-section-conclusion > *:not(.dp-hero-watermark) { position: relative; z-index: 1; }
 .dp-hero-watermark {
   position: absolute; top: -18px; right: -16px;
   width: 150px; height: 150px; object-fit: contain;
   opacity: 0.16; transform: rotate(-8deg);
-  pointer-events: none; z-index: 2;  /* 콘텐츠(불투명 포스터 포함) 위로 — 코너 스탬프 */
+  pointer-events: none; z-index: 2;
 }
-.dp-hero-zone > .dp-oneliner-poster {
+.dp-section-conclusion > .dp-oneliner-poster {
   margin: 16px 0 12px;
   border-radius: 18px;
 }
 
-/* ── Hero Summary: 판결문 레이아웃 ──────────────────────────
-   Zone A: 종합 판결 (점수 + 시그널 + 뱃지)
-   Zone B: 4개 수치 그리드
-   Zone C: RSI 온도계 (dp-thermo-compact)
-──────────────────────────────────────────────────────────── */
-.dp-hero-summary {
-  display: grid;
-  grid-template-columns: 1fr 1.1fr;
-  gap: 28px;
-  align-items: stretch;
-  margin-bottom: 0;
+/* ── ③ 타이밍 ────────────────────────────────────────────── */
+.dp-section-timing {
+  background: var(--surface-page);
+  padding: 12px 0 8px;
 }
-.dp-hero-left { min-width: 0; }
-.dp-hero-right {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid var(--border);
-  padding-left: 24px;
+.dp-section-timing .dp-hero-stats {
+  padding: 0 20px 8px;
+}
+.dp-section-timing #dp-spark-panel {
+  padding: 0 20px 12px;
+}
+.dp-section-timing .dp-thermo-compact {
+  padding: 0 20px 8px;
 }
 .dp-spark-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .dp-spark-eyebrow {
@@ -2041,11 +2046,7 @@ td.score-col {
   letter-spacing: 0.01em;
 }
 
-/* 풀폭 차트 섹션 — 배경 교차로 시각적 리듬 */
-.dp-chart-section {
-  background: var(--surface-page);
-  padding: 4px 0 8px;
-}
+/* (dp-chart-section 삭제됨 — dp-section-timing으로 대체) */
 
 /* ── Section Navigation (underline tabs) ─────────────────── */
 .dp-section-nav {
@@ -2341,12 +2342,7 @@ td.score-col {
   color: var(--text-tertiary);
 }
 
-/* ── Analysis Section ────────────────────────────────────── */
-.dp-analysis-section {
-  padding: 0;
-  background: var(--surface-page);
-  border-top: 1px solid var(--border);
-}
+/* (dp-analysis-section 삭제됨 — dp-section-detail 접힘그룹으로 대체) */
 
 /* 드로워 카드 입체감 — 흰 카드를 회색 캔버스 위에서 띄워 가독성↑
    (흰 배경 위 흰 카드로 경계가 사라지던 문제 해결) */
@@ -3391,12 +3387,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
     border-radius: 0;
     max-height: none;
   }
-  /* 판결문 레이아웃 모바일 */
-  .dp-hero-summary { grid-template-columns: 1fr; gap: 18px; }
-  .dp-hero-right {
-    border-left: none; padding-left: 0;
-    border-top: 1px solid var(--border); padding-top: 16px;
-  }
+  /* 판결문 레이아웃 모바일 — dp-hero-summary/right는 타이밍 섹션으로 이동 */
   .dp-verdict-zone {
     gap: 14px;
     padding: 16px 0 14px;

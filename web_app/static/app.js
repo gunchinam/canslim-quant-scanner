@@ -3160,7 +3160,7 @@ function _renderFhLogo(d) {
 
 // ── Hero Zone 로고 워터마크 (US, 우상단 배경) ────────────────────────────
 function _renderHeroWatermark(d) {
-  const zone = document.getElementById('dp-hero-zone');
+  const zone = document.getElementById('dp-section-conclusion');
   if (!zone) return;
   let img = document.getElementById('dp-hero-wm');
   const t = (d && d.Ticker ? String(d.Ticker) : '').toUpperCase();
@@ -3903,8 +3903,8 @@ const FOUR_AXIS_FETCH_TIMEOUT_MS = 90000;
 let _dpFourAxisIO = null;
 function _scheduleLoadDpFourAxis(ticker) {
   if (!('IntersectionObserver' in window)) { loadDpFourAxis(ticker); return; }
-  // .dp-chart-section은 항상 가시 (chart-wrap은 초기 display:none이라 IO가 fire 안 함)
-  const target = document.querySelector('#detail-panel .dp-chart-section')
+  // .dp-section-timing은 항상 가시 (chart-wrap은 초기 display:none이라 IO가 fire 안 함)
+  const target = document.querySelector('#detail-panel .dp-section-timing')
               || document.getElementById('dp-fa-haiku');
   if (!target) { loadDpFourAxis(ticker); return; }
   if (_dpFourAxisIO) { try { _dpFourAxisIO.disconnect(); } catch(_) {} _dpFourAxisIO = null; }
@@ -6147,8 +6147,8 @@ async function captureDetail() {
     cScroll.style.flex      = 'none';
     cScroll.style.minHeight = 'auto';
   }
-  // dp-hero-zone, dp-analysis-section 제약 해제 (클론에 한정)
-  clone.querySelectorAll('.dp-hero-zone,.dp-analysis-section,.dp-chart-section').forEach(s => {
+  // 섹션 제약 해제 (클론에 한정)
+  clone.querySelectorAll('.dp-section-conclusion,.dp-section-timing,.dp-section-company').forEach(s => {
     if (s) { s.style.minHeight = 'auto'; s.style.height = 'auto'; s.style.overflow = 'visible'; }
   });
 

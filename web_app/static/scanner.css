@@ -2365,6 +2365,16 @@ td.score-col {
 
 /* 드로워 카드 입체감 — 흰 카드를 회색 캔버스 위에서 띄워 가독성↑
    (흰 배경 위 흰 카드로 경계가 사라지던 문제 해결) */
+.detail-panel .card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+}
+#dp-investor-card,
+#dp-midcap-card {
+  margin: 8px 20px;
+}
 .detail-panel .card,
 #dp-fouraxis-header,
 #dp-fouraxis-obs {

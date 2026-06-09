@@ -2850,6 +2850,7 @@ async function _loadSentiment(ticker, market, seq) {
     Object.assign(_lastDetailData, data);
     _renderInvestorCard(_lastDetailData);
     _renderFhNews(_lastDetailData);
+    _renderFhLogo(_lastDetailData);
   } catch (e) {
     console.debug('sentiment 로드 실패:', e);
   }
@@ -3127,6 +3128,24 @@ function _renderFhNews(d) {
   wrap.innerHTML = `
     <div style="font-size:12px; font-weight:700; color:var(--text-secondary); padding:6px 0 2px; letter-spacing:0.01em;">최근 뉴스 · 7일</div>
     ${rows}`;
+}
+
+// ── Finnhub 회사 로고 (US, 헤더 dp-ticker 좌측) ──────────────────────────
+function _renderFhLogo(d) {
+  const tickerEl = document.getElementById('dp-ticker');
+  let img = document.getElementById('dp-fh-logo');
+  const url = d && d._FH_Available ? (d._FH_Logo || '') : '';
+  const safe = /^https?:\/\//i.test(url) ? url : '';
+  if (!safe) { if (img) img.remove(); return; }
+  if (!tickerEl || !tickerEl.parentNode) return;
+  if (!img) {
+    img = document.createElement('img');
+    img.id = 'dp-fh-logo';
+    img.style.cssText = 'width:22px; height:22px; border-radius:5px; object-fit:contain; vertical-align:middle; margin-right:8px; background:var(--surface-2);';
+    img.onerror = () => img.remove();
+    tickerEl.parentNode.insertBefore(img, tickerEl);
+  }
+  img.src = safe;
 }
 
 // ── 투자자 동향 카드 ─────────────────────────────────────────────────────

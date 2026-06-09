@@ -851,9 +851,8 @@ td.score-col {
 .chip[data-filter="laggard"] { border-color: #FCA5A5; color: #B91C1C; }
 .chip[data-filter="laggard"].active { background: #B91C1C; border-color: #B91C1C; color: #fff; }
 
-/* 노이즈 제거 — "설명" 컬럼은 종목명 hover 팝업(showStockPopup)과 완전 중복이라 기본 숨김.
-   정보 손실 없음(팝업에 동일 내용). 되살리려면 아래 두 줄 제거. */
-.desc-col, .desc-cell { display: none; }
+/* "설명" 컬럼 — 종목명 hover 팝업(showStockPopup)과 내용이 중복되지만,
+   사용자 요청으로 목록에 직접 노출(td.desc-cell 스타일은 아래 ~2970 참조). */
 .moat-conf {
   display: inline-block;
   font-size: 10px;

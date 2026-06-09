@@ -1652,6 +1652,11 @@ def api_sentiment(ticker: str):
                 out["_FH_Headlines"] = fh.get("news_headlines", [])
                 out["_FH_DayChangePct"] = fh.get("day_change_pct", 0)
                 out["_FH_CurrentPrice"] = fh.get("current_price", 0)
+                out["_FH_Logo"] = fh.get("logo", "")
+                out["_FH_IpoDate"] = fh.get("ipo_date", "")
+                out["_FH_ShareOut"] = fh.get("share_outstanding")
+                out["_FH_Industry"] = fh.get("industry", "")
+                out["_FH_Exchange"] = fh.get("exchange", "")
                 out["_FH_Available"] = True
             else:
                 out["_FH_Available"] = False

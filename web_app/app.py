@@ -1578,6 +1578,35 @@ def api_ticker(ticker: str):
         return jsonify({"error": str(e)}), 500
 
 
+_market_ctx_cache: dict = {"_ts": 0, "data": None}
+_market_ctx_lock = threading.Lock()
+_MARKET_CTX_TTL_SEC = 1800  # 30분
+
+
+@app.route("/api/market_context")
+def api_market_context():
+    """GET /api/market_context → Finnhub IPO 캘린더 + 시장 뉴스 (US, 30분 캐시)."""
+    _now = time.time()
+    with _market_ctx_lock:
+        c = _market_ctx_cache
+        if c["data"] is not None and (_now - c["_ts"]) < _MARKET_CTX_TTL_SEC:
+            return jsonify(c["data"])
+    try:
+        from finnhub_api import get_market_context, is_available as fh_ok
+        if not fh_ok():
+            return jsonify({"ok": False, "available": False, "ipos": [], "news": []})
+        ctx = get_market_context()
+        out = {"ok": True, "available": ctx.get("available", False),
+               "ipos": ctx.get("ipos", []), "news": ctx.get("news", [])}
+    except Exception as e:
+        logging.debug("market_context failed: %s", e)
+        out = {"ok": False, "available": False, "ipos": [], "news": []}
+    with _market_ctx_lock:
+        _market_ctx_cache["data"] = out
+        _market_ctx_cache["_ts"] = _now
+    return jsonify(out)
+
+
 _sentiment_cache: dict[str, dict] = {}
 _sentiment_cache_lock = threading.Lock()
 _SENTIMENT_TTL_SEC = 300  # 5분
@@ -2389,8 +2418,12 @@ def _wk52_high_low(closes):
     return (max(vals), min(vals))
 
 
-def _compute_four_axis_payload(ticker: str, market: str) -> tuple:
-    """yfinance + FourAxisAnalyzer + HandDrawnChartRenderer → (payload_dict|None, err_str|None)."""
+def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True) -> tuple:
+    """yfinance + FourAxisAnalyzer + HandDrawnChartRenderer → (payload_dict|None, err_str|None).
+
+    want_chart=False 이면 핸드드로잉 차트 렌더(+US 종목명 info 조회)를 생략한다 —
+    드로어는 차트를 쓰지 않으므로 헛렌더링/네트워크를 피해 응답을 빠르게 한다.
+    """
     try:
         import yfinance as yf
         _configure_yf_cache()
@@ -2493,7 +2526,7 @@ def _compute_four_axis_payload(ticker: str, market: str) -> tuple:
                         chart_title = str(nm)
                 except Exception as _e:
                     logging.debug("silent except (app.py): %s", _e)
-            if not chart_title and market == "US":
+            if want_chart and not chart_title and market == "US":
                 try:
                     yt0 = candidates[0] if candidates else ticker
                     yinfo = _run_with_timeout(
@@ -2508,16 +2541,19 @@ def _compute_four_axis_payload(ticker: str, market: str) -> tuple:
             logging.debug("silent except (app.py): %s", _e)
         chart_title = chart_title or ticker
 
-        renderer = HandDrawnChartRenderer(
-            hist, result, ticker=chart_title,
-            width_px=1200, height_px=560, dpi=100,
-        )
-        img = renderer.render()
+        if want_chart:
+            renderer = HandDrawnChartRenderer(
+                hist, result, ticker=chart_title,
+                width_px=1200, height_px=560, dpi=100,
+            )
+            img = renderer.render()
 
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        buf.seek(0)
-        chart_b64 = base64.b64encode(buf.read()).decode("ascii")
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            buf.seek(0)
+            chart_b64 = base64.b64encode(buf.read()).decode("ascii")
+        else:
+            chart_b64 = None  # 드로어는 차트 미사용 — 핸드드로잉 렌더 생략(성능)
 
         import numpy as np
 
@@ -2660,8 +2696,11 @@ _four_axis_render_lock = threading.Lock()  # BG warm만 직렬화 — 유저 요
 
 
 def _warm_four_axis(ticker: str, market: str, timeframe: str = "default") -> None:
-    """BG 선제 4축 캐시 채우기 — 클릭 시 차트 즉시 표시."""
-    cache_key = f"{ticker}:{market}:{timeframe}"
+    """BG 선제 4축 캐시 채우기 — 클릭(드로어) 시 분석 즉시 표시.
+
+    드로어는 차트를 쓰지 않으므로 no-chart(c0) 페이로드를 워밍한다.
+    """
+    cache_key = f"{ticker}:{market}:{timeframe}:c0"
     with _four_axis_cache_lock:
         if cache_key in _four_axis_cache:
             return  # BG warm hit — move_to_end 호출 안 함 (cold entry가 hot으로 위장하는 것 방지)
@@ -2672,7 +2711,7 @@ def _warm_four_axis(ticker: str, market: str, timeframe: str = "default") -> Non
         with _four_axis_cache_lock:
             if cache_key in _four_axis_cache:
                 return
-        payload, err = _compute_four_axis_payload(ticker, market)
+        payload, err = _compute_four_axis_payload(ticker, market, want_chart=False)
         if payload:
             with _four_axis_cache_lock:
                 if len(_four_axis_cache) >= _FOUR_AXIS_MAX:
@@ -2707,7 +2746,8 @@ def api_four_axis(ticker: str):
         except Exception as _e:
             logging.debug("silent except (app.py): %s", _e)
     timeframe = (request.args.get("timeframe") or "default").strip() or "default"
-    cache_key = f"{ticker}:{market}:{timeframe}"
+    want_chart = (request.args.get("chart", "1") != "0")  # 드로어는 chart=0 → 핸드드로잉 렌더 생략
+    cache_key = f"{ticker}:{market}:{timeframe}:{'c1' if want_chart else 'c0'}"
     now = int(time.time())
     with _four_axis_cache_lock:
         cached = _four_axis_cache.get(cache_key)
@@ -2715,7 +2755,7 @@ def api_four_axis(ticker: str):
             _four_axis_cache.move_to_end(cache_key)  # LRU bump — 유저 요청 hit만 hot으로 보존
             return jsonify(cached["data"])
     # 유저 요청은 락 없이 즉시 실행 — BG warm과 경쟁해도 Agg 백엔드에서 안전
-    payload, err = _compute_four_axis_payload(ticker, market)
+    payload, err = _compute_four_axis_payload(ticker, market, want_chart=want_chart)
     if payload is None:
         return jsonify({"error": err or "생성 실패"}), (404 if "데이터 부족" in (err or "") else 500)
     with _four_axis_cache_lock:

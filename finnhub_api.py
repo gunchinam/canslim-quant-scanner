@@ -328,6 +328,48 @@ def _parse_insider_sentiment(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _parse_ipo_calendar(raw: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """ipo_calendar 응답 → 정규화 리스트."""
+    if not raw or not isinstance(raw, dict):
+        return []
+    rows = raw.get("ipoCalendar") or []
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        if not r.get("symbol"):
+            continue
+        out.append({
+            "date": r.get("date", ""),
+            "symbol": r.get("symbol", ""),
+            "name": r.get("name", ""),
+            "price": r.get("price", ""),
+            "shares": r.get("numberOfShares"),
+            "exchange": r.get("exchange", ""),
+        })
+    return out
+
+
+def _parse_general_news(raw: Optional[List[Dict[str, Any]]],
+                        limit: int = 15) -> List[Dict[str, Any]]:
+    """general_news 응답(list) → 정규화 리스트. headline 없는 항목 제외."""
+    if not raw or not isinstance(raw, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for n in raw:
+        h = n.get("headline")
+        if not h:
+            continue
+        out.append({
+            "headline": h[:160],
+            "url": n.get("url", ""),
+            "source": n.get("source", ""),
+            "datetime": n.get("datetime", 0),
+            "category": n.get("category", ""),
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
 def get_basic_financials(ticker: str) -> Dict[str, Any]:
     """Finnhub basic financials -> yfinance info 호환 dict.
 

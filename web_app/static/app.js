@@ -3204,10 +3204,9 @@ function _renderInvestorCard(d) {
   if (items.length === 0) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
   grid.innerHTML = items.map(it => `
-    <div style="padding:10px 14px; border-right:1px solid var(--border); border-bottom:1px solid var(--border);">
-      <div style="font-size:11px; color:var(--text-tertiary); margin-bottom:4px;">${esc(it.label)}</div>
-      <div style="font-size:16px; font-weight:800; color:${it.color};">${esc(it.value)}</div>
-      ${it.sub ? `<div style="font-size:10px; color:var(--text-tertiary); margin-top:2px;">${esc(it.sub)}</div>` : ''}
+    <div style="display:grid; grid-template-columns:1fr auto; align-items:baseline; gap:12px; padding:12px 1px; border-bottom:1px solid var(--border);">
+      <span style="font-size:12px; color:var(--text-secondary); letter-spacing:0.01em;">${esc(it.label)}</span>
+      <span style="font-size:16px; font-weight:700; letter-spacing:-0.015em; font-variant-numeric:tabular-nums; text-align:right; color:${it.color};">${esc(it.value)}${it.sub ? `<small style="display:block; font-size:10.5px; color:var(--text-tertiary); font-weight:600; margin-top:2px; text-align:right;">${esc(it.sub)}</small>` : ''}</span>
     </div>
   `).join('');
 }

@@ -1897,6 +1897,10 @@ td.score-col {
 .dp-wk52-track { height: 4px; background: var(--surface-muted, #eef0f2); border-radius: 9px; margin: 7px 12px 6px 0; position: relative; }
 .dp-wk52-fill { position: absolute; left: 0; top: 0; height: 4px; background: var(--success); border-radius: 9px; }
 
+/* 투자자 동향 — 명세표(2열, 모바일 1열). 표 격자 제거 */
+#dp-investor-grid { grid-template-columns: 1fr 1fr; }
+@media (max-width: 768px) { #dp-investor-grid { grid-template-columns: 1fr; column-gap: 0; } }
+
 /* Zone A — 판결 행 ---------------------------------------- */
 .dp-verdict-zone {
   display: flex;

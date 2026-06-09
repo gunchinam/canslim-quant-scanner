@@ -2919,6 +2919,7 @@ function _clearPanelDetail() {
 
 function _populatePanelDetail(d, skipFourAxis) {
   _lastDetailData = d;
+  _renderHeroWatermark(d);
   setText('dp-name',    d.Name   || d.Ticker || '—');
   setText('dp-ticker',  d.Ticker || '—');
   setText('dp-sector',  d.Sector || '—');
@@ -3155,6 +3156,26 @@ function _renderFhLogo(d) {
     nameEl.parentNode.insertBefore(img, nameEl);  // 회사명 맨 앞
   }
   img.src = safe;
+}
+
+// ── Hero Zone 로고 워터마크 (US, 우상단 배경) ────────────────────────────
+function _renderHeroWatermark(d) {
+  const zone = document.getElementById('dp-hero-zone');
+  if (!zone) return;
+  let img = document.getElementById('dp-hero-wm');
+  const t = (d && d.Ticker ? String(d.Ticker) : '').toUpperCase();
+  const isUsLogo = t && !t.includes('.') && !/^\d+$/.test(t);
+  if (!isUsLogo) { if (img) img.remove(); return; }  // KR·로고없음 → 미표시
+  const url = `https://static2.finnhub.io/file/publicdatany/finnhubimage/stock_logo/${t}.png`;
+  if (!img) {
+    img = document.createElement('img');
+    img.id = 'dp-hero-wm';
+    img.className = 'dp-hero-watermark';
+    img.alt = '';
+    img.onerror = () => img.remove();  // 로고 404 → 제거
+    zone.insertBefore(img, zone.firstChild);
+  }
+  img.src = url;
 }
 
 // ── 투자자 동향 카드 ─────────────────────────────────────────────────────

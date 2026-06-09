@@ -1637,12 +1637,20 @@ function renderStockRow(stock, rank) {
 
   const checked = _selectedStocks.has(stock.Ticker);
   const t = esc(stock.Ticker);
+  // US 종목 로고 (Finnhub 정적 URL 패턴 — API 호출 0, lazy 로드, 없으면 onerror로 숨김)
+  const _rawT = (stock.Ticker || '').toUpperCase();
+  const _usLogo = (_rawT && !_rawT.includes('.') && !/^\d+$/.test(_rawT))
+    ? `https://static2.finnhub.io/file/publicdatany/finnhubimage/stock_logo/${_rawT}.png`
+    : '';
+  const logoHtml = _usLogo
+    ? `<img class="row-logo" src="${_usLogo}" loading="lazy" alt="" onerror="this.style.display='none'" style="width:18px;height:18px;border-radius:4px;object-fit:contain;vertical-align:middle;margin-right:6px;background:var(--surface-2);">`
+    : '';
   return `
 <tr onclick="openDetail('${t}')" data-ticker="${t}" style="cursor:pointer;">
   <td class="center"><input type="checkbox" ${checked ? 'checked' : ''} onclick="toggleSelectStock('${t}', event)" style="cursor:pointer;width:16px;height:16px;accent-color:#3182F6;"></td>
   <td class="center"><span class="rank-cell ${rankClass}">${rank}</span></td>
   <td class="name-cell" onmouseenter="showStockPopup('${t}', event)" onmouseleave="hideStockPopup()">
-    <span class="stock-name">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}${_greedBadge(stock)}${_bottleneckBadge(stock)}</span>
+    <span class="stock-name">${logoHtml}${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}${_greedBadge(stock)}${_bottleneckBadge(stock)}</span>
     <span class="stock-code">${t}</span>
   </td>
   <td class="desc-cell">${esc(stock.Desc || _industryKo(stock.Industry) || '')}</td>
@@ -3141,7 +3149,7 @@ function _renderFhLogo(d) {
   if (!img) {
     img = document.createElement('img');
     img.id = 'dp-fh-logo';
-    img.style.cssText = 'width:22px; height:22px; border-radius:5px; object-fit:contain; vertical-align:middle; margin-right:8px; background:var(--surface-2);';
+    img.style.cssText = 'width:30px; height:30px; border-radius:7px; object-fit:contain; vertical-align:middle; margin-right:9px; background:var(--surface-2); padding:2px; box-sizing:border-box;';
     img.onerror = () => img.remove();
     tickerEl.parentNode.insertBefore(img, tickerEl);
   }

@@ -3208,6 +3208,23 @@ function _renderInvestorCard(d) {
         color: dte <= 7 ? 'var(--warning)' : 'var(--text-secondary)'
       });
     }
+    // 신규: 내부자 심리 MSPR (-100~100, 양수=순매수 우위)
+    const mspr = d._FH_MSPR;
+    if (mspr != null) {
+      const trend = Array.isArray(d._FH_MSPRTrend) ? d._FH_MSPRTrend : [];
+      const msprColor = mspr >= 0 ? 'var(--success)' : 'var(--destructive)';
+      let spark = '';
+      if (trend.length >= 2 && typeof buildSparklineSVG === 'function') {
+        spark = buildSparklineSVG(trend, msprColor);
+      }
+      items.push({
+        label: '내부자 심리',
+        value: `${mspr >= 0 ? '+' : ''}${mspr.toFixed(0)}`,
+        sub: spark || (mspr >= 20 ? '강한 매수세' : mspr <= -20 ? '강한 매도세' : '중립'),
+        color: msprColor,
+        subIsHtml: !!spark,
+      });
+    }
     // 신규: 뉴스 buzz (7일 50건 이상)
     const news7 = d._FH_News7d || 0;
     if (news7 >= 50) {
@@ -3260,7 +3277,7 @@ function _renderInvestorCard(d) {
   grid.innerHTML = items.map(it => `
     <div style="display:grid; grid-template-columns:1fr auto; align-items:baseline; gap:12px; padding:12px 1px; border-bottom:1px solid var(--border);">
       <span style="font-size:12px; color:var(--text-secondary); letter-spacing:0.01em;">${esc(it.label)}</span>
-      <span style="font-size:16px; font-weight:700; letter-spacing:-0.015em; font-variant-numeric:tabular-nums; text-align:right; color:${it.color};">${esc(it.value)}${it.sub ? `<small style="display:block; font-size:10.5px; color:var(--text-tertiary); font-weight:600; margin-top:2px; text-align:right;">${esc(it.sub)}</small>` : ''}</span>
+      <span style="font-size:16px; font-weight:700; letter-spacing:-0.015em; font-variant-numeric:tabular-nums; text-align:right; color:${it.color};">${esc(it.value)}${it.sub ? `<small style="display:block; font-size:10.5px; color:var(--text-tertiary); font-weight:600; margin-top:2px; text-align:right;">${it.subIsHtml ? it.sub : esc(it.sub)}</small>` : ''}</span>
     </div>
   `).join('');
 }

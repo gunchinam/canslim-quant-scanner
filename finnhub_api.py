@@ -268,6 +268,27 @@ def get_peers(ticker: str) -> List[str]:
     return peers
 
 
+def _parse_profile2(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """company_profile2 응답 → 정규화 dict. 존재하는 키만 포함."""
+    if not raw or not isinstance(raw, dict):
+        return {}
+    out: Dict[str, Any] = {}
+    if raw.get("logo"):
+        out["logo"] = raw["logo"]
+    if raw.get("ipo"):
+        out["ipo"] = raw["ipo"]
+    so = raw.get("shareOutstanding")
+    if so is not None:
+        out["share_outstanding"] = so
+    if raw.get("finnhubIndustry"):
+        out["industry"] = raw["finnhubIndustry"]
+    if raw.get("exchange"):
+        out["exchange"] = raw["exchange"]
+    if raw.get("weburl"):
+        out["weburl"] = raw["weburl"]
+    return out
+
+
 def get_basic_financials(ticker: str) -> Dict[str, Any]:
     """Finnhub basic financials -> yfinance info 호환 dict.
 

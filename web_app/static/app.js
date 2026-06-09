@@ -3987,7 +3987,8 @@ async function loadDpFourAxis(ticker) {
           const cur = closes[closes.length - 1];
           const posPct = Math.max(0, Math.min(100, ((cur - d.wk52_low) / (d.wk52_high - d.wk52_low)) * 100));
           bar.style.width = posPct.toFixed(0) + '%';
-          wlbl.textContent = '상위 ' + posPct.toFixed(0) + '%';
+          const gapFromHigh = Math.round(posPct - 100);  // 고가=0%, 멀수록 큰 음수
+          wlbl.textContent = gapFromHigh === 0 ? '0%' : '−' + Math.abs(gapFromHigh) + '%';
         }
         panel.style.display = '';
       }

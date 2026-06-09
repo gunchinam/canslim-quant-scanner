@@ -3183,9 +3183,9 @@ function _renderInvestorCard(d) {
     const dte = d._FH_DaysToEarnings;
     if (dte != null && dte >= 0 && dte <= 60) {
       items.push({
-        label: '다음 실적',
+        label: '다음 실적(추정)',
         value: dte === 0 ? '오늘' : `D-${dte}`,
-        sub: d._FH_NextEarnings || '',
+        sub: d._FH_NextEarnings ? `~${d._FH_NextEarnings} 추정` : '추정',
         color: dte <= 7 ? 'var(--warning)' : 'var(--text-secondary)'
       });
     }

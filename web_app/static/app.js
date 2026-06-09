@@ -5037,6 +5037,31 @@ function _renderEtfRotation(d) {
   return `<div class="etf-rot-grid">${_rotationTable('🇺🇸 미국 섹터', us)}${_rotationTable('🇰🇷 한국 테마', kr)}</div>`;
 }
 
+// Hero 스파크라인 — closes 배열 → 인라인 SVG (viewBox 300x110)
+function buildSparklineSVG(closes, color) {
+  if (!Array.isArray(closes) || closes.length < 2) return '';
+  const W = 300, H = 110, pad = 6;
+  const lo = Math.min(...closes), hi = Math.max(...closes);
+  const span = (hi - lo) || 1;
+  const n = closes.length;
+  const x = i => (i / (n - 1)) * W;
+  const y = v => pad + (1 - (v - lo) / span) * (H - pad * 2);
+  const pts = closes.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const last = closes.length - 1;
+  const gid = 'spkg_' + Math.abs(closes.length * 7 + Math.round(hi));
+  return (
+    `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%;display:block;">`
+    + `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">`
+    + `<stop offset="0" stop-color="${color}" stop-opacity=".22"/>`
+    + `<stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>`
+    + `<polygon points="${pts} ${W},${H} 0,${H}" fill="url(#${gid})"/>`
+    + `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`
+    + `<circle cx="${x(last).toFixed(1)}" cy="${y(closes[last]).toFixed(1)}" r="4.5" fill="${color}"/>`
+    + `<circle cx="${x(last).toFixed(1)}" cy="${y(closes[last]).toFixed(1)}" r="9" fill="${color}" opacity=".18"/>`
+    + `</svg>`
+  );
+}
+
 // 거래량 한글 축약 (만/억)
 function _fmtEtfVol(n) {
   if (n == null) return '—';

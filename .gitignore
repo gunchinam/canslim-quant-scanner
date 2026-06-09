@@ -105,3 +105,6 @@ package-lock.json
 # 세션 작업 디렉터리 (커밋 제외)
 .superpowers/
 .bottleneck_snapshots/
+
+# 레짐/리드래그 일일 캐시 (런타임 생성물)
+regime_cache/

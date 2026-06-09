@@ -3403,6 +3403,15 @@ function _renderDetailFeatures(d) {
     }
   }
 
+  // ── 거래량 배수 · 시총 (Hero 우측 패널) ──────────────────────
+  const volEl = document.getElementById('dp-volratio');
+  if (volEl) volEl.textContent = (d.VolRatio != null) ? (Number(d.VolRatio).toFixed(1) + '×') : '—';
+  const mcEl = document.getElementById('dp-mktcap');
+  if (mcEl) {
+    const mc = (d.MarketCap != null) ? d.MarketCap : d._MarketCap;
+    mcEl.textContent = (mc != null) ? _fmtMarketCap(mc) : '—';
+  }
+
 }
 
 // P4-P12: 드로다운 리스크 메트릭 카드 (상세 패널)
@@ -3960,6 +3969,35 @@ async function loadDpFourAxis(ticker) {
     _dpFourAxisLoadingFor = null;
     document.getElementById('dp-fouraxis-chart').src = 'data:image/png;base64,' + d.chart;
     chartW.style.display = 'block';
+
+    // ── Hero 스파크라인 + 52주 위치 ─────────────────────────────
+    try {
+      const panel = document.getElementById('dp-spark-panel');
+      const sparkEl = document.getElementById('dp-spark');
+      const closes = Array.isArray(d.closes) ? d.closes : [];
+      if (panel && sparkEl && closes.length >= 2) {
+        const up = closes[closes.length - 1] >= closes[0];
+        const col = up ? '#22A463' : '#DC2626';
+        sparkEl.innerHTML = buildSparklineSVG(closes, col);
+        const lastEl = document.getElementById('dp-spark-last');
+        if (lastEl) { lastEl.textContent = fmtPrice(closes[closes.length - 1]); lastEl.style.color = col; }
+        const chgEl = document.getElementById('dp-spark-change');
+        if (chgEl && d.spark_change_pct != null) {
+          const s = d.spark_change_pct >= 0 ? '▲ ' : '▼ ';
+          chgEl.textContent = s + Math.abs(d.spark_change_pct).toFixed(1) + '%';
+          chgEl.classList.toggle('is-down', d.spark_change_pct < 0);
+        }
+        const bar = document.getElementById('dp-wk52-bar');
+        const wlbl = document.getElementById('dp-wk52-label');
+        if (bar && wlbl && d.wk52_high != null && d.wk52_low != null && d.wk52_high > d.wk52_low) {
+          const cur = closes[closes.length - 1];
+          const posPct = Math.max(0, Math.min(100, ((cur - d.wk52_low) / (d.wk52_high - d.wk52_low)) * 100));
+          bar.style.width = posPct.toFixed(0) + '%';
+          wlbl.textContent = '상위 ' + posPct.toFixed(0) + '%';
+        }
+        panel.style.display = '';
+      }
+    } catch (e) { console.warn('hero spark render failed:', e); }
 
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     set('dp-fa-phase', d.phase || '');

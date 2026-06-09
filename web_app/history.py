@@ -105,17 +105,28 @@ def save_snapshot(results: list[dict], market: str, universe: list[str] | set[st
     sorted_by_score = sorted(
         results, key=lambda x: x.get("TotalScore") or 0, reverse=True
     )
-    snap = {
-        r["Ticker"]: {
+    def _row(r: dict, rank: int) -> dict:
+        d = {
             "score": round(float(r.get("TotalScore", 0) or 0), 1),
-            "rank": i + 1,
+            "rank": rank,
             "entry": r.get("EntryStatus"),
             "_PER": r.get("_PER"),
             "_PBR": r.get("_PBR"),
         }
-        for i, r in enumerate(sorted_by_score)
-        if r.get("Ticker")
-    }
+        # 레짐 모듈 필드 (있을 때만) — RegimeEntryScore forward 누적 비교용.
+        # 미설치/비활성 시 키 부재 → 기존 포맷과 100% 호환.
+        re_score = r.get("RegimeEntryScore")
+        if re_score is not None:
+            d["regime_entry"] = round(float(re_score), 2)
+            d["regime_state"] = r.get("RegimeState")
+            d["ofi"] = r.get("OFIScore")
+            d["accum"] = bool(r.get("Accumulation"))
+        return d
+
+    snap = {}
+    for i, r in enumerate(sorted_by_score):
+        if r.get("Ticker"):
+            snap[r["Ticker"]] = _row(r, i + 1)
     if universe:
         for tkr in universe:
             if tkr and tkr not in snap:

@@ -36,6 +36,33 @@ try:
 except Exception:
     _bottleneck = None  # type: ignore
 
+# 선제적 레짐 파악 모듈 (모듈1~4). import 실패해도 스캐너는 정상 동작.
+try:
+    import regime_integration as _regime
+except Exception as _e:  # pragma: no cover
+    _regime = None  # type: ignore
+    logging.info("[Adapter] regime_integration 미사용: %s", _e)
+
+
+def _attach_regime(rows: list[dict], market: str) -> None:
+    """레짐 전환확률·OFI·리드래그 부착 + RegimeEntryScore 산출 (never throw)."""
+    if _regime is None:
+        return
+    try:
+        _regime.attach_all(rows, market)
+    except Exception as e:  # noqa: BLE001
+        logging.debug("[Adapter] regime attach 실패: %s", e)
+
+
+def _scan_sort_key(row: dict):
+    """REGIME_RANK=1 이면 RegimeEntryScore, 아니면 기존 TotalScore 정렬."""
+    if _regime is not None:
+        try:
+            return _regime.rank_key(row)
+        except Exception:
+            pass
+    return row.get("TotalScore", 0)
+
 try:
     from web_app.valuation_context import attach_valuation_context as _attach_val_ctx
 except Exception:
@@ -610,7 +637,8 @@ class ScanAdapter:
         _attach_index_membership(results, compute_bucket=False)  # 섹터 스캔: 소표본 백분위 왜곡 방지
         _attach_midcap_alpha(results)
         _attach_valuation_context(results)
-        results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
+        _attach_regime(results, self._market)  # 모듈1~4: 레짐 전환확률·OFI·리드래그 → RegimeEntryScore
+        results.sort(key=_scan_sort_key, reverse=True)
         return results
 
     def scan_all(self, *, max_workers: int = int(os.environ.get("SCAN_WORKERS", "8")), prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
@@ -648,7 +676,8 @@ class ScanAdapter:
         _attach_index_membership(results)
         _attach_midcap_alpha(results)
         _attach_valuation_context(results)
-        results.sort(key=lambda x: x.get("TotalScore", 0), reverse=True)
+        _attach_regime(results, self._market)  # 모듈1~4: 레짐 전환확률·OFI·리드래그 → RegimeEntryScore
+        results.sort(key=_scan_sort_key, reverse=True)
         # forward IC 추적: BOTTLENECK_SNAPSHOT=1 일 때만 오늘 병목 등급 스냅샷 적재
         if os.environ.get("BOTTLENECK_SNAPSHOT") == "1":
             try:

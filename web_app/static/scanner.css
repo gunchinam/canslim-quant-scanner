@@ -2328,8 +2328,16 @@ td.score-col {
 /* ── Analysis Section ────────────────────────────────────── */
 .dp-analysis-section {
   padding: 0;
-  background: var(--card);
+  background: var(--surface-page);
   border-top: 1px solid var(--border);
+}
+
+/* 드로워 카드 입체감 — 흰 카드를 회색 캔버스 위에서 띄워 가독성↑
+   (흰 배경 위 흰 카드로 경계가 사라지던 문제 해결) */
+.detail-panel .card,
+#dp-fouraxis-header,
+#dp-fouraxis-obs {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 .dp-disclaimer {
   margin: 20px 20px 12px;

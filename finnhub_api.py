@@ -439,3 +439,33 @@ def get_basic_financials(ticker: str) -> Dict[str, Any]:
 
     _store(cache_key, result)
     return result
+
+
+def get_market_context() -> Dict[str, Any]:
+    """시장 전역 데이터 — IPO 캘린더(향후 30일) + 일반 시장 뉴스.
+
+    per-ticker 아님. 자체 캐시(_cached/_store) 사용.
+    """
+    if not is_available():
+        return {"available": False, "ipos": [], "news": []}
+    cache_key = "fh_market_context"
+    cached = _cached(cache_key)
+    if cached is not None:
+        return cached
+    fc = _client()
+    today = datetime.now()
+    today_s = today.strftime("%Y-%m-%d")
+    in_30 = (today + timedelta(days=30)).strftime("%Y-%m-%d")
+
+    ipo_raw = _safe("ipo_calendar", "_market",
+                    lambda: fc.ipo_calendar(_from=today_s, to=in_30))
+    news_raw = _safe("general_news", "_market",
+                     lambda: fc.general_news("general", min_id=0))
+
+    result = {
+        "available": True,
+        "ipos": _parse_ipo_calendar(ipo_raw),
+        "news": _parse_general_news(news_raw),
+    }
+    _store(cache_key, result)
+    return result

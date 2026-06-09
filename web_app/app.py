@@ -2359,6 +2359,28 @@ def api_consensus(ticker: str):
     return jsonify(result)
 
 
+def _downsample_closes(closes, max_points: int = 24):
+    """스파크라인용 종가 배열을 max_points 이하로 균등 다운샘플. 최신가는 항상 보존."""
+    vals = [float(c) for c in closes if c is not None]
+    n = len(vals)
+    if n == 0:
+        return []
+    if n <= max_points:
+        return vals
+    step = n / max_points
+    out = [vals[int(i * step)] for i in range(max_points)]
+    out[-1] = vals[-1]  # 마지막(최신) 값 보존
+    return out
+
+
+def _wk52_high_low(closes):
+    """종가 배열의 (고가, 저가). 비면 (None, None)."""
+    vals = [float(c) for c in closes if c is not None]
+    if not vals:
+        return (None, None)
+    return (max(vals), min(vals))
+
+
 def _compute_four_axis_payload(ticker: str, market: str) -> tuple:
     """yfinance + FourAxisAnalyzer + HandDrawnChartRenderer → (payload_dict|None, err_str|None)."""
     try:
@@ -2519,6 +2541,21 @@ def _compute_four_axis_payload(ticker: str, market: str) -> tuple:
             "key_observation": rd.get("key_observation", ""),
             "structured_analysis": rd.get("structured_analysis", ""),
         }
+
+        # ── Hero 스파크라인용 경량 데이터 (20~24 포인트) + 52주 고저 ──
+        try:
+            _closes_full = [float(x) for x in hist["Close"].dropna().tolist()]
+            _recent = _closes_full[-60:] if len(_closes_full) > 60 else _closes_full
+            payload["closes"] = _downsample_closes(_recent, max_points=24)
+            _hi, _lo = _wk52_high_low(_closes_full[-252:])
+            payload["wk52_high"] = _hi
+            payload["wk52_low"] = _lo
+            payload["spark_change_pct"] = (
+                round((_recent[-1] / _recent[0] - 1) * 100, 1)
+                if len(_recent) >= 2 and _recent[0] else None
+            )
+        except Exception as _e:
+            logging.debug("hero spark payload: %s", _e)
 
         # ── 과열/바닥 신호 ────────────────────────────────────────────
         try:

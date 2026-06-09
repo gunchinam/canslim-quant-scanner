@@ -1851,8 +1851,51 @@ td.score-col {
    Zone C: RSI 온도계 (dp-thermo-compact)
 ──────────────────────────────────────────────────────────── */
 .dp-hero-summary {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 28px;
+  align-items: stretch;
   margin-bottom: 0;
 }
+.dp-hero-left { min-width: 0; }
+.dp-hero-right {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  padding-left: 24px;
+}
+.dp-spark-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.dp-spark-eyebrow {
+  font-size: 10px; letter-spacing: 0.08em; color: var(--text-tertiary);
+  font-weight: 700; text-transform: uppercase;
+}
+.dp-spark-change {
+  font-size: 11px; font-weight: 800; color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  padding: 2px 7px; border-radius: 6px;
+}
+.dp-spark-change.is-down {
+  color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+}
+.dp-spark-chart { position: relative; flex: 1; min-height: 96px; }
+.dp-spark-chart > #dp-spark { position: absolute; inset: 0; }
+.dp-spark-last {
+  position: absolute; right: 0; top: 0;
+  font-size: 12px; font-weight: 800; color: var(--success);
+}
+.dp-spark-facts { display: flex; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 11px; }
+.dp-spark-fact { flex: 1; padding-left: 14px; border-left: 1px solid var(--border); }
+.dp-spark-fact:first-child { padding-left: 0; border-left: none; }
+.dp-spark-fact--wide { flex: 1.2; }
+.dp-spark-fact-label {
+  display: block; font-size: 9px; letter-spacing: 0.06em;
+  color: var(--text-tertiary); font-weight: 700; text-transform: uppercase;
+}
+.dp-spark-fact-val { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+.dp-wk52-track { height: 4px; background: var(--surface-muted, #eef0f2); border-radius: 9px; margin: 7px 12px 6px 0; position: relative; }
+.dp-wk52-fill { position: absolute; left: 0; top: 0; height: 4px; background: var(--success); border-radius: 9px; }
 
 /* Zone A — 판결 행 ---------------------------------------- */
 .dp-verdict-zone {
@@ -2104,10 +2147,10 @@ td.score-col {
   padding: 24px 20px;
   min-height: 90px;
   font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Helvetica Neue", 'Pretendard', sans-serif;
-  font-size: clamp(28px, 5.5vw, 46px);
+  font-size: clamp(30px, 5.5vw, 46px);
   font-weight: 800;
-  line-height: 1.16;
-  letter-spacing: -0.02em;
+  line-height: 1.25;
+  letter-spacing: -0.03em;
   color: #1a1a1a;
   background: #F4ECD8;
   border: 3px solid #1a1a1a;
@@ -3321,6 +3364,11 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
     max-height: none;
   }
   /* 판결문 레이아웃 모바일 */
+  .dp-hero-summary { grid-template-columns: 1fr; gap: 18px; }
+  .dp-hero-right {
+    border-left: none; padding-left: 0;
+    border-top: 1px solid var(--border); padding-top: 16px;
+  }
   .dp-verdict-zone {
     gap: 14px;
     padding: 16px 0 14px;

@@ -3403,6 +3403,15 @@ function _renderDetailFeatures(d) {
     }
   }
 
+  // ── 거래량 배수 · 시총 (Hero 우측 패널) ──────────────────────
+  const volEl = document.getElementById('dp-volratio');
+  if (volEl) volEl.textContent = (d.VolRatio != null) ? (Number(d.VolRatio).toFixed(1) + '×') : '—';
+  const mcEl = document.getElementById('dp-mktcap');
+  if (mcEl) {
+    const mc = (d.MarketCap != null) ? d.MarketCap : d._MarketCap;
+    mcEl.textContent = (mc != null) ? _fmtMarketCap(mc) : '—';
+  }
+
 }
 
 // P4-P12: 드로다운 리스크 메트릭 카드 (상세 패널)
@@ -3960,6 +3969,35 @@ async function loadDpFourAxis(ticker) {
     _dpFourAxisLoadingFor = null;
     document.getElementById('dp-fouraxis-chart').src = 'data:image/png;base64,' + d.chart;
     chartW.style.display = 'block';
+
+    // ── Hero 스파크라인 + 52주 위치 ─────────────────────────────
+    try {
+      const panel = document.getElementById('dp-spark-panel');
+      const sparkEl = document.getElementById('dp-spark');
+      const closes = Array.isArray(d.closes) ? d.closes : [];
+      if (panel && sparkEl && closes.length >= 2) {
+        const up = closes[closes.length - 1] >= closes[0];
+        const col = up ? '#22A463' : '#DC2626';
+        sparkEl.innerHTML = buildSparklineSVG(closes, col);
+        const lastEl = document.getElementById('dp-spark-last');
+        if (lastEl) { lastEl.textContent = fmtPrice(closes[closes.length - 1]); lastEl.style.color = col; }
+        const chgEl = document.getElementById('dp-spark-change');
+        if (chgEl && d.spark_change_pct != null) {
+          const s = d.spark_change_pct >= 0 ? '▲ ' : '▼ ';
+          chgEl.textContent = s + Math.abs(d.spark_change_pct).toFixed(1) + '%';
+          chgEl.classList.toggle('is-down', d.spark_change_pct < 0);
+        }
+        const bar = document.getElementById('dp-wk52-bar');
+        const wlbl = document.getElementById('dp-wk52-label');
+        if (bar && wlbl && d.wk52_high != null && d.wk52_low != null && d.wk52_high > d.wk52_low) {
+          const cur = closes[closes.length - 1];
+          const posPct = Math.max(0, Math.min(100, ((cur - d.wk52_low) / (d.wk52_high - d.wk52_low)) * 100));
+          bar.style.width = posPct.toFixed(0) + '%';
+          wlbl.textContent = '상위 ' + posPct.toFixed(0) + '%';
+        }
+        panel.style.display = '';
+      }
+    } catch (e) { console.warn('hero spark render failed:', e); }
 
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     set('dp-fa-phase', d.phase || '');
@@ -5035,6 +5073,31 @@ function _renderEtfRotation(d) {
     return '<div class="etf-sectors-empty">로테이션 데이터가 없어요.</div>';
   }
   return `<div class="etf-rot-grid">${_rotationTable('🇺🇸 미국 섹터', us)}${_rotationTable('🇰🇷 한국 테마', kr)}</div>`;
+}
+
+// Hero 스파크라인 — closes 배열 → 인라인 SVG (viewBox 300x110)
+function buildSparklineSVG(closes, color) {
+  if (!Array.isArray(closes) || closes.length < 2) return '';
+  const W = 300, H = 110, pad = 6;
+  const lo = Math.min(...closes), hi = Math.max(...closes);
+  const span = (hi - lo) || 1;
+  const n = closes.length;
+  const x = i => (i / (n - 1)) * W;
+  const y = v => pad + (1 - (v - lo) / span) * (H - pad * 2);
+  const pts = closes.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const last = closes.length - 1;
+  const gid = 'spkg_' + Math.abs(closes.length * 7 + Math.round(hi));
+  return (
+    `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%;display:block;">`
+    + `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">`
+    + `<stop offset="0" stop-color="${color}" stop-opacity=".22"/>`
+    + `<stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>`
+    + `<polygon points="${pts} ${W},${H} 0,${H}" fill="url(#${gid})"/>`
+    + `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`
+    + `<circle cx="${x(last).toFixed(1)}" cy="${y(closes[last]).toFixed(1)}" r="4.5" fill="${color}"/>`
+    + `<circle cx="${x(last).toFixed(1)}" cy="${y(closes[last]).toFixed(1)}" r="9" fill="${color}" opacity=".18"/>`
+    + `</svg>`
+  );
 }
 
 // 거래량 한글 축약 (만/억)

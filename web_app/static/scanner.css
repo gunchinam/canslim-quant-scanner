@@ -68,6 +68,22 @@ html, body {
 .macro-signal.caution { background: rgba(255,176,32,0.15);  color: #C77700; }
 .macro-signal.danger  { background: rgba(245,63,63,0.13);   color: #E03131; }
 .macro-signal.unknown { background: var(--surface-page);    color: var(--text-tertiary); }
+.macro-signal .trend-arrow { font-size: 10px; opacity: 0.7; margin-left: 2px; }
+.macro-leading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: default;
+  letter-spacing: -0.2px;
+}
+.macro-leading.hidden { display: none; }
+.macro-leading.safe    { background: rgba(0,192,115,0.10);  color: #00A862; }
+.macro-leading.caution { background: rgba(255,176,32,0.13); color: #C77700; }
+.macro-leading.danger  { background: rgba(245,63,63,0.11);  color: #E03131; }
 .macro-item {
   display: inline-flex;
   align-items: baseline;

@@ -5401,11 +5401,39 @@ function renderMacro(d) {
   const sigEl = document.getElementById('macro-signal');
   const itemsEl = document.getElementById('macro-items');
   const metaEl = document.getElementById('macro-meta');
+  const leadEl = document.getElementById('macro-leading');
   if (!sigEl || !itemsEl || !metaEl) return;
 
   const sig = d.signal || { level: 'unknown', emoji: '⚪', label: '정보없음' };
+  const trend = sig.trend || 'stable';
+  const trendArrow = trend === 'deteriorating' ? '<span class="trend-arrow">↗악화</span>'
+                   : trend === 'improving' ? '<span class="trend-arrow">↘개선</span>' : '';
   sigEl.className = 'macro-signal ' + (sig.level || 'unknown');
-  sigEl.innerHTML = `${sig.emoji || '⚪'} <span>${esc(sig.label || '')}</span>`;
+  sigEl.innerHTML = `${sig.emoji || '⚪'} <span>${esc(sig.label || '')}${trendArrow}</span>`;
+
+  // 종가베팅 선행 지표
+  if (leadEl) {
+    const lead = d.leading;
+    if (lead && lead.safety) {
+      const lbl = lead.safety === 'safe' ? '종가베팅 안전'
+                : lead.safety === 'caution' ? '종가베팅 주의'
+                : '종가베팅 위험';
+      const ico = lead.safety === 'safe' ? '🟢'
+                : lead.safety === 'caution' ? '🟡' : '🔴';
+      leadEl.className = 'macro-leading ' + lead.safety;
+      leadEl.innerHTML = `${ico} ${esc(lbl)}`;
+      leadEl.title = (lead.reasons && lead.reasons.length)
+        ? lead.reasons.join('\n')
+        : '선행 지표 이상 없음';
+      const details = [];
+      if (lead.vix_term != null) details.push('VIX텀 ' + lead.vix_term.toFixed(2));
+      if (lead.skew != null) details.push('SKEW ' + lead.skew);
+      if (lead.hy_spread_chg != null) details.push('HY ' + (lead.hy_spread_chg > 0 ? '+' : '') + lead.hy_spread_chg + '%p');
+      if (details.length) leadEl.title += '\n\n' + details.join(' | ');
+    } else {
+      leadEl.className = 'macro-leading hidden';
+    }
+  }
 
   const ind = d.indicators || {};
   const parts = [];

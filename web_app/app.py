@@ -2358,23 +2358,6 @@ def api_consensus(ticker: str):
         _consensus_cache[cons_cache_key] = {"data": result, "_ts": int(time.time())}
     return jsonify(result)
 
-@app.route("/api/regime/<ticker>")
-def api_regime(ticker: str):
-    """AgentQuant 기반 시장 레짐 + 진입 타이밍 시그널."""
-    ticker = _validate_ticker(ticker)
-    if not ticker:
-        return jsonify({"error": "invalid ticker"}), 400
-    market = (request.args.get("market") or "US").upper()
-    try:
-        from agentquant_signal import get_regime_signal
-        payload = get_regime_signal(ticker, market=market)
-        if not payload:
-            return jsonify({"error": "신호를 계산할 수 없습니다."}), 404
-        return jsonify(payload)
-    except Exception as e:
-        logging.exception("api_regime")
-        return jsonify({"error": str(e)}), 500
-
 
 def _compute_four_axis_payload(ticker: str, market: str) -> tuple:
     """yfinance + FourAxisAnalyzer + HandDrawnChartRenderer → (payload_dict|None, err_str|None)."""
@@ -2956,16 +2939,6 @@ def api_score_history(ticker: str):
 
 
 
-
-@app.route("/api/bucket-stats")
-def api_bucket_stats():
-    from one_liner import _bucket_counter
-    total = sum(_bucket_counter.values())
-    data = [
-        {"bucket": k, "count": v, "pct": round(v / total * 100, 1) if total else 0}
-        for k, v in _bucket_counter.most_common()
-    ]
-    return jsonify({"total": total, "distribution": data})
 
 
 # SocketIO 초기화 (gunicorn / 직접 실행 모두 대응)

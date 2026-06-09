@@ -4552,9 +4552,9 @@ function _renderReasonTags(topReason) {
 // ── 테이블 정렬 ─────────────────────────────────────────────────────
 
 function initFilterChips() {
-  document.querySelectorAll('#filter-chips .chip').forEach(chip => {
+  document.querySelectorAll('#filter-chips .chip[data-filter]').forEach(chip => {
     chip.addEventListener('click', () => {
-      closeEtfView();   // ETF 인라인 탭이 열려 있으면 종목 목록으로 복귀
+      closeEtfView();
       const f = chip.dataset.filter || 'all';
       if (f === 'all') {
         _activeFilters.clear();
@@ -4563,12 +4563,11 @@ function initFilterChips() {
       } else {
         _activeFilters.add(f);
       }
-      // 점수급등 필터는 어제 대비 변동(ScoreDelta) 기준으로 자동 정렬 — 급등 종목이 위로.
       if (f === 'score_surge') {
         if (_activeFilters.has('score_surge')) {
           _sortKey = 'ScoreDelta'; _sortDir = -1;
         } else if (_sortKey === 'ScoreDelta') {
-          _sortKey = 'TotalScore'; _sortDir = -1;  // 해제 시 점수순 복귀
+          _sortKey = 'TotalScore'; _sortDir = -1;
         }
         _syncSortArrowUI();
       }
@@ -4579,7 +4578,7 @@ function initFilterChips() {
 }
 
 function _syncFilterChipUI() {
-  document.querySelectorAll('#filter-chips .chip').forEach(c => {
+  document.querySelectorAll('#filter-chips .chip[data-filter]').forEach(c => {
     const f = c.dataset.filter || 'all';
     if (f === 'all') {
       c.classList.toggle('active', _activeFilters.size === 0);
@@ -6224,3 +6223,16 @@ async function captureDetail() {
   // 스크롤 시 숨김 — 위치 어긋남 방지
   window.addEventListener('scroll', () => { if (tip) tip.classList.remove('show'); currentTicker = null; }, true);
 })();
+
+// ── TopBar ⋯ 오버플로 메뉴 토글 ────────────────────────────────────────────
+(function () {
+  const btn = document.getElementById('topbar-more-btn');
+  const menu = document.getElementById('topbar-more-menu');
+  if (!btn || !menu) return;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    menu.hidden = !menu.hidden;
+  });
+  document.addEventListener('click', () => { menu.hidden = true; });
+})();
+

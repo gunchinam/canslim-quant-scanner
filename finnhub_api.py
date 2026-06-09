@@ -243,6 +243,15 @@ def get_sentiment_data(ticker: str) -> Dict[str, Any]:
         result["news_count_7d"] = 0
         result["news_headlines"] = []
 
+    # 7) Company profile2 (로고·정확 IPO일·상장주식수·산업)
+    prof = _safe("profile2", ticker, lambda: fc.company_profile2(symbol=ticker))
+    parsed_prof = _parse_profile2(prof)
+    result["logo"] = parsed_prof.get("logo", "")
+    result["ipo_date"] = parsed_prof.get("ipo", "")
+    result["share_outstanding"] = parsed_prof.get("share_outstanding")
+    result["industry"] = parsed_prof.get("industry", "")
+    result["exchange"] = parsed_prof.get("exchange", "")
+
     _store(cache_key, result)
     return result
 

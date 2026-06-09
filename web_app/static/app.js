@@ -4025,7 +4025,7 @@ async function loadDpFourAxis(ticker) {
   const reqSeq = ++_dpFourAxisReqSeq;
 
   try {
-    const p = new URLSearchParams({ market: currentMarket });
+    const p = new URLSearchParams({ market: currentMarket, chart: '0' });
     const res = await _fetchWithTimeout(`/api/four_axis/${encodeURIComponent(ticker)}?${p}`);
     if (!res.ok) throw new Error(await _readApiError(res));
     const d = await res.json();
@@ -4125,7 +4125,7 @@ async function loadDpFourAxis(ticker) {
     if (reqSeq !== _dpFourAxisReqSeq) return;
     _dpFourAxisLoadedFor = null;
     _dpFourAxisLoadingFor = null;
-    errDiv.textContent = '4축 차트 로드 실패: ' + e.message;
+    errDiv.textContent = '분석 로드 실패: ' + e.message;
     errDiv.style.display = 'block';
   } finally {
     if (reqSeq !== _dpFourAxisReqSeq) return;
@@ -5044,6 +5044,7 @@ function openEtfView() {
   _setViewTab('etf');
   // 매번 새로 호출하되 서버 TTL 캐시가 비용을 흡수 (최초 1회만 로딩 표시)
   loadEtfData(!_etfLoaded);
+  loadMarketContext();
 }
 
 function closeEtfView() {
@@ -5069,6 +5070,43 @@ function _setViewTab(view) {
   document.querySelectorAll('.view-tab').forEach(function (b) {
     b.classList.toggle('active', b.dataset.view === view);
   });
+}
+
+// ── 시장 맥락: IPO 캘린더 + 시장 뉴스 (US) ──────────────────────────────
+let _marketCtxLoaded = false;
+async function loadMarketContext() {
+  if (_marketCtxLoaded) return;
+  const wrap = document.getElementById('market-context');
+  const body = document.getElementById('market-context-body');
+  if (!wrap || !body) return;
+  try {
+    const res = await fetch('/api/market_context');
+    const d = await res.json();
+    if (!d.available || (!(d.ipos || []).length && !(d.news || []).length)) {
+      wrap.style.display = 'none'; return;
+    }
+    const ipoRows = (d.ipos || []).slice(0, 8).map(i => `
+      <div style="display:flex; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); font-size:12.5px;">
+        <span style="color:var(--text-primary); font-weight:600;">${esc(i.symbol)} <span style="color:var(--text-tertiary); font-weight:400;">${esc(i.name || '')}</span></span>
+        <span style="color:var(--text-secondary); white-space:nowrap;">${esc(i.date)}${i.price ? ` · $${esc(i.price)}` : ''}</span>
+      </div>`).join('');
+    const newsRows = (d.news || []).slice(0, 8).map(n => {
+      const u = /^https?:\/\//i.test(n.url || '') ? n.url : '';
+      const t = esc(n.headline || '');
+      return `<div style="padding:7px 0; border-bottom:1px solid var(--border); font-size:12.5px; line-height:1.4;">
+        ${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${t}</a>` : t}
+        ${n.source ? `<span style="color:var(--text-tertiary); font-size:10.5px; margin-left:6px;">${esc(n.source)}</span>` : ''}
+      </div>`;
+    }).join('');
+    body.innerHTML = `
+      ${ipoRows ? `<div style="font-size:11.5px; font-weight:700; color:var(--text-tertiary); margin:4px 0;">예정 IPO</div>${ipoRows}` : ''}
+      ${newsRows ? `<div style="font-size:11.5px; font-weight:700; color:var(--text-tertiary); margin:10px 0 4px;">시장 뉴스</div>${newsRows}` : ''}`;
+    wrap.style.display = '';
+    _marketCtxLoaded = true;
+  } catch (e) {
+    console.debug('market_context 로드 실패:', e);
+    wrap.style.display = 'none';
+  }
 }
 
 async function loadEtfData(showLoading) {

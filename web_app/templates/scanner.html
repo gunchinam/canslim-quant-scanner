@@ -206,6 +206,10 @@
             <div id="etf-list-kr" class="etf-list"></div>
           </section>
         </div>
+        <div id="market-context" style="display:none; margin-top:12px;">
+          <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin:8px 0;">🆕 IPO 캘린더 · 시장 뉴스</div>
+          <div id="market-context-body"></div>
+        </div>
       </div>
     </main>
   </div>
@@ -246,11 +250,11 @@
 
       <!-- Section Nav -->
       <nav class="dp-section-nav" id="dp-section-nav">
-        <button class="dp-section-btn active" onclick="dpScrollTo('dp-hero-zone',this)">요약</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-chart-section',this)">차트</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-analysis-section',this)">분석</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-group-company',this)">기업</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-group-ref',this)">참고</button>
+        <button class="dp-section-btn active" onclick="dpScrollTo('dp-hero-zone',this)">📋 요약</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-chart-section',this)">📈 차트</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-analysis-section',this)">📊 분석</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-group-company',this)">🏢 기업</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-group-ref',this)">📎 참고</button>
       </nav>
 
     <!-- Hero Zone -->
@@ -354,7 +358,7 @@
 
     <!-- Chart -->
     <section class="dp-chart-section" id="dp-chart-section">
-      <div id="dp-fouraxis-loading" style="text-align:center;padding:40px;color:var(--text-tertiary);display:none;">차트 생성 중...</div>
+      <div id="dp-fouraxis-loading" style="text-align:center;padding:40px;color:var(--text-tertiary);display:none;">분석 불러오는 중...</div>
       <div id="dp-fouraxis-error"   style="text-align:center;padding:24px;color:var(--destructive);display:none;"></div>
       <div id="dp-fouraxis-header" style="display:none;padding:14px 16px;margin:14px 20px 8px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border);">
         <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px;font-weight:600;">📈 현재 타이밍 분석 <span style="font-weight:400;color:var(--text-tertiary);">— 별점 = 아래 ‘타이밍 점수’를 별로 표시한 것 (같은 값)</span></div>

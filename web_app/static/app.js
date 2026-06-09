@@ -3180,7 +3180,7 @@ function _renderInvestorCard(d) {
       });
     }
     if (instPct != null) {
-      items.push({ label: '기관 보유', value: `${instPct.toFixed(0)}%`, color: 'var(--text-secondary)' });
+      items.push({ label: '기관 보유', value: instPct > 100 ? '100%+' : `${instPct.toFixed(0)}%`, color: 'var(--text-secondary)' });
     }
     if (recKey) {
       const recKr = {strong_buy:'강한 관심', buy:'관심', hold:'보유', sell:'경계', strong_sell:'강한 경계'};

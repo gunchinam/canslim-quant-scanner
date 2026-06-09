@@ -1859,9 +1859,11 @@ td.score-col {
 
 /* ── ② 결론 ──────────────────────────────────────────────── */
 .dp-section-conclusion {
-  padding: 0 20px 16px;
+  margin: 12px 20px 0;
+  padding: 0 16px 16px;
   background: var(--card);
-  border-bottom: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: 18px;
   position: relative;
   overflow: hidden;
 }
@@ -1883,13 +1885,25 @@ td.score-col {
   padding: 12px 0 8px;
 }
 .dp-section-timing .dp-hero-stats {
-  padding: 0 20px 8px;
+  margin: 8px 20px;
+  padding: 14px 16px 2px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
 }
 .dp-section-timing #dp-spark-panel {
-  padding: 0 20px 12px;
+  margin: 8px 20px;
+  padding: 14px 16px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
 }
 .dp-section-timing .dp-thermo-compact {
-  padding: 0 20px 8px;
+  margin: 8px 20px;
+  padding: 14px 16px 4px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
 }
 .dp-spark-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .dp-spark-eyebrow {

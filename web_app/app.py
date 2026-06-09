@@ -2337,7 +2337,7 @@ def api_consensus(ticker: str):
         try:
             import yfinance as yf
             info = _run_with_timeout(
-                lambda: yf.Ticker(ticker).info or {}, 5, f"consensus yf {ticker}"
+                lambda: yf.Ticker(ticker).info or {}, 8, f"consensus yf {ticker}"
             ) or {}
             def _flt(v):
                 try: return float(v)

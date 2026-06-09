@@ -1072,7 +1072,7 @@ async function _loadMacroStrip(region) {
 
 // ───────── 인사이더 거래 ─────────
 const _INS_SIDE_LABEL = {
-  buy: '매수', sell: '매도', option: '옵션행사', grant: '부여', other: '기타'
+  buy: '취득', sell: '처분', option: '옵션행사', grant: '부여', other: '기타'
 };
 function _insFmtVal(v) {
   if (v == null || isNaN(v)) return '—';
@@ -1101,7 +1101,7 @@ function _renderInsiderCard(payload) {
   if (cntEl)  cntEl.textContent  = String(sm.count || txs.length);
   if (netEl) {
     const net = Number(sm.net || 0);
-    netEl.textContent = net > 0 ? `순매수 ${_insFmtVal(net)}` : net < 0 ? `순매도 ${_insFmtVal(-net)}` : '균형';
+    netEl.textContent = net > 0 ? `순취득 ${_insFmtVal(net)}` : net < 0 ? `순처분 ${_insFmtVal(-net)}` : '균형';
     netEl.className = 'dp-insider-net ' + (net > 0 ? 'pos' : net < 0 ? 'neg' : 'zero');
   }
 
@@ -2541,7 +2541,7 @@ function _auxTextKo(badge, text, st) {
     const hm = text.match(/Hurst\s+([\d.]+)/);
     const km = text.match(/Kalman\s+(\S+)/);
     const h = hm ? hm[1] : '—';
-    const k = km ? (_KALMAN_KO[km[1]] || km[1].replace('SELL','매도/회피')) : '—';
+    const k = km ? (_KALMAN_KO[km[1]] || km[1].replace('SELL','경계')) : '—';
     const hv = parseFloat(h);
     const hDesc = isNaN(hv) ? '' : hv > 0.7 ? '강한 추세' : hv > 0.5 ? '추세 지속' : hv > 0.4 ? '약한 추세' : '역추세(반전 가능)';
     const hTxt = hDesc ? `${h} (${hDesc})` : h;
@@ -2572,7 +2572,7 @@ const _LABEL_KO = {
   '신고가·피벗 돌파 (New Highs)':   ['신고가·피벗 돌파', '52주 최고가 및 패턴 돌파'],
   '거래량 확인 돌파 (Supply/Demand)':['거래량 확인 돌파', '기관 참여를 동반한 거래량 급증'],
   '주도주 판별 (Leader/Laggard)':   ['주도주 판별',      '시장 대비 상대강도 측정'],
-  '기관 수급 (Institutional)':      ['기관 수급',        '기관 자금의 매수·매도 흐름'],
+  '기관 수급 (Institutional)':      ['기관 수급',        '기관 자금의 유입·유출 흐름'],
   '시장 방향 (Market Direction)':   ['시장 방향',        '전체 시장 추세와 방향성'],
   'Fama-French Factor':             ['가치·퀄리티 팩터', '저평가·고품질 종목 선별'],
   'Mean Reversion':                 ['평균 회귀',        'RSI·Z-Score 기반 반등/조정 가능성'],
@@ -2596,9 +2596,9 @@ const _CS_WHAT = {
   'C':         '분기 순이익 증가율 — 최근 분기 EPS가 전년 동기 대비 얼마나 성장했는지 봄. 오닐 기준 25% 이상이 목표임.',
   'A':         '연간 ROE 기준 — 자기자본으로 얼마나 벌어들이는지 봄. 오닐 기준 17% 이상이 합격선임.',
   'N':         '신고가·피벗 돌파 — 52주 최고가 근접 여부 + 컵앤핸들 피벗 돌파 측정함.',
-  'S':         '거래량 수반 돌파 — 기관 매수 동반한 거래량 급증으로 진짜 돌파인지 확인함.',
+  'S':         '거래량 수반 돌파 — 기관 참여 동반한 거래량 급증으로 진짜 돌파인지 확인함.',
   'L':         '시장 주도주 여부 — 시장 대비 상대강도(RS Rating) 측정함. 80점 이상이 주도주 기준임.',
-  'I':         '기관 자금 수급 — 스마트머니(기관·세력)의 매수/매도 압력을 자금 흐름 지표로 측정함.',
+  'I':         '기관 자금 수급 — 스마트머니(기관·세력)의 유입/유출 압력을 자금 흐름 지표로 측정함.',
   'M':         '시장 방향 — 지금 시장이 상승장(Bull)인지 하락장(Bear)인지 추세와 ADX로 봄.',
   'Quant':     '퀀트 보조 전략 — Fama-French 팩터, 모멘텀, 평균회귀 등 통계 기반 전략 점수임.',
   'Math':      '수학적 시계열 분석 — 허스트 지수(추세 지속성), 칼만 필터(노이즈 제거), Z-Score(통계적 위치) 활용함.',
@@ -3121,7 +3121,7 @@ function _renderInvestorCard(d) {
     if (d._FH_InsiderCount > 0) {
       items.push({
         label: '내부자 거래',
-        value: insNet > 0 ? '순매수' : insNet < 0 ? '순매도' : '중립',
+        value: insNet > 0 ? '순취득' : insNet < 0 ? '순처분' : '중립',
         sub: `${d._FH_InsiderCount}건`,
         color: insNet > 0 ? 'var(--success)' : insNet < 0 ? 'var(--destructive)' : 'var(--text-tertiary)'
       });
@@ -3131,7 +3131,7 @@ function _renderInvestorCard(d) {
       items.push({
         label: '추천 변화',
         value: change === 'upgrade' ? '상향' : '하향',
-        sub: `매수 ${d._FH_RecBuy || 0} · 매도 ${d._FH_RecSell || 0}`,
+        sub: `긍정 ${d._FH_RecBuy || 0} · 부정 ${d._FH_RecSell || 0}`,
         color: change === 'upgrade' ? 'var(--success)' : 'var(--destructive)'
       });
     }
@@ -3221,11 +3221,11 @@ const _KO_MAP = {
   'BULL': '상승장', 'BEAR': '하락장', 'NEUTRAL': '관망', 'SIDEWAYS': '횡보',
   // Signal keywords
   'STRONG LEADER': '강력 리더', 'LEADER': '리더', 'WATCH': '관찰',
-  'ACCUMULATE': '매집', 'HOLD': '보유/관망', 'SELL': '매도/회피',
+  'ACCUMULATE': '주목', 'HOLD': '보유/관망', 'SELL': '경계',
   'AVOID': '회피', 'LAGGARD': '낙후', 'BREAKOUT': '돌파',
   'MOMENTUM': '모멘텀', 'CAUTION': '주의', 'BEAR MARKET': '하락장',
   // ORB/NR7/BB signals
-  'BUY': '매수', 'NO SIGNAL': '신호 없음', 'PARTIAL': '부분',
+  'BUY': '관심', 'NO SIGNAL': '신호 없음', 'PARTIAL': '부분',
   'OVERSOLD': '과매도', 'OVERBOUGHT': '과매수',
   'NR7 COMPRESSION': 'NR7 압축', 'SQUEEZE': '수축',
   'BUY_TREND': '상승 추세', 'SELL_TREND': '하락 추세',
@@ -3243,7 +3243,7 @@ const _KO_MAP = {
   'SLIGHT_OVERVALUED': '소폭 고평가', 'AT_TARGET': 'DCF 적정가 도달',
   'ABOVE_STRONG': '강한 상회', 'BELOW_WEAK': '약한 하회',
   'BULLISH': '상승', 'BEARISH': '하락', 'MODERATE': '보통',
-  'ACCUMULATION': '매집', 'DISTRIBUTION': '분산',
+  'ACCUMULATION': '주목', 'DISTRIBUTION': '분산',
   'ABOVE': '상회', 'BELOW': '하회', 'TRENDING': '추세 진행',
   'OVERVALUED': '고평가', 'EXTREME': '극심',
   'INFLOW': '유입', 'OUTFLOW': '유출', 'NONE': '없음',
@@ -3326,7 +3326,7 @@ function _renderTechTab(d) {
     ['VWAP 거리',  vwapRaw, '양수=평균가 위(강세) · 음수=아래(약세)',         d.VWAPDistance > 0 ? 'var(--success)' : 'var(--destructive)'],
     ['거래량 비율',volRaw,  '1↑ 평소보다 활발 · 2↑ 기관 참여 가능성',        d.VolRatio > 1.5 ? 'var(--success)' : null],
     ['MACD 방향',  macdRaw, '히스토그램 양수=상승 모멘텀 · 음수=하락 모멘텀', macdCol],
-    ['ORB 신호',   _orbNr7Label(d.ORBSignal), '시초가 범위 돌파 시 매수 신호',     _orbNr7Color(d.ORBSignal)],
+    ['ORB 신호',   _orbNr7Label(d.ORBSignal), '시초가 범위 돌파 시 진입 신호',     _orbNr7Color(d.ORBSignal)],
   ];
 
   el.innerHTML = rows.map(([l, v, s, c]) => _indicatorRowHtml(l, v, s, c)).join('');
@@ -4459,12 +4459,12 @@ async function loadConsensus(ticker, wrapId = 'consensus-wrap', prefix = 'cons')
   if (cached) { _renderConsensusData(wrap, cached, prefix); return; }
   try {
     const res = await fetch(`/api/consensus/${ticker}?${p}`);
-    if (!res.ok) return;
+    if (!res.ok) { console.warn(`consensus HTTP ${res.status} for ${ticker}`); return; }
     const data = await res.json();
     _clientCache.set(cacheKey, data);
     _renderConsensusData(wrap, data, prefix);
   } catch (e) {
-    console.debug('loadConsensus:', e);
+    console.warn('loadConsensus failed:', ticker, e.message || e);
   }
 }
 
@@ -4498,7 +4498,7 @@ function _renderConsensusData(wrap, data, prefix = 'cons') {
       <div style="display:flex; align-items:center; padding:8px 0; border-top:1px solid var(--border); font-size:12px;">
         <span style="flex:1; font-weight:600; color:var(--text-primary);">${esc(r.firm)}</span>
         <span style="font-weight:700; color:var(--text-primary); margin-right:8px;">${r.target ? fmtPrice(r.target) : '—'}</span>
-        <span style="color:${r.opinion && r.opinion.includes('매수') ? 'var(--success)' : 'var(--text-tertiary)'}; font-weight:600; width:32px; text-align:center;">${esc(r.opinion || '')}</span>
+        <span style="color:${r.opinion && /긍정|관심|강한/.test(r.opinion) ? 'var(--success)' : 'var(--text-tertiary)'}; font-weight:600; width:32px; text-align:center;">${esc(r.opinion || '')}</span>
         <span style="color:var(--text-tertiary); margin-left:8px; min-width:60px; text-align:right;">${esc(r.date || '')}</span>
       </div>
     `).join('');
@@ -5950,12 +5950,10 @@ async function captureDetail() {
     cScroll.style.flex      = 'none';
     cScroll.style.minHeight = 'auto';
   }
-  const cBody = clone.querySelector('.dp-body');
-  if (cBody) {
-    cBody.style.minHeight = 'auto';
-    cBody.style.height    = 'auto';
-    cBody.style.overflow  = 'visible';
-  }
+  // dp-hero-zone, dp-analysis-section 제약 해제 (클론에 한정)
+  clone.querySelectorAll('.dp-hero-zone,.dp-analysis-section,.dp-chart-section').forEach(s => {
+    if (s) { s.style.minHeight = 'auto'; s.style.height = 'auto'; s.style.overflow = 'visible'; }
+  });
 
   // 클론의 탭 네비 숨기고 모든 탭 패널 펼침 + 섹션 헤더 주입
   const cTabNav = clone.querySelector('.dp-tab-nav');

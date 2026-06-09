@@ -1813,6 +1813,13 @@ td.score-col {
 }
 .dp-header-meta { display: flex; align-items: center; gap: 8px; margin-top: 0; flex-shrink: 0; }
 .dp-ticker-code { font-size: 13px; color: var(--text-tertiary); font-weight: 500; }
+.dp-fh-logo {
+  width: 34px; height: 34px; flex-shrink: 0;
+  border-radius: 9px; object-fit: contain;
+  background: #fff; padding: 4px; box-sizing: border-box;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
 .dp-sector-tag {
   display: inline-flex; align-items: center;
   height: 18px; padding: 0 8px; border-radius: 100px;

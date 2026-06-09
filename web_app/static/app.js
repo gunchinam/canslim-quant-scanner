@@ -3140,18 +3140,19 @@ function _renderFhNews(d) {
 
 // ── Finnhub 회사 로고 (US, 헤더 dp-ticker 좌측) ──────────────────────────
 function _renderFhLogo(d) {
-  const tickerEl = document.getElementById('dp-ticker');
+  const nameEl = document.getElementById('dp-name');
   let img = document.getElementById('dp-fh-logo');
   const url = d && d._FH_Available ? (d._FH_Logo || '') : '';
   const safe = /^https?:\/\//i.test(url) ? url : '';
   if (!safe) { if (img) img.remove(); return; }
-  if (!tickerEl || !tickerEl.parentNode) return;
+  if (!nameEl || !nameEl.parentNode) return;
   if (!img) {
     img = document.createElement('img');
     img.id = 'dp-fh-logo';
-    img.style.cssText = 'width:30px; height:30px; border-radius:7px; object-fit:contain; vertical-align:middle; margin-right:9px; background:var(--surface-2); padding:2px; box-sizing:border-box;';
+    img.className = 'dp-fh-logo';
+    img.alt = '';
     img.onerror = () => img.remove();
-    tickerEl.parentNode.insertBefore(img, tickerEl);
+    nameEl.parentNode.insertBefore(img, nameEl);  // 회사명 맨 앞
   }
   img.src = safe;
 }

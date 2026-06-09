@@ -84,4 +84,21 @@ try:
 except Exception as e:
     print(f"  Error: {e}")
 
+# 7) IPO calendar + general news (무료 여부 실측)
+print("\n=== IPO Calendar (다음 30일) ===")
+try:
+    from datetime import datetime as _dt, timedelta as _td
+    _t = _dt.now()
+    ic = fc.ipo_calendar(_from=_t.strftime("%Y-%m-%d"),
+                         to=(_t + _td(days=30)).strftime("%Y-%m-%d"))
+    print(f"  ipos={len(ic.get('ipoCalendar') or [])}")
+except Exception as e:
+    print(f"  Error: {e}")
+print("\n=== General News ===")
+try:
+    gn = fc.general_news("general", min_id=0)
+    print(f"  news={len(gn or [])}; first={ (gn or [{}])[0].get('headline','')[:50] }")
+except Exception as e:
+    print(f"  Error: {e}")
+
 print("\nDone.")

@@ -3969,26 +3969,27 @@ async function loadDpFourAxis(ticker) {
     document.getElementById('dp-fouraxis-chart').src = 'data:image/png;base64,' + d.chart;
     chartW.style.display = 'block';
 
-    // ── Hero 스파크라인 + 52주 위치 ─────────────────────────────
+    // ── Hero 우측 패널: 4축 추세 차트 + 변화 배지 + 52주 위치 ──────
     try {
       const panel = document.getElementById('dp-spark-panel');
       const sparkEl = document.getElementById('dp-spark');
-      const closes = Array.isArray(d.closes) ? d.closes : [];
-      if (panel && sparkEl && closes.length >= 2) {
-        const up = closes[closes.length - 1] >= closes[0];
-        const col = up ? '#22A463' : '#DC2626';
-        sparkEl.innerHTML = buildSparklineSVG(closes, col);
+      if (panel && sparkEl && d.chart) {
+        sparkEl.innerHTML = '<img src="data:image/png;base64,' + d.chart + '" alt="추세 차트" style="width:100%;height:100%;object-fit:contain;display:block;border-radius:8px;">';
         const lastEl = document.getElementById('dp-spark-last');
-        if (lastEl) { lastEl.textContent = fmtPrice(closes[closes.length - 1]); lastEl.style.color = col; }
+        if (lastEl) lastEl.textContent = '';   // 차트 이미지 위 라벨 제거(겹침 방지)
         const chgEl = document.getElementById('dp-spark-change');
-        if (chgEl && d.spark_change_pct != null) {
-          const s = d.spark_change_pct >= 0 ? '▲ ' : '▼ ';
-          chgEl.textContent = s + Math.abs(d.spark_change_pct).toFixed(1) + '%';
-          chgEl.classList.toggle('is-down', d.spark_change_pct < 0);
+        if (chgEl) {
+          if (d.spark_change_pct != null) {
+            const s = d.spark_change_pct >= 0 ? '▲ ' : '▼ ';
+            chgEl.textContent = s + Math.abs(d.spark_change_pct).toFixed(1) + '%';
+            chgEl.classList.toggle('is-down', d.spark_change_pct < 0);
+          } else { chgEl.textContent = ''; }
         }
+        // 52주 위치 = (현재 - 저) / (고 - 저), 현재가는 최근 종가
+        const closes = Array.isArray(d.closes) ? d.closes : [];
         const bar = document.getElementById('dp-wk52-bar');
         const wlbl = document.getElementById('dp-wk52-label');
-        if (bar && wlbl && d.wk52_high != null && d.wk52_low != null && d.wk52_high > d.wk52_low) {
+        if (bar && wlbl && closes.length && d.wk52_high != null && d.wk52_low != null && d.wk52_high > d.wk52_low) {
           const cur = closes[closes.length - 1];
           const posPct = Math.max(0, Math.min(100, ((cur - d.wk52_low) / (d.wk52_high - d.wk52_low)) * 100));
           bar.style.width = posPct.toFixed(0) + '%';
@@ -3996,7 +3997,7 @@ async function loadDpFourAxis(ticker) {
         }
         panel.style.display = '';
       }
-    } catch (e) { console.warn('hero spark render failed:', e); }
+    } catch (e) { console.warn('hero chart render failed:', e); }
 
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     set('dp-fa-phase', d.phase || '');
@@ -5072,31 +5073,6 @@ function _renderEtfRotation(d) {
     return '<div class="etf-sectors-empty">로테이션 데이터가 없어요.</div>';
   }
   return `<div class="etf-rot-grid">${_rotationTable('🇺🇸 미국 섹터', us)}${_rotationTable('🇰🇷 한국 테마', kr)}</div>`;
-}
-
-// Hero 스파크라인 — closes 배열 → 인라인 SVG (viewBox 300x110)
-function buildSparklineSVG(closes, color) {
-  if (!Array.isArray(closes) || closes.length < 2) return '';
-  const W = 300, H = 110, pad = 6;
-  const lo = Math.min(...closes), hi = Math.max(...closes);
-  const span = (hi - lo) || 1;
-  const n = closes.length;
-  const x = i => (i / (n - 1)) * W;
-  const y = v => pad + (1 - (v - lo) / span) * (H - pad * 2);
-  const pts = closes.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-  const last = closes.length - 1;
-  const gid = 'spkg_' + Math.abs(closes.length * 7 + Math.round(hi));
-  return (
-    `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%;display:block;">`
-    + `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">`
-    + `<stop offset="0" stop-color="${color}" stop-opacity=".22"/>`
-    + `<stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>`
-    + `<polygon points="${pts} ${W},${H} 0,${H}" fill="url(#${gid})"/>`
-    + `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`
-    + `<circle cx="${x(last).toFixed(1)}" cy="${y(closes[last]).toFixed(1)}" r="4.5" fill="${color}"/>`
-    + `<circle cx="${x(last).toFixed(1)}" cy="${y(closes[last]).toFixed(1)}" r="9" fill="${color}" opacity=".18"/>`
-    + `</svg>`
-  );
 }
 
 // 거래량 한글 축약 (만/억)

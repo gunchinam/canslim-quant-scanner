@@ -1805,12 +1805,13 @@ td.score-col {
   gap: 12px;
   flex-shrink: 0;
 }
-.dp-header-info { flex: 1; min-width: 0; }
+.dp-header-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
 .dp-name {
   font-size: 18px; font-weight: 700; color: var(--text-primary);
-  display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0; flex-shrink: 1;
 }
-.dp-header-meta { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+.dp-header-meta { display: flex; align-items: center; gap: 8px; margin-top: 0; flex-shrink: 0; }
 .dp-ticker-code { font-size: 13px; color: var(--text-tertiary); font-weight: 500; }
 .dp-sector-tag {
   display: inline-flex; align-items: center;

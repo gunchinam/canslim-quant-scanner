@@ -242,106 +242,22 @@
         </button>
       </div>
     </div>
+    <div id="dp-about-box" class="dp-about-bar" style="display:none;">
+      <p id="dp-about" class="dp-about-text"></p>
+    </div>
+
     <div class="dp-scroll">
 
       <!-- Section Nav -->
       <nav class="dp-section-nav" id="dp-section-nav">
-        <button class="dp-section-btn active" onclick="dpScrollTo('dp-section-company',this)">🏢 회사</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-conclusion',this)">🎯 결론</button>
+        <button class="dp-section-btn active" onclick="dpScrollTo('dp-section-conclusion',this)">🎯 결론</button>
         <button class="dp-section-btn" onclick="dpScrollTo('dp-section-timing',this)">📈 타이밍</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-company',this)">🏢 회사</button>
         <button class="dp-section-btn" onclick="dpScrollTo('dp-section-detail',this)">📊 상세</button>
         <button class="dp-section-btn" onclick="dpScrollTo('dp-group-ref',this)">📎 참고</button>
       </nav>
 
-    <!-- ① 🏢 회사 정체성 -->
-    <section id="dp-section-company" class="dp-section-company">
-      <div id="dp-about-box" class="dp-about-bar" style="display:none;">
-        <p id="dp-about" class="dp-about-text"></p>
-      </div>
-
-      <!-- 핵심 경제적 해자 (Economic Moat) -->
-      <div id="dp-moat-card" class="dp-moat-card" style="display:none;">
-        <div class="dp-moat-head">
-          <span id="dp-moat-icon" class="dp-moat-icon">🛡</span>
-          <div class="dp-moat-titles">
-            <div class="dp-moat-title"><span id="dp-moat-conf" class="dp-conf-dot estimated" title="추정치"></span>이 회사의 핵심 해자</div>
-            <div id="dp-moat-cat" class="dp-moat-cat">—</div>
-          </div>
-          <span id="dp-moat-source" class="dp-moat-source" title="해자 정보의 출처">—</span>
-        </div>
-        <div class="dp-moat-body">
-          <div class="dp-moat-label-row">
-            <span class="dp-moat-label-key">한 줄로</span>
-            <span id="dp-moat-label" class="dp-moat-label-val">—</span>
-          </div>
-          <div class="dp-moat-section">
-            <div class="dp-moat-key">왜 경쟁사가 따라잡기 어려운가</div>
-            <div id="dp-moat-detail" class="dp-moat-val">—</div>
-          </div>
-          <div id="dp-moat-axes" class="dp-moat-axes" style="display:none;"></div>
-          <div class="dp-moat-footnote">
-            모닝스타 5종 분류 기준 · 사전 큐레이션 (러셀 1000 + KOSPI/KOSDAQ 주요)
-          </div>
-        </div>
-      </div>
-
-      <div id="dp-peers-card" class="dp-peers-card" style="display:none;">
-        <div class="dp-peers-head">
-          <span class="dp-peers-icon">⚔️</span>
-          <div class="dp-peers-titles">
-            <div class="dp-peers-title">같은 섹터 경쟁사 비교</div>
-            <div id="dp-peers-sector" class="dp-peers-sector">—</div>
-          </div>
-          <span id="dp-peers-count" class="dp-peers-count">—</span>
-        </div>
-        <div class="dp-peers-body">
-          <div class="dp-peers-tablewrap">
-            <table class="dp-peers-table">
-              <thead>
-                <tr>
-                  <th class="dp-peers-th-name">종목</th>
-                  <th>점수</th>
-                  <th>시총</th>
-                  <th>PER</th>
-                  <th>PBR</th>
-                  <th>ROE</th>
-                  <th>영업이익률</th>
-                  <th>12M</th>
-                </tr>
-              </thead>
-              <tbody id="dp-peers-tbody"></tbody>
-            </table>
-          </div>
-          <div class="dp-peers-footnote">
-            스캔 캐시 기준 · 동일 섹터/업종 시총 상위 종목 · 본인은 🟢 표시
-          </div>
-        </div>
-      </div>
-
-      <div id="dp-segments-card" class="dp-segments-card" style="display:none;">
-        <div class="dp-segments-head">
-          <span class="dp-segments-icon">📊</span>
-          <div class="dp-segments-titles">
-            <div class="dp-segments-title"><span id="dp-segments-conf" class="dp-conf-dot estimated" title="추정치"></span>매출 세그먼트</div>
-            <div id="dp-segments-meta" class="dp-segments-meta">—</div>
-          </div>
-          <span id="dp-segments-count" class="dp-segments-count">—</span>
-        </div>
-        <div class="dp-segments-body">
-          <div class="dp-segments-grid">
-            <div class="dp-segments-pie">
-              <svg id="dp-segments-svg" viewBox="0 0 100 100" width="160" height="160" aria-hidden="true"></svg>
-            </div>
-            <div id="dp-segments-legend" class="dp-segments-legend"></div>
-          </div>
-          <div class="dp-segments-footnote">
-            최신 사업보고서/10-K 기준 근사치 · 회계연도·환율·재분류로 차이 가능
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ② 🎯 결론 -->
+<!-- ② 🎯 결론 -->
     <section id="dp-section-conclusion" class="dp-section-conclusion">
       <div id="dp-fa-haiku" class="dp-oneliner-poster" style="display:none;"></div>
 
@@ -366,7 +282,7 @@
       </div>
     </section>
 
-    <!-- ③ 📈 타이밍 -->
+<!-- ③ 📈 타이밍 -->
     <section id="dp-section-timing" class="dp-section-timing">
           <div class="dp-hero-stats">
             <div class="dp-hero-stat-cell">
@@ -451,13 +367,97 @@
       </div>
     </section>
 
-    <!-- ④ 📊 상세 (접힘) -->
+<!-- ① 🏢 회사 정체성 -->
+    <section id="dp-section-company" class="dp-section-company">
+      <!-- 핵심 경제적 해자 (Economic Moat) -->
+      <div id="dp-moat-card" class="dp-moat-card" style="display:none;">
+        <div class="dp-moat-head">
+          <span id="dp-moat-icon" class="dp-moat-icon">🛡</span>
+          <div class="dp-moat-titles">
+            <div class="dp-moat-title"><span id="dp-moat-conf" class="dp-conf-dot estimated" title="추정치"></span>이 회사의 핵심 해자</div>
+            <div id="dp-moat-cat" class="dp-moat-cat">—</div>
+          </div>
+          <span id="dp-moat-source" class="dp-moat-source" title="해자 정보의 출처">—</span>
+        </div>
+        <div class="dp-moat-body">
+          <div class="dp-moat-label-row">
+            <span class="dp-moat-label-key">한 줄로</span>
+            <span id="dp-moat-label" class="dp-moat-label-val">—</span>
+          </div>
+          <div class="dp-moat-section">
+            <div class="dp-moat-key">왜 경쟁사가 따라잡기 어려운가</div>
+            <div id="dp-moat-detail" class="dp-moat-val">—</div>
+          </div>
+          <div id="dp-moat-axes" class="dp-moat-axes" style="display:none;"></div>
+          <div class="dp-moat-footnote">
+            모닝스타 5종 분류 기준 · 사전 큐레이션 (러셀 1000 + KOSPI/KOSDAQ 주요)
+          </div>
+        </div>
+      </div>
+
+      <div id="dp-peers-card" class="dp-peers-card" style="display:none;">
+        <div class="dp-peers-head">
+          <span class="dp-peers-icon">⚔️</span>
+          <div class="dp-peers-titles">
+            <div class="dp-peers-title">같은 섹터 경쟁사 비교</div>
+            <div id="dp-peers-sector" class="dp-peers-sector">—</div>
+          </div>
+          <span id="dp-peers-count" class="dp-peers-count">—</span>
+        </div>
+        <div class="dp-peers-body">
+          <div class="dp-peers-tablewrap">
+            <table class="dp-peers-table">
+              <thead>
+                <tr>
+                  <th class="dp-peers-th-name">종목</th>
+                  <th>점수</th>
+                  <th>시총</th>
+                  <th>PER</th>
+                  <th>PBR</th>
+                  <th>ROE</th>
+                  <th>영업이익률</th>
+                  <th>12M</th>
+                </tr>
+              </thead>
+              <tbody id="dp-peers-tbody"></tbody>
+            </table>
+          </div>
+          <div class="dp-peers-footnote">
+            스캔 캐시 기준 · 동일 섹터/업종 시총 상위 종목 · 본인은 🟢 표시
+          </div>
+        </div>
+      </div>
+
+      <div id="dp-segments-card" class="dp-segments-card" style="display:none;">
+        <div class="dp-segments-head">
+          <span class="dp-segments-icon">📊</span>
+          <div class="dp-segments-titles">
+            <div class="dp-segments-title"><span id="dp-segments-conf" class="dp-conf-dot estimated" title="추정치"></span>매출 세그먼트</div>
+            <div id="dp-segments-meta" class="dp-segments-meta">—</div>
+          </div>
+          <span id="dp-segments-count" class="dp-segments-count">—</span>
+        </div>
+        <div class="dp-segments-body">
+          <div class="dp-segments-grid">
+            <div class="dp-segments-pie">
+              <svg id="dp-segments-svg" viewBox="0 0 100 100" width="160" height="160" aria-hidden="true"></svg>
+            </div>
+            <div id="dp-segments-legend" class="dp-segments-legend"></div>
+          </div>
+          <div class="dp-segments-footnote">
+            최신 사업보고서/10-K 기준 근사치 · 회계연도·환율·재분류로 차이 가능
+          </div>
+        </div>
+      </div>
+    </section>
+
+<!-- ④ 📊 상세 (접힘) -->
     <div class="dp-card-group" id="dp-section-detail">
       <button class="dp-card-group-toggle" onclick="toggleCardGroup(this)">
         <span>📊 상세 분석</span>
-        <svg class="dp-cg-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        <svg class="dp-cg-chevron open" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
-      <div class="dp-card-group-body">
+      <div class="dp-card-group-body open">
       <div class="dp-disclaimer">
         ⚠️ 등급·신호·목표가는 <b>알고리즘 스크리닝 결과</b>일 뿐, 투자 조언이 아닙니다. <b>드로다운 리스크</b>를 꼭 함께 확인하세요. 판단과 손익은 본인 책임입니다.
       </div>
@@ -520,14 +520,13 @@
       </div><!-- /상세 분석 body -->
     </div><!-- /상세 분석 group -->
 
-
-      <!-- ── 참고 정보 그룹 (기본 접힘) ─────────────────────── -->
+<!-- ── 참고 정보 그룹 (기본 접힘) ─────────────────────── -->
       <div class="dp-card-group" id="dp-group-ref">
         <button class="dp-card-group-toggle" onclick="toggleCardGroup(this)">
           <span>📋 참고 정보</span>
-          <svg class="dp-cg-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          <svg class="dp-cg-chevron open" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
-        <div class="dp-card-group-body">
+        <div class="dp-card-group-body open">
 
       <div id="dp-insider-card" class="dp-insider-card" style="display:none;">
         <div class="dp-insider-head">
@@ -598,7 +597,7 @@
         </div><!-- /참고 정보 body -->
       </div><!-- /참고 정보 group -->
 
-    </div><!-- /dp-scroll -->
+    </div><!-- /dp-scroll --></div><!-- /dp-scroll -->
 
   </div>
 </div>

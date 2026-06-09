@@ -2849,6 +2849,7 @@ async function _loadSentiment(ticker, market, seq) {
     // 키 머지 후 수급/센티먼트 카드만 재렌더
     Object.assign(_lastDetailData, data);
     _renderInvestorCard(_lastDetailData);
+    _renderFhNews(_lastDetailData);
   } catch (e) {
     console.debug('sentiment 로드 실패:', e);
   }
@@ -3092,6 +3093,40 @@ function _populatePanelDetail(d, skipFourAxis) {
       _scheduleLoadDpFourAxis(tk);
     }
   }
+}
+
+// ── Finnhub 뉴스 헤드라인 리스트 (US, 최근 7일) ──────────────────────────
+function _renderFhNews(d) {
+  const existing = document.getElementById('dp-fh-news');
+  if (!d || !d._FH_Available || !Array.isArray(d._FH_Headlines) || d._FH_Headlines.length === 0) {
+    if (existing) existing.remove();
+    return;
+  }
+  let wrap = existing;
+  if (!wrap) {
+    const anchor = document.getElementById('dp-investor-card');
+    if (!anchor || !anchor.parentNode) return;
+    wrap = document.createElement('div');
+    wrap.id = 'dp-fh-news';
+    wrap.style.cssText = 'padding:8px 24px 12px;';
+    anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
+  }
+  const rows = d._FH_Headlines.slice(0, 5).map(n => {
+    const title = esc(n.title || '');
+    const src = esc(n.source || '');
+    const url = n.url || '';
+    const safeUrl = /^https?:\/\//i.test(url) ? url : '';
+    const titleHtml = safeUrl
+      ? `<a href="${esc(safeUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${title}</a>`
+      : title;
+    return `<div style="padding:9px 0; border-bottom:1px solid var(--border);">
+      <div style="font-size:13px; line-height:1.45; color:var(--text-primary);">${titleHtml}</div>
+      ${src ? `<div style="font-size:10.5px; color:var(--text-tertiary); margin-top:3px;">${src}</div>` : ''}
+    </div>`;
+  }).join('');
+  wrap.innerHTML = `
+    <div style="font-size:12px; font-weight:700; color:var(--text-secondary); padding:6px 0 2px; letter-spacing:0.01em;">최근 뉴스 · 7일</div>
+    ${rows}`;
 }
 
 // ── 투자자 동향 카드 ─────────────────────────────────────────────────────

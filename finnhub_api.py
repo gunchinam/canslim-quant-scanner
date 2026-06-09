@@ -252,6 +252,15 @@ def get_sentiment_data(ticker: str) -> Dict[str, Any]:
     result["industry"] = parsed_prof.get("industry", "")
     result["exchange"] = parsed_prof.get("exchange", "")
 
+    # 8) Insider sentiment MSPR (최근 ~18개월)
+    twelve_mo_ago = (today - timedelta(days=540)).strftime("%Y-%m-%d")
+    ins_sent = _safe("insider_sentiment", ticker,
+                     lambda: fc.stock_insider_sentiment(ticker, twelve_mo_ago, today_s))
+    parsed_ms = _parse_insider_sentiment(ins_sent)
+    result["mspr"] = parsed_ms.get("mspr")
+    result["mspr_trend"] = parsed_ms.get("mspr_trend", [])
+    result["mspr_change"] = parsed_ms.get("mspr_change", 0.0)
+
     _store(cache_key, result)
     return result
 

@@ -1657,6 +1657,9 @@ def api_sentiment(ticker: str):
                 out["_FH_ShareOut"] = fh.get("share_outstanding")
                 out["_FH_Industry"] = fh.get("industry", "")
                 out["_FH_Exchange"] = fh.get("exchange", "")
+                out["_FH_MSPR"] = fh.get("mspr")
+                out["_FH_MSPRTrend"] = fh.get("mspr_trend", [])
+                out["_FH_MSPRChange"] = fh.get("mspr_change", 0.0)
                 out["_FH_Available"] = True
             else:
                 out["_FH_Available"] = False

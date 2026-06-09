@@ -167,20 +167,72 @@ def _fetch_us_rate() -> float | None:
     return _fetch_naver_rate("us_rate", "미국 기준금리")
 
 
+# ── 신호등 상수 ───────────────────────────────────────────────────────
+_SIG_DANGER  = {"level": "danger",  "emoji": "🔴", "label": "위험"}
+_SIG_CAUTION = {"level": "caution", "emoji": "🟡", "label": "주의"}
+_SIG_STABLE  = {"level": "stable",  "emoji": "🟢", "label": "안정"}
+_SIG_UNKNOWN = {"level": "unknown", "emoji": "⚪", "label": "정보없음"}
+
+# ── 임계값 (macro_gate.py와 동일한 VIX 기준) ─────────────────────────
+_VIX_CAUTION   = 20
+_VIX_DANGER    = 30
+_KRW_CAUTION   = 1430
+_KRW_DANGER    = 1480
+_US10Y_STRESS  = 3.0   # 10Y 금리 일간 변화율 %
+_DXY_STRESS    = 1.0   # DXY 일간 변화율 %
+
+
 # ── 신호등 계산 ───────────────────────────────────────────────────────
-def _signal(vix, usdkrw) -> dict:
-    """VIX·원달러 기반 시장 신호등. 데이터 없으면 unknown."""
+def _signal(vix, usdkrw, us10y_chg=None, dxy_chg=None, vix_prev=None) -> dict:
+    """VIX·원달러 + 금리·달러 변화율 기반 시장 신호등."""
     if vix is None and usdkrw is None:
-        return {"level": "unknown", "emoji": "⚪", "label": "정보없음"}
-    # VIX 기준: ≥30 위험 / ≥22 주의 / <22 안정
-    # USD/KRW: 1400대는 근래 평상 범위 — 1480↑ 위험, 1430↑ 주의
-    danger  = (vix is not None and vix >= 30) or (usdkrw is not None and usdkrw > 1480)
-    caution = (vix is not None and vix >= 22) or (usdkrw is not None and usdkrw > 1430)
-    if danger:
-        return {"level": "danger", "emoji": "🔴", "label": "위험"}
-    if caution:
-        return {"level": "caution", "emoji": "🟡", "label": "주의"}
-    return {"level": "stable", "emoji": "🟢", "label": "안정"}
+        result = dict(_SIG_UNKNOWN)
+        result["trend"] = "stable"
+        return result
+
+    # ── 주요 지표 스트레스 점수 (0=안정, 1=주의, 2=위험) ──
+    vix_score = 0
+    if vix is not None:
+        if vix >= _VIX_DANGER: vix_score = 2
+        elif vix >= _VIX_CAUTION: vix_score = 1
+
+    krw_score = 0
+    if usdkrw is not None:
+        if usdkrw > _KRW_DANGER: krw_score = 2
+        elif usdkrw > _KRW_CAUTION: krw_score = 1
+
+    # ── 보조 지표 (기수집 데이터 활용) ──
+    rate_stress = 1 if (us10y_chg is not None and us10y_chg > _US10Y_STRESS) else 0
+    dxy_stress = 1 if (dxy_chg is not None and dxy_chg > _DXY_STRESS) else 0
+    aux_count = rate_stress + dxy_stress
+
+    # ── 종합 판정 ──
+    primary = max(vix_score, krw_score)
+
+    if primary >= 2:
+        result = dict(_SIG_DANGER)
+    elif primary >= 1:
+        # 주요 주의 + 보조 2개 동시 스트레스 → 위험 격상
+        if aux_count >= 2:
+            result = dict(_SIG_DANGER)
+        else:
+            result = dict(_SIG_CAUTION)
+    # 주요 안정이지만 보조 2개 동시 스트레스 → 주의
+    elif aux_count >= 2:
+        result = dict(_SIG_CAUTION)
+    else:
+        result = dict(_SIG_STABLE)
+
+    # 전환 방향 감지
+    trend = "stable"
+    if vix is not None and vix_prev is not None and vix_prev > 0:
+        vix_chg_pct = (vix - vix_prev) / vix_prev * 100
+        if vix_chg_pct > 5:
+            trend = "deteriorating"
+        elif vix_chg_pct < -5:
+            trend = "improving"
+    result["trend"] = trend
+    return result
 
 
 _ALL_KEYS = (
@@ -202,8 +254,18 @@ def _build() -> dict:
             return None
         return d
 
-    vix = (cell("vix") or {}).get("value")
+    vix_data = cell("vix")
+    vix = (vix_data or {}).get("value")
     usdkrw = (cell("usdkrw") or {}).get("value")
+    us10y_chg = (cell("us10y") or {}).get("change_pct")
+    dxy_chg = (cell("dxy") or {}).get("change_pct")
+
+    # VIX 전일 종가 (전환 방향 감지용)
+    vix_prev = None
+    if vix_data and vix_data.get("change_pct") is not None and vix is not None:
+        chg = vix_data["change_pct"]
+        if chg != 0:
+            vix_prev = vix / (1 + chg / 100)
 
     indicators = {
         "vix":     cell("vix"),
@@ -220,7 +282,7 @@ def _build() -> dict:
         "us_rate": ({"value": us_rate, "change_pct": None} if us_rate is not None else None),
     }
     return {
-        "signal": _signal(vix, usdkrw),
+        "signal": _signal(vix, usdkrw, us10y_chg=us10y_chg, dxy_chg=dxy_chg, vix_prev=vix_prev),
         "indicators": indicators,
         "ts": datetime.now(_KST).isoformat(timespec="seconds"),
         "stale": False,
@@ -255,7 +317,7 @@ def get_macro(force: bool = False) -> dict:
                 stale["stale"] = True
                 return stale
         return {
-            "signal": {"level": "unknown", "emoji": "⚪", "label": "정보없음"},
+            "signal": _SIG_UNKNOWN,
             "indicators": {k: None for k in _ALL_KEYS},
             "ts": datetime.now(_KST).isoformat(timespec="seconds"),
             "stale": True,

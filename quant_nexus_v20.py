@@ -911,6 +911,34 @@ _SW_MATRIX = np.array(
     dtype=np.float64,
 )  # shape (5, 23)
 
+# ── Regime-conditional factor multiplier (Patch-02) ────────────────────
+# 학계 근거: Daniel-Moskowitz (2016) — factor premium regime별 비대칭
+# BEAR에서 momentum 감쇄, drawdown/quality 강화 / BULL에서 역전
+REGIME_FACTOR_MULT: dict[str, dict[str, float]] = {
+    "STRONG_BULL":   {"momentum": 1.25, "mtf": 1.25, "rs": 1.10,
+                      "drawdown": 0.75, "mean_reversion": 0.80,
+                      "quality": 0.90, "fama_french": 0.90},
+    "BULL":          {"momentum": 1.15, "mtf": 1.15, "rs": 1.05,
+                      "drawdown": 0.85, "mean_reversion": 0.90},
+    "SIDEWAYS_BULL": {"momentum": 1.05, "mtf": 1.05},
+    "SIDEWAYS":      {},
+    "SIDEWAYS_BEAR": {"momentum": 0.85, "mtf": 0.85,
+                      "drawdown": 1.15, "quality": 1.10},
+    "BEAR":          {"momentum": 0.50, "mtf": 0.50, "rs": 0.85,
+                      "drawdown": 1.30, "mean_reversion": 1.20,
+                      "quality": 1.20, "fama_french": 1.15},
+    "STRONG_BEAR":   {"momentum": 0.30, "mtf": 0.30, "rs": 0.70,
+                      "drawdown": 1.40, "mean_reversion": 1.30,
+                      "quality": 1.30, "fama_french": 1.25},
+}
+
+def _effective_weights(strategy_weights: dict, regime_state: str) -> dict:
+    """STRATEGY_WEIGHTS에 regime mult 적용 후 합=1.0 정규화."""
+    mult = REGIME_FACTOR_MULT.get(regime_state, {})
+    raw = {k: v * mult.get(k, 1.0) for k, v in strategy_weights.items()}
+    s = sum(raw.values())
+    return {k: v / s for k, v in raw.items()} if s > 0 else strategy_weights
+
 # ─── 열 툴팁 ──────────────────────────────────────────────────────────
 COLUMN_TOOLTIPS = {
     "TICKER":   "종목 코드\n주식을 식별하는 고유 심볼입니다.",
@@ -5629,8 +5657,10 @@ class QuantNexusApp:
             #     가중치를 적용한다 — "c_raw * 0.35 += base" 같은
             #     고정 하드코딩 덧셈은 완전히 폐기한다.
             # ════════════════════════════════════════════════════════════
-            w = STRATEGY_WEIGHTS.get(self._scan_strategy,
-                                     STRATEGY_WEIGHTS["BALANCED"])
+            _base_w = STRATEGY_WEIGHTS.get(self._scan_strategy,
+                                           STRATEGY_WEIGHTS["BALANCED"])
+            _regime_state = regime.get("regime", "SIDEWAYS") if regime else "SIDEWAYS"
+            w = _effective_weights(_base_w, _regime_state)
 
             # ── 투자지주사: 실적/밸류 팩터 무력화, NAV-할인 신호 주축화 ──
             # 지주사 주가는 실적이 아니라 보유 상장지분 NAV에 할인율이
@@ -5942,12 +5972,23 @@ class QuantNexusApp:
             # ════════════════════════════════════════════════════════════
             vix_m = _smooth_band(self.vix_value, [
                 (12.0, 1.04), (15.0, 1.02), (20.0, 1.00),
-                (25.0, 0.93), (30.0, 0.86), (35.0, 0.80), (45.0, 0.75)])
+                (25.0, 0.92), (30.0, 0.82), (35.0, 0.70), (45.0, 0.55)])
             base = max(0.0, min(120.0, base * vix_m))
             # Re-clamp to fail-safe ceiling if it was set (VIX upmove must not bypass cap).
             if fail_safe_triggered:
                 _ceil_post = CANSLIM["SCORE_CEIL_MOMENTUM_OVERRIDE"] if _momentum_override else CANSLIM["SCORE_CEIL_LAGGARD"]
                 base = min(base, _ceil_post)
+
+            # ════════════════════════════════════════════════════════════
+            # STEP 7.5 — 매크로 레짐 감쇄 (macro_gate Risk-Off → 글로벌 점수 축소)
+            # ════════════════════════════════════════════════════════════
+            _macro_r = getattr(self, '_scan_macro_regime', None)
+            if _macro_r == "Risk-Off":
+                base *= 0.82
+            elif _macro_r == "Neutral":
+                base *= 0.94
+            # Risk-On: 1.0 (변화 없음)
+            base = max(0.0, min(120.0, base))
 
             # ════════════════════════════════════════════════════════════
             # STEP 8 — [M] Bear Cap: Bear 시장 → 최종 점수 50% 상한
@@ -6049,7 +6090,13 @@ class QuantNexusApp:
                 _holdco_wv = np.array([w.get(k, 0.0) for k in _SW_KEYS], dtype=np.float64)
                 _raw_b_arr = np.full(len(_SW_MODES), float(_holdco_wv @ _fv_arr))
             else:
-                _raw_b_arr = _SW_MATRIX @ _fv_arr  # shape (5,)
+                # regime 조건부 가중치 적용
+                _regime_sw = np.array(
+                    [[_effective_weights(STRATEGY_WEIGHTS[m], _regime_state).get(k, 0.0)
+                      for k in _SW_KEYS] for m in _SW_MODES],
+                    dtype=np.float64,
+                )
+                _raw_b_arr = _regime_sw @ _fv_arr
             all_scores: dict[str, float] = {}
             for _i, _mode in enumerate(_SW_MODES):
                 _b = float(_raw_b_arr[_i])
@@ -6059,6 +6106,11 @@ class QuantNexusApp:
                     _ceil = CANSLIM["SCORE_CEIL_MOMENTUM_OVERRIDE"] if _momentum_override else CANSLIM["SCORE_CEIL_LAGGARD"]
                     _b = min(_b, _ceil)
                 _b = max(0.0, min(120.0, _b * vix_m))
+                # macro regime dampener (5전략 재계산에도 동일 적용)
+                if _macro_r == "Risk-Off":
+                    _b *= 0.82
+                elif _macro_r == "Neutral":
+                    _b *= 0.94
                 if fail_safe_triggered:
                     _ceil_ms = CANSLIM["SCORE_CEIL_MOMENTUM_OVERRIDE"] if _momentum_override else CANSLIM["SCORE_CEIL_LAGGARD"]
                     _b = min(_b, _ceil_ms)

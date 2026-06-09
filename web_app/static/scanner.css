@@ -1850,12 +1850,12 @@ td.score-col {
   position: relative;
   overflow: hidden;
 }
-.dp-hero-summary > *:not(.dp-hero-watermark) { position: relative; z-index: 1; }
+.dp-hero-zone > *:not(.dp-hero-watermark) { position: relative; z-index: 1; }
 .dp-hero-watermark {
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 220px; height: 220px; object-fit: contain;
-  opacity: 0.10; pointer-events: none; z-index: 0;  /* 코트 가운데 로고 — 콘텐츠 뒤 */
+  position: absolute; top: -18px; right: -16px;
+  width: 150px; height: 150px; object-fit: contain;
+  opacity: 0.16; transform: rotate(-8deg);
+  pointer-events: none; z-index: 2;  /* 콘텐츠(불투명 포스터 포함) 위로 — 코너 스탬프 */
 }
 .dp-hero-zone > .dp-oneliner-poster {
   margin: 16px 0 12px;
@@ -1873,7 +1873,6 @@ td.score-col {
   gap: 28px;
   align-items: stretch;
   margin-bottom: 0;
-  position: relative;
 }
 .dp-hero-left { min-width: 0; }
 .dp-hero-right {

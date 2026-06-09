@@ -3161,20 +3161,19 @@ function _renderFhLogo(d) {
 // ── Hero Zone 로고 워터마크 (US, 우상단 배경) ────────────────────────────
 function _renderHeroWatermark(d) {
   const zone = document.getElementById('dp-hero-zone');
-  const host = zone ? zone.querySelector('.dp-hero-summary') : null;
+  if (!zone) return;
   let img = document.getElementById('dp-hero-wm');
   const t = (d && d.Ticker ? String(d.Ticker) : '').toUpperCase();
   const isUsLogo = t && !t.includes('.') && !/^\d+$/.test(t);
-  if (!host || !isUsLogo) { if (img) img.remove(); return; }  // KR·로고없음·호스트없음 → 미표시
+  if (!isUsLogo) { if (img) img.remove(); return; }  // KR·로고없음 → 미표시
   const url = `https://static2.finnhub.io/file/publicdatany/finnhubimage/stock_logo/${t}.png`;
-  if (!img || img.parentNode !== host) {  // 요약 영역 정중앙에 주입(코트 로고)
-    if (img) img.remove();
+  if (!img) {
     img = document.createElement('img');
     img.id = 'dp-hero-wm';
     img.className = 'dp-hero-watermark';
     img.alt = '';
     img.onerror = () => img.remove();  // 로고 404 → 제거
-    host.insertBefore(img, host.firstChild);
+    zone.insertBefore(img, zone.firstChild);
   }
   img.src = url;
 }

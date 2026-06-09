@@ -2850,6 +2850,7 @@ async function _loadSentiment(ticker, market, seq) {
     Object.assign(_lastDetailData, data);
     _renderInvestorCard(_lastDetailData);
     _renderFhNews(_lastDetailData);
+    _renderFhLogo(_lastDetailData);
   } catch (e) {
     console.debug('sentiment 로드 실패:', e);
   }
@@ -3129,6 +3130,24 @@ function _renderFhNews(d) {
     ${rows}`;
 }
 
+// ── Finnhub 회사 로고 (US, 헤더 dp-ticker 좌측) ──────────────────────────
+function _renderFhLogo(d) {
+  const tickerEl = document.getElementById('dp-ticker');
+  let img = document.getElementById('dp-fh-logo');
+  const url = d && d._FH_Available ? (d._FH_Logo || '') : '';
+  const safe = /^https?:\/\//i.test(url) ? url : '';
+  if (!safe) { if (img) img.remove(); return; }
+  if (!tickerEl || !tickerEl.parentNode) return;
+  if (!img) {
+    img = document.createElement('img');
+    img.id = 'dp-fh-logo';
+    img.style.cssText = 'width:22px; height:22px; border-radius:5px; object-fit:contain; vertical-align:middle; margin-right:8px; background:var(--surface-2);';
+    img.onerror = () => img.remove();
+    tickerEl.parentNode.insertBefore(img, tickerEl);
+  }
+  img.src = safe;
+}
+
 // ── 투자자 동향 카드 ─────────────────────────────────────────────────────
 function _renderInvestorCard(d) {
   const wrap = document.getElementById('dp-investor-card');
@@ -3189,6 +3208,23 @@ function _renderInvestorCard(d) {
         color: dte <= 7 ? 'var(--warning)' : 'var(--text-secondary)'
       });
     }
+    // 신규: 내부자 심리 MSPR (-100~100, 양수=순매수 우위)
+    const mspr = d._FH_MSPR;
+    if (mspr != null) {
+      const trend = Array.isArray(d._FH_MSPRTrend) ? d._FH_MSPRTrend : [];
+      const msprColor = mspr >= 0 ? 'var(--success)' : 'var(--destructive)';
+      let spark = '';
+      if (trend.length >= 2 && typeof buildSparklineSVG === 'function') {
+        spark = buildSparklineSVG(trend, msprColor);
+      }
+      items.push({
+        label: '내부자 심리',
+        value: `${mspr >= 0 ? '+' : ''}${mspr.toFixed(0)}`,
+        sub: spark || (mspr >= 20 ? '강한 매수세' : mspr <= -20 ? '강한 매도세' : '중립'),
+        color: msprColor,
+        subIsHtml: !!spark,
+      });
+    }
     // 신규: 뉴스 buzz (7일 50건 이상)
     const news7 = d._FH_News7d || 0;
     if (news7 >= 50) {
@@ -3241,7 +3277,7 @@ function _renderInvestorCard(d) {
   grid.innerHTML = items.map(it => `
     <div style="display:grid; grid-template-columns:1fr auto; align-items:baseline; gap:12px; padding:12px 1px; border-bottom:1px solid var(--border);">
       <span style="font-size:12px; color:var(--text-secondary); letter-spacing:0.01em;">${esc(it.label)}</span>
-      <span style="font-size:16px; font-weight:700; letter-spacing:-0.015em; font-variant-numeric:tabular-nums; text-align:right; color:${it.color};">${esc(it.value)}${it.sub ? `<small style="display:block; font-size:10.5px; color:var(--text-tertiary); font-weight:600; margin-top:2px; text-align:right;">${esc(it.sub)}</small>` : ''}</span>
+      <span style="font-size:16px; font-weight:700; letter-spacing:-0.015em; font-variant-numeric:tabular-nums; text-align:right; color:${it.color};">${esc(it.value)}${it.sub ? `<small style="display:block; font-size:10.5px; color:var(--text-tertiary); font-weight:600; margin-top:2px; text-align:right;">${it.subIsHtml ? it.sub : esc(it.sub)}</small>` : ''}</span>
     </div>
   `).join('');
 }
@@ -3989,7 +4025,7 @@ async function loadDpFourAxis(ticker) {
   const reqSeq = ++_dpFourAxisReqSeq;
 
   try {
-    const p = new URLSearchParams({ market: currentMarket });
+    const p = new URLSearchParams({ market: currentMarket, chart: '0' });
     const res = await _fetchWithTimeout(`/api/four_axis/${encodeURIComponent(ticker)}?${p}`);
     if (!res.ok) throw new Error(await _readApiError(res));
     const d = await res.json();
@@ -4089,7 +4125,7 @@ async function loadDpFourAxis(ticker) {
     if (reqSeq !== _dpFourAxisReqSeq) return;
     _dpFourAxisLoadedFor = null;
     _dpFourAxisLoadingFor = null;
-    errDiv.textContent = '4축 차트 로드 실패: ' + e.message;
+    errDiv.textContent = '분석 로드 실패: ' + e.message;
     errDiv.style.display = 'block';
   } finally {
     if (reqSeq !== _dpFourAxisReqSeq) return;
@@ -5008,6 +5044,7 @@ function openEtfView() {
   _setViewTab('etf');
   // 매번 새로 호출하되 서버 TTL 캐시가 비용을 흡수 (최초 1회만 로딩 표시)
   loadEtfData(!_etfLoaded);
+  loadMarketContext();
 }
 
 function closeEtfView() {
@@ -5033,6 +5070,43 @@ function _setViewTab(view) {
   document.querySelectorAll('.view-tab').forEach(function (b) {
     b.classList.toggle('active', b.dataset.view === view);
   });
+}
+
+// ── 시장 맥락: IPO 캘린더 + 시장 뉴스 (US) ──────────────────────────────
+let _marketCtxLoaded = false;
+async function loadMarketContext() {
+  if (_marketCtxLoaded) return;
+  const wrap = document.getElementById('market-context');
+  const body = document.getElementById('market-context-body');
+  if (!wrap || !body) return;
+  try {
+    const res = await fetch('/api/market_context');
+    const d = await res.json();
+    if (!d.available || (!(d.ipos || []).length && !(d.news || []).length)) {
+      wrap.style.display = 'none'; return;
+    }
+    const ipoRows = (d.ipos || []).slice(0, 8).map(i => `
+      <div style="display:flex; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); font-size:12.5px;">
+        <span style="color:var(--text-primary); font-weight:600;">${esc(i.symbol)} <span style="color:var(--text-tertiary); font-weight:400;">${esc(i.name || '')}</span></span>
+        <span style="color:var(--text-secondary); white-space:nowrap;">${esc(i.date)}${i.price ? ` · $${esc(i.price)}` : ''}</span>
+      </div>`).join('');
+    const newsRows = (d.news || []).slice(0, 8).map(n => {
+      const u = /^https?:\/\//i.test(n.url || '') ? n.url : '';
+      const t = esc(n.headline || '');
+      return `<div style="padding:7px 0; border-bottom:1px solid var(--border); font-size:12.5px; line-height:1.4;">
+        ${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${t}</a>` : t}
+        ${n.source ? `<span style="color:var(--text-tertiary); font-size:10.5px; margin-left:6px;">${esc(n.source)}</span>` : ''}
+      </div>`;
+    }).join('');
+    body.innerHTML = `
+      ${ipoRows ? `<div style="font-size:11.5px; font-weight:700; color:var(--text-tertiary); margin:4px 0;">예정 IPO</div>${ipoRows}` : ''}
+      ${newsRows ? `<div style="font-size:11.5px; font-weight:700; color:var(--text-tertiary); margin:10px 0 4px;">시장 뉴스</div>${newsRows}` : ''}`;
+    wrap.style.display = '';
+    _marketCtxLoaded = true;
+  } catch (e) {
+    console.debug('market_context 로드 실패:', e);
+    wrap.style.display = 'none';
+  }
 }
 
 async function loadEtfData(showLoading) {

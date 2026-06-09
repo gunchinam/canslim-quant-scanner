@@ -1844,12 +1844,17 @@ td.score-col {
 /* ── Hero Zone ────────────────────────────────────────────── */
 /* ── ① 회사 정체성 ────────────────────────────────────────── */
 .dp-section-company {
-  padding: 0 20px 16px;
+  padding: 0 0 8px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
 }
 .dp-section-company .dp-about-bar {
-  padding: 10px 0 8px;
+  padding: 10px 20px 8px;
+}
+.dp-section-company .dp-peers-card,
+.dp-section-company .dp-segments-card {
+  margin-left: 20px;
+  margin-right: 20px;
 }
 
 /* ── ② 결론 ──────────────────────────────────────────────── */

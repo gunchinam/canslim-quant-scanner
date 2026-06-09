@@ -298,6 +298,27 @@ def _parse_profile2(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return out
 
 
+def _parse_insider_sentiment(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """stock_insider_sentiment 응답 → 최신 MSPR + 월별 추세.
+
+    MSPR(Monthly Share Purchase Ratio): -100~100. 양수=순매수 우위.
+    """
+    if not raw or not isinstance(raw, dict):
+        return {}
+    rows = raw.get("data") or []
+    if not rows:
+        return {}
+    rows = sorted(rows, key=lambda r: (r.get("year", 0), r.get("month", 0)))
+    trend = [float(r.get("mspr") or 0.0) for r in rows]
+    latest = trend[-1]
+    prev = trend[-2] if len(trend) >= 2 else latest
+    return {
+        "mspr": latest,
+        "mspr_trend": trend,
+        "mspr_change": round(latest - prev, 4),
+    }
+
+
 def get_basic_financials(ticker: str) -> Dict[str, Any]:
     """Finnhub basic financials -> yfinance info 호환 dict.
 

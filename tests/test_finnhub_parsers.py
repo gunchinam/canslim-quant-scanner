@@ -10,7 +10,7 @@ _PROJECT_ROOT = os.path.dirname(_THIS_DIR)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from finnhub_api import _parse_profile2  # noqa: E402
+from finnhub_api import _parse_profile2, _parse_insider_sentiment  # noqa: E402
 
 
 class TestParseProfile2(unittest.TestCase):
@@ -36,6 +36,29 @@ class TestParseProfile2(unittest.TestCase):
         out = _parse_profile2({"name": "X", "logo": "https://x/x.png"})
         self.assertEqual(out["logo"], "https://x/x.png")
         self.assertNotIn("ipo", out)
+
+
+class TestParseInsiderSentiment(unittest.TestCase):
+    def test_latest_and_trend(self) -> None:
+        raw = {"data": [
+            {"year": 2026, "month": 1, "mspr": -10.0, "change": -100},
+            {"year": 2026, "month": 2, "mspr": 5.0, "change": 50},
+            {"year": 2026, "month": 3, "mspr": 20.0, "change": 200},
+        ]}
+        out = _parse_insider_sentiment(raw)
+        self.assertEqual(out["mspr"], 20.0)
+        self.assertEqual(out["mspr_trend"], [-10.0, 5.0, 20.0])
+        self.assertEqual(out["mspr_change"], 15.0)
+
+    def test_empty(self) -> None:
+        self.assertEqual(_parse_insider_sentiment(None), {})
+        self.assertEqual(_parse_insider_sentiment({"data": []}), {})
+
+    def test_single_month_no_change(self) -> None:
+        out = _parse_insider_sentiment({"data": [{"year": 2026, "month": 3, "mspr": 7.0}]})
+        self.assertEqual(out["mspr"], 7.0)
+        self.assertEqual(out["mspr_trend"], [7.0])
+        self.assertEqual(out["mspr_change"], 0.0)
 
 
 if __name__ == "__main__":

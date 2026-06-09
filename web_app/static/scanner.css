@@ -1852,9 +1852,9 @@ td.score-col {
 }
 .dp-hero-zone > *:not(.dp-hero-watermark) { position: relative; z-index: 1; }
 .dp-hero-watermark {
-  position: absolute; top: -22px; right: -18px;
-  width: 150px; height: 150px; object-fit: contain;
-  opacity: 0.07; transform: rotate(-8deg);
+  position: absolute; top: -24px; right: -20px;
+  width: 170px; height: 170px; object-fit: contain;
+  opacity: 0.14; transform: rotate(-8deg);
   pointer-events: none; z-index: 0;
 }
 .dp-hero-zone > .dp-oneliner-poster {

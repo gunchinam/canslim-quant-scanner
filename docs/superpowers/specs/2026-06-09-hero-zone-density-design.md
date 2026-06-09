@@ -98,7 +98,7 @@
 **보존(변경 금지) element ID 11개:**
 `dp-score, dp-signal, dp-risk-gauge, dp-leader-badge, dp-price, dp-day-chg, dp-thermo-label, dp-thermo-action, dp-rs-value, dp-rs-label, dp-thermo-marker`
 
-> 참고: 기존 Zone C(RSI 온도계, `dp-thermo-*`)는 신규 차트 패널과 별개다. **온도계를 유지할지, 차트 패널로 대체/통합할지** 구현 시 결정 — 본 설계는 차트 패널을 우측에 추가하고 온도계는 한줄평·차트 아래 풀폭으로 유지하는 안을 기본으로 한다(추가 검토 항목).
+> **결정(확정):** 기존 Zone C(RSI 온도계, `dp-thermo-*`)는 **유지**한다. 신규 차트 패널은 ③ 우측에 추가하고, RSI 온도계는 2-컬럼(②③) 아래에 **풀폭으로 유지**한다(데스크탑·모바일 공통). 온도계 element ID 4개(`dp-thermo-label/action/marker` + 라벨)는 그대로 보존.
 
 **신규 element (예시 ID):**
 `dp-spark` (SVG), `dp-spark-change` (▲N%), `dp-spark-last` (마지막값), `dp-wk52-bar`, `dp-wk52-label`, `dp-volratio`, `dp-mktcap`
@@ -117,7 +117,7 @@
 
 ## 7. 미해결 / 구현 시 결정
 
-1. RSI 온도계(`dp-thermo-*`) 유지 vs 차트 패널과 통합 — 기본은 "유지(차트 아래 풀폭)"
+1. ~~RSI 온도계 유지 vs 통합~~ → **확정: 유지(②③ 아래 풀폭)**
 2. 20일 closes를 상세 응답에 인라인 vs 별도 경량 엔드포인트
 3. 52주 high/low가 payload에 없으면 어디서 확보할지(price_levels 재사용)
 4. 데스크탑 2-컬럼 전환 분기점(768px 위에서 2-컬럼, 그 이하 스택)

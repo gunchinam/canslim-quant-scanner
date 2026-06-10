@@ -202,6 +202,12 @@ def _apply_moat_bonus(rows: list) -> None:
             r["TotalScore"] = min(100.0, r["TotalScore"] + bonus)
 
 
+# 상장폐지·무데이터(yfinance 2년치 가격 없음) 유령 티커 — 스캔 결과에서 제외.
+# 엔진 유니버스에 남아 stale 가격으로 폴백돼 리스트에 뜨는 것을 차단한다.
+# 새 상폐 종목 발견 시 여기에 추가. (접미사 .KS/.KQ 제거 후 대문자 비교)
+_DELISTED_TICKERS = {"BITF", "CMBM", "FDXF"}
+
+
 def _strip_heavy(rows: list) -> list:
     if not rows:
         return rows
@@ -210,6 +216,8 @@ def _strip_heavy(rows: list) -> list:
         if not isinstance(r, dict):
             out.append(r)
             continue
+        if str(r.get("Ticker", "")).upper().split(".")[0] in _DELISTED_TICKERS:
+            continue  # 상폐 유령 제외
         d = {k: v for k, v in r.items() if k not in _SCAN_STRIP_FIELDS}
         ep = d.get("EntryPlan")
         if isinstance(ep, dict):

@@ -5059,39 +5059,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let _etfLoaded = false;
 
+// 인라인 대체 뷰(ETF / IPO·뉴스) 표시 헬퍼 ──────────────────────────
+function _hideAltViews() {
+  ['etf-view', 'etf-rotation', 'market-view'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
+  });
+}
+function _setStockTableVisible(show) {
+  const tbl = document.querySelector('.stock-table-wrap');
+  const mob = document.getElementById('mobile-stock-list');
+  if (tbl) tbl.style.display = show ? '' : 'none';
+  if (mob) mob.style.display = show ? '' : 'none';
+}
+
 function openEtfView() {
   const view = document.getElementById('etf-view');
   if (!view) return;
-  if (!view.hidden) { closeEtfView(); return; }   // 탭 토글 — 다시 누르면 목록으로
+  if (!view.hidden) { showStockView(); return; }   // 탭 토글 — 다시 누르면 목록으로
   // 인라인 탭 — 종목 표 자리에 ETF를 끼워 넣는다(상단·필터는 그대로).
-  const tbl = document.querySelector('.stock-table-wrap');
-  const mob = document.getElementById('mobile-stock-list');
-  if (tbl) tbl.style.display = 'none';
-  if (mob) mob.style.display = 'none';
+  _hideAltViews();
+  _setStockTableVisible(false);
   view.hidden = false;
   const rot = document.getElementById('etf-rotation');
   if (rot) rot.hidden = false;   // F. 로테이션 토글 노출(본문은 클릭 시 지연 로딩)
   _setViewTab('etf');
-  // 매번 새로 호출하되 서버 TTL 캐시가 비용을 흡수 (최초 1회만 로딩 표시)
-  loadEtfData(!_etfLoaded);
+  loadEtfData(!_etfLoaded);   // 서버 TTL 캐시가 비용 흡수 (최초 1회만 로딩 표시)
+}
+
+// 🆕 IPO·뉴스 뷰 (종목 표 자리에 인라인 표시)
+function openMarketView() {
+  const view = document.getElementById('market-view');
+  if (!view) return;
+  if (!view.hidden) { showStockView(); return; }   // 탭 토글 — 다시 누르면 목록으로
+  _hideAltViews();
+  _setStockTableVisible(false);
+  view.hidden = false;
+  _setViewTab('market');
   loadMarketContext();
 }
 
-function closeEtfView() {
-  const view = document.getElementById('etf-view');
-  if (!view || view.hidden) return;
-  view.hidden = true;
-  // 인라인 스타일 제거 → CSS/미디어쿼리 기본 표시로 복귀
-  const tbl = document.querySelector('.stock-table-wrap');
-  const mob = document.getElementById('mobile-stock-list');
-  if (tbl) tbl.style.display = '';
-  if (mob) mob.style.display = '';
-  _setViewTab('stock');
-}
+function closeEtfView() { showStockView(); }   // 하위호환(ESC 핸들러 등에서 호출)
 
-// 종목 스캐너 뷰로 복귀 (ETF 탭 → 종목 탭)
+// 종목 스캐너 뷰로 복귀
 function showStockView() {
-  closeEtfView();
+  _hideAltViews();
+  _setStockTableVisible(true);
   _setViewTab('stock');
 }
 
@@ -5102,40 +5115,44 @@ function _setViewTab(view) {
   });
 }
 
-// ── 시장 맥락: IPO 캘린더 + 시장 뉴스 (US) ──────────────────────────────
+// ── 시장 맥락: IPO 캘린더 + 시장 뉴스 (US) — IPO·뉴스 탭 본문 ────────────
 let _marketCtxLoaded = false;
 async function loadMarketContext() {
+  const ipoEl  = document.getElementById('market-ipo-list');
+  const newsEl = document.getElementById('market-news-list');
+  if (!ipoEl || !newsEl) return;
   if (_marketCtxLoaded) return;
-  const wrap = document.getElementById('market-context');
-  const body = document.getElementById('market-context-body');
-  if (!wrap || !body) return;
+  ipoEl.innerHTML  = '<div class="mc-empty">불러오는 중…</div>';
+  newsEl.innerHTML = '';
   try {
     const res = await fetch('/api/market_context');
     const d = await res.json();
-    if (!d.available || (!(d.ipos || []).length && !(d.news || []).length)) {
-      wrap.style.display = 'none'; return;
-    }
-    const ipoRows = (d.ipos || []).slice(0, 8).map(i => `
-      <div style="display:flex; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); font-size:12.5px;">
-        <span style="color:var(--text-primary); font-weight:600;">${esc(i.symbol)} <span style="color:var(--text-tertiary); font-weight:400;">${esc(i.name || '')}</span></span>
-        <span style="color:var(--text-secondary); white-space:nowrap;">${esc(i.date)}${i.price ? ` · $${esc(i.price)}` : ''}</span>
-      </div>`).join('');
-    const newsRows = (d.news || []).slice(0, 8).map(n => {
+    const ipos = (d.available && Array.isArray(d.ipos)) ? d.ipos.slice(0, 12) : [];
+    const news = (d.available && Array.isArray(d.news)) ? d.news.slice(0, 12) : [];
+
+    ipoEl.innerHTML = ipos.length ? ipos.map(i => `
+      <div class="mc-card">
+        <div class="mc-card-top">
+          <span class="mc-symbol">${esc(i.symbol)}${i.name ? `<span class="mc-coname">${esc(i.name)}</span>` : ''}</span>
+          <span class="mc-date">${esc(i.date)}</span>
+        </div>
+        ${i.price ? `<div class="mc-sub">공모가 $${esc(i.price)}</div>` : ''}
+      </div>`).join('') : '<div class="mc-empty">예정된 IPO가 없어요.</div>';
+
+    newsEl.innerHTML = news.length ? news.map(n => {
       const u = /^https?:\/\//i.test(n.url || '') ? n.url : '';
-      const t = esc(n.headline || '');
-      return `<div style="padding:7px 0; border-bottom:1px solid var(--border); font-size:12.5px; line-height:1.4;">
-        ${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${t}</a>` : t}
-        ${n.source ? `<span style="color:var(--text-tertiary); font-size:10.5px; margin-left:6px;">${esc(n.source)}</span>` : ''}
-      </div>`;
-    }).join('');
-    body.innerHTML = `
-      ${ipoRows ? `<div style="font-size:11.5px; font-weight:700; color:var(--text-tertiary); margin:4px 0;">예정 IPO</div>${ipoRows}` : ''}
-      ${newsRows ? `<div style="font-size:11.5px; font-weight:700; color:var(--text-tertiary); margin:10px 0 4px;">시장 뉴스</div>${newsRows}` : ''}`;
-    wrap.style.display = '';
+      const inner = `<div class="mc-news-headline">${esc(n.headline || '')}</div>` +
+        (n.source ? `<div class="mc-news-source">${esc(n.source)}</div>` : '');
+      return u
+        ? `<a class="mc-card mc-news" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
+        : `<div class="mc-card mc-news">${inner}</div>`;
+    }).join('') : '<div class="mc-empty">표시할 뉴스가 없어요.</div>';
+
     _marketCtxLoaded = true;
   } catch (e) {
     console.debug('market_context 로드 실패:', e);
-    wrap.style.display = 'none';
+    ipoEl.innerHTML  = '<div class="mc-empty">불러오기 실패. 잠시 후 다시 시도해 주세요.</div>';
+    newsEl.innerHTML = '';
   }
 }
 

@@ -72,6 +72,7 @@
     <div class="view-tabs" role="tablist" aria-label="화면 전환">
       <button class="view-tab active" data-view="stock" data-action="showStockView">📈 종목 스캐너</button>
       <button class="view-tab" data-view="etf" data-action="openEtfView" title="미국·한국 인기 ETF를 한눈에 — 구성종목·섹터·수수료·수익률">📊 ETF 현황</button>
+      <button class="view-tab" data-view="market" data-action="openMarketView" title="예정 IPO 일정과 시장 뉴스 (미국)">🆕 IPO·뉴스</button>
     </div>
     <div class="tabbar-stats">
       <div class="stat-item">
@@ -202,9 +203,23 @@
             <div id="etf-list-kr" class="etf-list"></div>
           </section>
         </div>
-        <div id="market-context" style="display:none; margin-top:12px;">
-          <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin:8px 0;">🆕 IPO 캘린더 · 시장 뉴스</div>
-          <div id="market-context-body"></div>
+      </div>
+
+      <!-- 🆕 IPO·뉴스 (인라인 탭 — 종목 표 자리에 표시) -->
+      <div id="market-view" class="etf-view" hidden>
+        <div class="etf-view-header">
+          <div class="etf-view-title">🆕 IPO 캘린더 · 시장 뉴스 <span class="etf-view-meta">미국 시장</span></div>
+          <button class="etf-view-close" data-action="showStockView" aria-label="종목 목록으로">← 종목 목록</button>
+        </div>
+        <div class="etf-view-body">
+          <section class="etf-col">
+            <h3 class="etf-col-title">🗓️ 예정 IPO</h3>
+            <div id="market-ipo-list" class="etf-list"></div>
+          </section>
+          <section class="etf-col">
+            <h3 class="etf-col-title">📰 시장 뉴스</h3>
+            <div id="market-news-list" class="etf-list"></div>
+          </section>
         </div>
       </div>
     </main>

@@ -20,24 +20,19 @@ html, body {
   max-width: 100vw;
 }
 
-/* ── Macro Strip (신호등 띠) ───────────────────────────────── */
 /* ── Context Bar (신호등 + 지수 + 매크로 이벤트 + 축약 면책) ── */
 .context-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-  padding: 0 24px;
-  height: 36px;
+  gap: 7px 16px;
+  padding: 8px 24px;
   background: var(--card);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
-  font-size: 12.5px;
-  white-space: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
+  font-size: 13.5px;
   z-index: 90;
 }
-.context-bar::-webkit-scrollbar { display: none; }
 /* 컨텍스트 바 안으로 들어온 매크로 이벤트 — 밴드 스타일 해제하고 인라인화 */
 .context-bar .macro-events-strip {
   display: inline-flex;
@@ -49,7 +44,7 @@ html, body {
   overflow: visible;
 }
 .context-bar .macro-events-strip.empty { display: none; }
-.context-bar .macro-meta { margin-left: auto; }
+.context-bar .macro-meta { margin-left: 0; }
 /* 축약 면책 고지 (항상 노출, 전체 문구는 title 툴팁) */
 .ctx-disclaimer {
   display: inline-flex;
@@ -67,7 +62,8 @@ html, body {
   align-items: center;
   gap: 6px;
   font-weight: 800;
-  padding: 3px 12px;
+  font-size: 13.5px;
+  padding: 5px 14px;
   border-radius: 999px;
   letter-spacing: -0.3px;
 }
@@ -81,8 +77,8 @@ html, body {
   align-items: center;
   gap: 4px;
   font-weight: 700;
-  font-size: 11.5px;
-  padding: 3px 10px;
+  font-size: 12.5px;
+  padding: 4px 11px;
   border-radius: 999px;
   cursor: default;
   letter-spacing: -0.2px;
@@ -94,16 +90,17 @@ html, body {
 .macro-item {
   display: inline-flex;
   align-items: baseline;
-  gap: 5px;
+  gap: 6px;
+  font-size: 13.5px;
   color: var(--text-secondary);
 }
 .macro-item .mi-label { font-weight: 600; color: var(--text-tertiary); }
-.macro-item .mi-val   { font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-.macro-item .mi-chg   { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.macro-item .mi-val   { font-size: 14.5px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.macro-item .mi-chg   { font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .macro-item .mi-chg.up   { color: #E03131; }
 .macro-item .mi-chg.down { color: #1971C2; }
 .macro-item .mi-chg.flat { color: var(--text-tertiary); }
-.macro-sep { width: 1px; height: 16px; background: var(--border); flex: none; }
+.macro-sep { width: 1px; height: 20px; background: var(--border); flex: none; }
 .macro-meta {
   margin-left: auto;
   display: inline-flex;
@@ -371,7 +368,7 @@ html, body {
 .filter-bar {
   display: flex;
   align-items: center;
-  padding: 8px 24px;
+  padding: 10px 24px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
 }
@@ -622,6 +619,7 @@ html, body {
 .main {
   overflow-y: auto;
   padding: 16px 24px;
+  background: var(--card);
 }
 
 /* Stock Table */
@@ -1851,7 +1849,7 @@ td.score-col {
 /* ── Hero Zone ────────────────────────────────────────────── */
 /* ── ① 회사 정체성 ────────────────────────────────────────── */
 .dp-section-company {
-  padding: 0 0 8px;
+  padding: 12px 0 8px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
 }
@@ -2825,6 +2823,7 @@ td.score-col {
   padding: 10px 16px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 6px 10px -6px rgba(0, 0, 0, 0.10);
   flex-shrink: 0;
   position: sticky;
   top: 40px;
@@ -3377,7 +3376,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   .tabbar-stats { margin-left: 0; justify-content: flex-start; }
   .tabbar-stats .stat-item { padding: 0 10px 0 0; border-right: none; }
   .tabbar-stats .stat-value { font-size: 13px; }
-  .context-bar { padding: 0 12px; height: 34px; }
+  .context-bar { padding: 6px 12px; height: auto; }
   .ctx-disclaimer { font-size: 10px; }
   .filter-bar { padding: 6px 12px; }
   .filter-chips {
@@ -3626,7 +3625,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   .btn-scan { font-size: 12px; gap: 4px; }
   .btn-scan svg { width: 12px; height: 12px; }
 
-  .context-bar { height: 28px; font-size: 10.5px; gap: 8px; }
+  .context-bar { height: auto; font-size: 10.5px; gap: 6px 8px; }
   .macro-signal { padding: 2px 8px; font-size: 10.5px; }
 
   .chip { min-height: 44px; padding: 0 12px; font-size: 12px; }
@@ -3805,8 +3804,8 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 24px;
-  background: var(--surface-page);
+  padding: 11px 24px;
+  background: var(--card);
 }
 .scanner-tabbar .tabbar-stats {
   display: flex;

@@ -472,6 +472,7 @@ function onMarketChange(val) {
   _syncIndexBarUI();
   _setSegActive('market-btn-group', val);
   loadSectors();
+  loadMacro();   // 매크로 신호등·지수는 마켓 무관(/api/macro) — 스캔과 독립적으로 갱신해 전환 시 누락 방지
   runScan().then(() => {
     loadWatchlist();
     if (typeof _loadMacroStrip === 'function') _loadMacroStrip(val);

@@ -902,7 +902,7 @@ td.score-col {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+  background: color-mix(in srgb, var(--card) 85%, var(--border));
   border-bottom: 1px solid var(--border);
 }
 .dp-moat-icon {
@@ -1001,8 +1001,8 @@ td.score-col {
 .dp-peers-card {
   margin-top: 12px;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg-card);
+  border-radius: var(--radius);
+  background: var(--card);
   overflow: hidden;
 }
 .dp-peers-head {
@@ -1010,7 +1010,7 @@ td.score-col {
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.04));
+  background: color-mix(in srgb, var(--warning) 6%, var(--card));
   border-bottom: 1px solid var(--border);
 }
 .dp-peers-icon { font-size: 22px; line-height: 1; }
@@ -1031,7 +1031,7 @@ td.score-col {
 .dp-peers-count {
   font-size: 11px;
   color: var(--text-tertiary);
-  background: var(--bg-secondary);
+  background: var(--surface-muted);
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 2px 8px;
@@ -1098,8 +1098,8 @@ td.score-col {
 .dp-segments-card {
   margin-top: 12px;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg-card);
+  border-radius: var(--radius);
+  background: var(--card);
   overflow: hidden;
 }
 .dp-segments-head {
@@ -1107,7 +1107,7 @@ td.score-col {
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(37, 99, 235, 0.04));
+  background: color-mix(in srgb, var(--info) 6%, var(--card));
   border-bottom: 1px solid var(--border);
 }
 .dp-segments-icon { font-size: 22px; line-height: 1; }
@@ -1205,10 +1205,10 @@ td.score-col {
 
 /* === 오너십 지도 카드 (보라 톤) === */
 .dp-ownership-card {
-  margin-top: 12px;
+  margin: 12px 20px 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg-card);
+  border-radius: 18px;
+  background: var(--card);
   overflow: hidden;
 }
 .dp-ownership-head {
@@ -1330,10 +1330,10 @@ td.score-col {
 
 /* === 인사이더 거래 타임라인 (핑크 톤) === */
 .dp-insider-card {
-  margin-top: 12px;
+  margin: 12px 20px 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg-card);
+  border-radius: 18px;
+  background: var(--card);
   overflow: hidden;
 }
 .dp-insider-head {
@@ -1458,10 +1458,10 @@ td.score-col {
 
 /* === 이벤트 캘린더 카드 (앰버 톤) === */
 .dp-events-card {
-  margin-top: 12px;
+  margin: 12px 20px 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg-card);
+  border-radius: 18px;
+  background: var(--card);
   overflow: hidden;
 }
 .dp-events-head {
@@ -1815,7 +1815,7 @@ td.score-col {
 .dp-fh-logo {
   width: 34px; height: 34px; flex-shrink: 0;
   border-radius: 9px; object-fit: contain;
-  background: #fff; padding: 4px; box-sizing: border-box;
+  background: var(--card); padding: 4px; box-sizing: border-box;
   border: 1px solid var(--border);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
@@ -1858,14 +1858,38 @@ td.score-col {
 }
 
 /* ── ② 결론 ──────────────────────────────────────────────── */
-.dp-section-conclusion {
+/* ── 결론+타이밍 통합 카드 ────────────────────────────────── */
+.dp-hero-card {
   margin: 12px 20px 0;
-  padding: 0 16px 16px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 18px;
-  position: relative;
   overflow: hidden;
+  position: relative;
+}
+.dp-section-conclusion {
+  padding: 0;
+  position: relative;
+}
+/* ── 2단 레이아웃 (목업 v3) ──────────────────────────────── */
+.dp-hero-flex {
+  display: flex;
+  gap: 0;
+  align-items: stretch;
+  padding: 16px 16px 0;
+}
+.dp-hero-left {
+  flex: 1;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+  padding-right: 16px;
+}
+.dp-hero-right {
+  flex: 1.1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding-left: 16px;
 }
 .dp-section-conclusion > *:not(.dp-hero-watermark) { position: relative; z-index: 1; }
 .dp-hero-watermark {
@@ -1881,29 +1905,41 @@ td.score-col {
 
 /* ── ③ 타이밍 ────────────────────────────────────────────── */
 .dp-section-timing {
-  background: var(--surface-page);
-  padding: 12px 0 8px;
+  padding: 0;
 }
 .dp-section-timing .dp-hero-stats {
-  margin: 8px 20px;
-  padding: 14px 16px 2px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+.dp-section-timing .dp-hero-stat-cell {
+  padding: 10px 0;
+  border-right: none;
+}
+.dp-section-timing .dp-hero-stat-cell:nth-child(odd) {
+  border-right: 1px solid var(--border);
+  padding-right: 12px;
+}
+.dp-section-timing .dp-hero-stat-cell:nth-child(even) {
+  padding-left: 12px;
+  padding-right: 0;
+}
+.dp-section-timing .dp-hero-stat-cell:nth-child(n+3) {
+  border-top: 1px solid var(--border);
 }
 .dp-section-timing #dp-spark-panel {
-  margin: 8px 20px;
-  padding: 14px 16px 12px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 18px;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 .dp-section-timing .dp-thermo-compact {
-  margin: 8px 20px;
+  margin: 0;
   padding: 14px 16px 4px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 18px;
+  border-top: 1px solid var(--border);
 }
 .dp-spark-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .dp-spark-eyebrow {
@@ -1925,7 +1961,7 @@ td.score-col {
   position: absolute; right: 0; top: 0;
   font-size: 12px; font-weight: 800; color: var(--success);
 }
-.dp-spark-facts { display: flex; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 11px; }
+.dp-spark-facts { display: flex; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
 .dp-spark-fact { flex: 1; padding-left: 14px; border-left: 1px solid var(--border); }
 .dp-spark-fact:first-child { padding-left: 0; border-left: none; }
 .dp-spark-fact--wide { flex: 1.2; }
@@ -1944,10 +1980,9 @@ td.score-col {
 /* Zone A — 판결 행 ---------------------------------------- */
 .dp-verdict-zone {
   display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 20px 0 16px;
-  border-bottom: 1px solid var(--border);
+  align-items: flex-end;
+  gap: 10px;
+  padding: 0 0 12px;
   margin-bottom: 0;
 }
 
@@ -2130,7 +2165,7 @@ td.score-col {
   overflow: hidden;
   transition: max-height 0.3s var(--ease-default);
 }
-.dp-card-group-body.open { max-height: 4000px; }
+.dp-card-group-body.open { max-height: 4000px; padding-bottom: 12px; }
 
 /* ── Header Actions (inline style → CSS) ────────────────────── */
 .dp-header-actions {
@@ -2155,8 +2190,8 @@ td.score-col {
   transition: opacity 0.15s;
 }
 .dp-action-btn:hover { opacity: 0.85; }
-.dp-action-link { background: var(--brand, #0071E3); color: #fff; }
-.dp-action-capture { background: #1D1D1F; color: #fff; }
+.dp-action-link { background: var(--brand, #0071E3); color: var(--primary-foreground); }
+.dp-action-capture { background: var(--primary); color: var(--primary-foreground); }
 
 /* ── About Bar ──────────────────────────────────────────────── */
 .dp-about-bar {
@@ -2266,6 +2301,98 @@ td.score-col {
   background: #E8E8E8; color: #2A2A2A; border-color: #2A2A2A; box-shadow: 6px 6px 0 #2A2A2A;
 }
 
+/* ── RSI Thermometer Marker ───────────────────────────────── */
+#dp-thermo-marker {
+  position: absolute;
+  top: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 3px solid var(--text-tertiary);
+  transform: translateX(-50%);
+  left: 50%;
+  transition: left .4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 2px 6px rgba(0,0,0,.18);
+}
+
+/* ── 4축 타이밍 분석 ─────────────────────────────────────── */
+#dp-fouraxis-loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-tertiary);
+  display: none;
+}
+#dp-fouraxis-error {
+  text-align: center;
+  padding: 24px;
+  color: var(--destructive);
+  display: none;
+}
+#dp-fouraxis-header {
+  display: none;
+  padding: 14px 16px;
+  margin: 14px 20px 8px;
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.dp-fouraxis-title {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.dp-fouraxis-title-hint {
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+.dp-fouraxis-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+#dp-fa-phase { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+#dp-fa-stars { font-size: 16px; color: var(--warning); }
+#dp-fa-stars-meaning { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+.dp-fouraxis-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.dp-axis-sub {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}
+.dp-axis-val .dp-axis-denom {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+#dp-fouraxis-obs {
+  display: none;
+  padding: 14px 16px;
+  margin: 0 20px 16px;
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.dp-fouraxis-obs-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+#dp-fa-observation {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
 /* ── RSI Thermometer Track ────────────────────────────────── */
 .dp-thermo-track {
   position: relative;
@@ -2302,9 +2429,9 @@ td.score-col {
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  margin-bottom: 12px;
+  margin: 0 16px 8px;
   background: var(--surface-page);
-  border-radius: 18px;
+  border-radius: 12px;
   border: 1px solid var(--border);
   border-left: 3px solid var(--brand);
   font-size: 13px;
@@ -2333,8 +2460,9 @@ td.score-col {
 
 /* ── Earnings Card ───────────────────────────────────────── */
 .dp-earnings-card {
+  margin: 8px 20px;
   padding: 14px;
-  background: var(--surface-page);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 18px;
 }
@@ -2391,7 +2519,14 @@ td.score-col {
   color: var(--text-tertiary);
 }
 .dp-drawdown-wrap {
-  padding: 0 20px 8px;
+  margin: 8px 20px;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+.dp-drawdown-wrap:empty {
+  display: none;
 }
 .dp-consensus-card {
   margin: 8px 20px;
@@ -2427,6 +2562,24 @@ td.score-col {
   flex-direction: column;
 }
 
+/* ── Finnhub 최근 뉴스 7일 카드 ─────────────────────────────── */
+.dp-fh-news-card {
+  margin: 8px 20px;
+  padding: 12px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+
+/* ── Tabs Card (탭 영역 카드 래퍼) ──────────────────────────── */
+.dp-tabs-card {
+  margin: 8px 20px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
 /* ── Tab Content ─────────────────────────────────────────── */
 .dp-tab-content {
   padding: 16px;
@@ -2440,11 +2593,11 @@ td.score-col {
 
 /* 점수 숫자 — 판결문 레이아웃 핵심 요소 */
 .dp-score-num {
-  font-size: 60px;
+  font-size: 46px;
   font-weight: 800;
-  line-height: 1;
+  line-height: .9;
   color: var(--text-primary);
-  letter-spacing: -0.04em;
+  letter-spacing: -0.045em;
   font-variant-numeric: tabular-nums;
   /* 점수 값에 따라 색상으로 상태를 외침 */
   transition: color 0.3s var(--ease-default);
@@ -2454,7 +2607,7 @@ td.score-col {
 .dp-score-num.score-low  { color: var(--destructive); }
 
 .dp-score-unit {
-  font-size: 20px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-tertiary);
   letter-spacing: -0.01em;
@@ -2662,7 +2815,7 @@ td.score-col {
 .dp-tab-nav {
   display: flex;
   gap: 6px;
-  padding: 10px 20px;
+  padding: 10px 16px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -2674,11 +2827,11 @@ td.score-col {
 }
 .dp-tab-nav::-webkit-scrollbar { display: none; }
 .dp-tab-btn {
-  height: 32px; padding: 0 14px;
+  height: 36px; padding: 0 14px;
   border: none; background: var(--surface-subtle);
   border-radius: 980px;
-  font-size: 12px; font-weight: 600;
-  color: var(--text-tertiary); cursor: pointer;
+  font-size: 13px; font-weight: 600;
+  color: var(--text-secondary); cursor: pointer;
   transition: background 0.15s, color 0.15s;
   font-family: inherit;
   white-space: nowrap;
@@ -2686,7 +2839,8 @@ td.score-col {
 .dp-tab-btn:hover:not(.active) { background: var(--border); color: var(--text-primary); }
 .dp-tab-btn.active {
   background: var(--brand, #0071E3);
-  color: #fff;
+  color: var(--primary-foreground);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .dp-tab-panel {
@@ -3416,44 +3570,29 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
     border-radius: 0;
     max-height: none;
   }
-  /* 판결문 레이아웃 모바일 — dp-hero-summary/right는 타이밍 섹션으로 이동 */
-  .dp-verdict-zone {
-    gap: 14px;
-    padding: 16px 0 14px;
+  /* 모바일: 2단 → 세로 전환 */
+  .dp-hero-flex {
+    flex-direction: column;
+    padding: 12px 16px 0;
   }
-  .dp-verdict-score-wrap {
-    padding-right: 14px;
-  }
-  .dp-score-num { font-size: 48px; }
-  .dp-score-unit { font-size: 18px; }
-  /* Zone B: 모바일에서 2×2 그리드 */
-  .dp-hero-stats {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .dp-hero-stat-cell {
-    padding: 10px 12px 10px 0;
-  }
-  .dp-hero-stat-cell:not(:first-child) {
-    padding-left: 12px;
-  }
-  /* 1·2번 셀 하단 구분선 */
-  .dp-hero-stat-cell:nth-child(1),
-  .dp-hero-stat-cell:nth-child(2) {
+  .dp-hero-left {
+    border-right: none;
+    padding-right: 0;
     border-bottom: 1px solid var(--border);
     padding-bottom: 12px;
   }
-  /* 3·4번 셀 상단 패딩 */
-  .dp-hero-stat-cell:nth-child(3),
-  .dp-hero-stat-cell:nth-child(4) {
+  .dp-hero-right {
+    padding-left: 0;
     padding-top: 12px;
   }
-  /* 짝수 열(2·4번)은 오른쪽 border 제거 */
-  .dp-hero-stat-cell:nth-child(2),
-  .dp-hero-stat-cell:nth-child(4) {
-    border-right: none;
-    padding-right: 0;
+  .dp-verdict-zone {
+    gap: 10px;
+    padding: 0 0 10px;
   }
+  .dp-score-num { font-size: 40px; }
+  .dp-score-unit { font-size: 14px; }
   #dp-quadrant-card { display: none !important; }
+  .dp-section-btn { min-height: 44px; }
 
   /* 탭바 — 모바일에서 섹션네비 아래 고정 */
   .dp-tab-nav { top: 38px; }
@@ -3461,8 +3600,8 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   /* .dp-tab-btn:active click effect removed */
 
   /* 4축 그리드 2열로 */
-  #dp-fouraxis-header > div:last-child {
-    grid-template-columns: repeat(2, 1fr) !important;
+  .dp-fouraxis-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
   #dp-fouraxis-header { padding: 10px 14px 6px; }
   #dp-fouraxis-chart-wrap { padding: 8px 14px; }

@@ -13,10 +13,8 @@ html, body {
 
 /* ── App Shell ─────────────────────────────────────────────── */
 .app-shell {
-  display: grid;
-  /* topbar / macro-events-strip / disclaimer / macro-strip / stats-bar / ix-discovery-card / content
-     1fr 는 마지막(content) 만 — stats-bar 가 1fr 를 먹어 그 아래 빈 공간이 생기는 버그 방지. */
-  grid-template-rows: 60px auto auto auto auto auto 1fr;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
   overflow: hidden;
   max-width: 100vw;
@@ -494,6 +492,8 @@ html, body {
 
 /* ── Main Content ──────────────────────────────────────────── */
 .content {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   grid-template-columns: 200px 1fr;
   overflow: hidden;
@@ -890,7 +890,7 @@ td.score-col {
 
 /* === 디테일 페이지 — 핵심 해자 카드 === */
 .dp-moat-card {
-  margin: 0 20px 16px;
+  margin: 0 20px 8px;
   padding: 0;
   background: var(--card);
   border-radius: var(--radius);
@@ -1849,7 +1849,7 @@ td.score-col {
   border-bottom: 1px solid var(--border);
 }
 .dp-section-company .dp-about-bar {
-  padding: 10px 20px 8px;
+  padding: 8px 20px;
 }
 .dp-section-company .dp-peers-card,
 .dp-section-company .dp-segments-card {
@@ -1899,7 +1899,7 @@ td.score-col {
   pointer-events: none; z-index: 2;
 }
 .dp-section-conclusion > .dp-oneliner-poster {
-  margin: 16px 0 12px;
+  margin: 16px 16px 12px;
   border-radius: 18px;
 }
 
@@ -2195,7 +2195,7 @@ td.score-col {
 
 /* ── About Bar ──────────────────────────────────────────────── */
 .dp-about-bar {
-  padding: 6px 20px 8px;
+  padding: 8px 20px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
 }
@@ -2319,20 +2319,20 @@ td.score-col {
 /* ── 4축 타이밍 분석 ─────────────────────────────────────── */
 #dp-fouraxis-loading {
   text-align: center;
-  padding: 40px;
+  padding: 40px 20px;
   color: var(--text-tertiary);
   display: none;
 }
 #dp-fouraxis-error {
   text-align: center;
-  padding: 24px;
+  padding: 24px 20px;
   color: var(--destructive);
   display: none;
 }
 #dp-fouraxis-header {
   display: none;
   padding: 14px 16px;
-  margin: 14px 20px 8px;
+  margin: 8px 20px;
   background: var(--card);
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -2375,7 +2375,7 @@ td.score-col {
 #dp-fouraxis-obs {
   display: none;
   padding: 14px 16px;
-  margin: 0 20px 16px;
+  margin: 8px 20px 16px;
   background: var(--card);
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -2428,8 +2428,8 @@ td.score-col {
 .dp-news-bar {
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
-  margin: 0 16px 8px;
+  padding: 10px 16px;
+  margin: 0 20px 8px;
   background: var(--surface-page);
   border-radius: 12px;
   border: 1px solid var(--border);
@@ -2509,8 +2509,8 @@ td.score-col {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 .dp-disclaimer {
-  margin: 20px 20px 12px;
-  padding: 10px 14px;
+  margin: 12px 20px;
+  padding: 10px 16px;
   background: var(--surface-subtle, #F5F5F7);
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -3276,16 +3276,16 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: var(--card);
+  padding: 12px 14px;
+  background: var(--surface-page);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 12px;
   border-left: 3px solid transparent;
   transition: border-left-color 0.15s;
 }
-.ind-pos  { border-left-color: var(--success); background: rgba(52,199,89,0.03); }
-.ind-neg  { border-left-color: var(--destructive); background: rgba(255,59,48,0.03); }
-.ind-info { border-left-color: var(--info); background: rgba(59,130,246,0.03); }
+.ind-pos  { border-left-color: var(--success);     background: color-mix(in srgb, var(--success) 9%, var(--surface-page)); }
+.ind-neg  { border-left-color: var(--destructive); background: color-mix(in srgb, var(--destructive) 9%, var(--surface-page)); }
+.ind-info { border-left-color: var(--info);        background: color-mix(in srgb, var(--info) 9%, var(--surface-page)); }
 .ind-label { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
 .ind-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
 .ind-val { font-size: 16px; font-weight: 700; white-space: nowrap; }
@@ -3327,7 +3327,6 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 /* ── Responsive: Mobile (≤768px) ───────────────────────────── */
 @media (max-width: 768px) {
   .app-shell {
-    grid-template-rows: 52px auto auto auto 1fr;
     height: 100dvh;
     height: 100vh; /* fallback */
     max-width: 100vw;
@@ -3605,9 +3604,9 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   }
   #dp-fouraxis-header { padding: 10px 14px 6px; }
   #dp-fouraxis-chart-wrap { padding: 8px 14px; }
-  #dp-fouraxis-obs { margin: 0 12px 12px; padding: 12px; }
+  #dp-fouraxis-obs { margin: 0 16px 12px; padding: 12px; }
 
-  .dp-oneliner-poster { font-size: clamp(20px, 5vw, 36px); margin: 10px 14px; padding: 18px 14px; }
+  .dp-oneliner-poster { font-size: clamp(20px, 5vw, 36px); margin: 10px 16px; padding: 18px 16px; }
 
   /* Loading screen mobile */
   .scan-loading { padding: 40px 16px 32px; }
@@ -4620,4 +4619,34 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   .action-cards { grid-template-columns: 1fr; }
   .mece-inner { padding: 12px; }
   .price-map-val { min-width: 60px; font-size: 11px; }
+}
+
+/* ── 캡쳐모드: 핵심 컬럼만 표시 ── */
+.capture-mode .stock-table th:nth-child(1),
+.capture-mode .stock-table td:nth-child(1),
+.capture-mode .stock-table th:nth-child(4),
+.capture-mode .stock-table td:nth-child(4),
+.capture-mode .stock-table th:nth-child(5),
+.capture-mode .stock-table td:nth-child(5),
+.capture-mode .stock-table th:nth-child(10),
+.capture-mode .stock-table td:nth-child(10),
+.capture-mode .stock-table th:nth-child(11),
+.capture-mode .stock-table td:nth-child(11),
+.capture-mode .stock-table th:nth-child(12),
+.capture-mode .stock-table td:nth-child(12),
+.capture-mode .stock-table th:nth-child(13),
+.capture-mode .stock-table td:nth-child(13),
+.capture-mode .stock-table th:nth-child(14),
+.capture-mode .stock-table td:nth-child(14) { display: none !important; }
+
+.capture-mode .stock-table { font-size: 15px; }
+.capture-mode .stock-table th,
+.capture-mode .stock-table td { padding: 10px 14px; }
+.capture-mode .stock-table .name-cell .stock-name { font-size: 15px; }
+.capture-mode .stock-table .score-num { font-size: 16px; }
+
+.topbar-more-item.active-item {
+  background: #EDE9FE;
+  color: #6B21A8;
+  font-weight: 700;
 }

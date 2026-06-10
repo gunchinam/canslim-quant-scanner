@@ -85,6 +85,12 @@ except Exception:
     _DART_OK = False
 
 try:
+    from bottom_fishing_score import compute_bf_score as _compute_bf
+    _BF_OK = True
+except Exception:
+    _BF_OK = False
+
+try:
     import fundamental_value_grade as _fvg
     _FVG_OK = True
 except Exception:
@@ -2702,7 +2708,7 @@ class WallStreetQuantStrategies:
             # CVaR 95% + P5: Skew/Kurtosis
             # B1: 전체 history(시점 혼재) + 30일 하한(꼬리 1~2개) → 최근 252일 트레일링 + 표본 하한 상향.
             # daily_ret(전체)은 하방베타·자기상관용으로 유지하고, 꼬리 통계는 최근 1년 창으로 계산.
-            daily_ret = c.pct_change().dropna()
+            daily_ret = c.pct_change(fill_method=None).dropna()
             _ret_w = daily_ret.iloc[-252:]                       # 최근 1년(252거래일) 한정
             if len(_ret_w) >= 120:                                # 30→120: 5% 꼬리 ≥6개 확보
                 var_95 = float(_ret_w.quantile(0.05))
@@ -2716,7 +2722,7 @@ class WallStreetQuantStrategies:
             # P9: Downside Beta + P12: Stress Scenarios
             if benchmark_hist is not None and len(daily_ret) >= 60:
                 try:
-                    bench_ret = benchmark_hist["Close"].pct_change().dropna()
+                    bench_ret = benchmark_hist["Close"].pct_change(fill_method=None).dropna()
                     common = daily_ret.index.intersection(bench_ret.index)
                     if len(common) >= 60:
                         sr, br = daily_ret.loc[common], bench_ret.loc[common]
@@ -2755,7 +2761,7 @@ class WallStreetQuantStrategies:
                 try:
                     _vol = hist["Volume"].iloc[-20:]
                     _cls = hist["Close"].iloc[-20:]
-                    _ret = _cls.pct_change().abs().iloc[1:]
+                    _ret = _cls.pct_change(fill_method=None).abs().iloc[1:]
                     _tvol = (_cls.iloc[1:].values * _vol.iloc[1:].values)
                     _valid = _tvol > 0
                     if _valid.sum() >= 10:
@@ -3900,7 +3906,7 @@ class QuantNexusApp:
         """네이버 finance/annual API에서 PER/PBR/ROE/영업이익률/부채비율 + DCF 입력값(EPS/BPS/영업CF/EBITDA/발행주식수) 조회."""
         code = ticker.split('.')[0]
         cached = self._naver_fund_cache.get(code)
-        if cached is not None:
+        if cached:
             return cached
         result = {}
         try:
@@ -3922,7 +3928,6 @@ class QuantNexusApp:
                     latest_key = tr['key']
                     break
             if not latest_key:
-                self._naver_fund_cache[code] = result
                 return result
 
             # title → (key, unit_multiplier)
@@ -3959,7 +3964,7 @@ class QuantNexusApp:
                 self._save_naver_fund_cache()
         except Exception as e:
             logging.debug(f"Naver fund fetch failed for {code}: {e}")
-            self._naver_fund_cache[code] = {}
+            # 실패 시 캐시 저장 안 함 — 다음 호출에서 재시도
         return result
 
     # ─────────────────────────────────────────────────────────────────────
@@ -5761,77 +5766,111 @@ class QuantNexusApp:
                         "(실적·PER·ROE 팩터는 점수에서 제외)")
 
             # ── [C] Current Quarterly EPS 가속도 ─────────────────────
-            c_raw = earn["c_score"]
-            if earn["eps_acceleration"]:
-                canslim_tags.append("C🔥 분기 실적이 2분기 연속 가속 성장 중이에요")
-            elif c_raw >= 28:
-                canslim_tags.append("C 분기 순이익이 50% 이상 폭발적으로 늘었어요")
-            elif c_raw >= 18:
-                canslim_tags.append("C 분기 순이익이 25% 이상 성장해 기준을 충족했어요")
-            elif earn["fail_safe_eps"]:
-                canslim_tags.append("C⛔ 분기 순이익이 적자예요. 진입에 주의하세요")
+            # 각 원칙을 개별 try/except 로 감싸 하나가 실패해도
+            # 나머지 원칙 태그가 사라지지 않도록 방어한다.
+            try:
+                c_raw = earn["c_score"]
+                if earn.get("data_missing"):
+                    canslim_tags.append("C 실적 데이터가 아직 공개되지 않았어요 (분기 보고 전이거나 공시 미반영)")
+                elif earn["eps_acceleration"]:
+                    canslim_tags.append("C🔥 분기 실적이 2분기 연속 가속 성장 중이에요")
+                elif c_raw >= 28:
+                    canslim_tags.append("C 분기 순이익이 50% 이상 폭발적으로 늘었어요")
+                elif c_raw >= 18:
+                    canslim_tags.append("C 분기 순이익이 25% 이상 성장해 기준을 충족했어요")
+                elif earn["fail_safe_eps"]:
+                    canslim_tags.append("C⛔ 분기 순이익이 적자예요. 진입에 주의하세요")
+                elif c_raw > 0:
+                    canslim_tags.append(f"C 분기 순이익이 소폭({earn['eps_growth']:+.0%}) 성장했지만 기준(25%)에 미달해요")
+                else:
+                    canslim_tags.append("C 분기 순이익 성장이 확인되지 않았어요")
+            except Exception:
+                c_raw = 0
+                canslim_tags.append("C 분기 실적 데이터를 분석할 수 없었어요")
             f_cs_c = _n01(max(c_raw, 0.0), best=60.0)   # 60점이 사실상 상한
 
             # ── [A] Annual Earnings: ROE 17%+ ────────────────────────
-            a_raw = ff["a_score"]
-            if ff["roe_pass"]:
-                canslim_tags.append(f"A✅ 자기자본이익률 {ff['roe']:.0%}로 기준(17%)을 통과했어요")
-            else:
-                canslim_tags.append(f"A⛔ 자기자본이익률 {ff['roe']:.0%}로 기준(17%)에 미달해요")
+            try:
+                a_raw = ff["a_score"]
+                if ff["roe_pass"]:
+                    canslim_tags.append(f"A✅ 자기자본이익률 {ff['roe']:.0%}로 기준(17%)을 통과했어요")
+                else:
+                    canslim_tags.append(f"A⛔ 자기자본이익률 {ff['roe']:.0%}로 기준(17%)에 미달해요")
+            except Exception:
+                a_raw = 0
+                canslim_tags.append("A 자기자본이익률(ROE) 데이터를 확인할 수 없었어요")
             f_cs_a = _n(a_raw)
 
             # ── [N] New Highs / 컵앤핸들 피벗 ───────────────────────
             n_raw = 0.0
-            if mom["near_52w_high"]:
-                n_raw += 20
-                canslim_tags.append(f"N🚀 52주 최고가에서 {mom['dist_from_52w_high']:.0%} 아래, 신고가 도전 중이에요")
-            elif mom["dist_from_52w_high"] < 0.10:
-                n_raw += 10
-                canslim_tags.append(f"N 52주 최고가에서 10% 이내에 위치했어요")
-            else:
-                canslim_tags.append(f"N 52주 최고가보다 {mom['dist_from_52w_high']:.0%} 아래에 있어요")
-            if mom["pivot_breakout"]:
-                n_raw += 15
-                canslim_tags.append("N🔔 컵앤핸들 패턴의 피벗을 돌파했어요")
+            try:
+                if mom["near_52w_high"]:
+                    n_raw += 20
+                    canslim_tags.append(f"N🚀 52주 최고가에서 {mom['dist_from_52w_high']:.0%} 아래, 신고가 도전 중이에요")
+                elif mom["dist_from_52w_high"] < 0.10:
+                    n_raw += 10
+                    canslim_tags.append(f"N 52주 최고가에서 10% 이내에 위치했어요")
+                else:
+                    canslim_tags.append(f"N 52주 최고가보다 {mom['dist_from_52w_high']:.0%} 아래에 있어요")
+                if mom["pivot_breakout"]:
+                    n_raw += 15
+                    canslim_tags.append("N🔔 컵앤핸들 패턴의 피벗을 돌파했어요")
+            except Exception:
+                canslim_tags.append("N 52주 신고가 데이터를 확인할 수 없었어요")
             f_cs_n = _n01(n_raw, best=35.0)
 
             # ── [S] Supply & Demand (거래량 확인 돌파) ───────────────
-            s_raw = vol_a["score"]
-            if vol_a["s_confirmed"]:
-                canslim_tags.append(f"S✅ 거래량이 평소의 {vol_a['ratio']:.1f}배로 급증해 기관 참여가 확인됐어요")
-            elif vol_a["unconfirmed_break"]:
-                s_raw -= 10
-                canslim_tags.append(f"S⚠️ 가격은 올랐지만 거래량이 부족해요. 가짜 신호일 수 있어요")
-            else:
-                canslim_tags.append(f"S 거래량이 평소의 {vol_a['ratio']:.1f}배 수준이에요")
+            try:
+                s_raw = vol_a["score"]
+                if vol_a["s_confirmed"]:
+                    canslim_tags.append(f"S✅ 거래량이 평소의 {vol_a['ratio']:.1f}배로 급증해 기관 참여가 확인됐어요")
+                elif vol_a["unconfirmed_break"]:
+                    s_raw -= 10
+                    canslim_tags.append(f"S⚠️ 가격은 올랐지만 거래량이 부족해요. 가짜 신호일 수 있어요")
+                else:
+                    canslim_tags.append(f"S 거래량이 평소의 {vol_a['ratio']:.1f}배 수준이에요")
+            except Exception:
+                s_raw = 0
+                canslim_tags.append("S 거래량 데이터를 확인할 수 없었어요")
             f_cs_s = _n(s_raw)
 
             # ── [L] Leader or Laggard (RS 80+) ──────────────────────
-            l_raw = rs["score"]
-            if rs["is_leader"]:
-                canslim_tags.append(f"L⭐ 상대강도 {rs['rs_rating']}점으로 시장 주도주예요")
-            elif rs["fail_safe_rs"]:
-                canslim_tags.append(f"L📉 상대강도 {rs['rs_rating']}점으로 시장 대비 뒤처지고 있어요")
-            else:
-                canslim_tags.append(f"L 상대강도(RS) {rs['rs_rating']}점이에요")
+            try:
+                l_raw = rs["score"]
+                if rs["is_leader"]:
+                    canslim_tags.append(f"L⭐ 상대강도 {rs['rs_rating']}점으로 시장 주도주예요")
+                elif rs["fail_safe_rs"]:
+                    canslim_tags.append(f"L📉 상대강도 {rs['rs_rating']}점으로 시장 대비 뒤처지고 있어요")
+                else:
+                    canslim_tags.append(f"L 상대강도(RS) {rs['rs_rating']}점이에요")
+            except Exception:
+                l_raw = 0
+                canslim_tags.append("L 상대강도(RS) 데이터를 확인할 수 없었어요")
             f_cs_l = _n(l_raw)
 
             # ── [I] Institutional Sponsorship (Smart Money) ──────────
-            i_raw = flow["score"]
-            canslim_tags.append(f"I 기관 자금 흐름은 '{flow['signal']}'이에요")
+            try:
+                i_raw = flow["score"]
+                canslim_tags.append(f"I 기관 자금 흐름은 '{flow['signal']}'이에요")
+            except Exception:
+                i_raw = 0
+                canslim_tags.append("I 기관 자금 흐름 데이터를 확인할 수 없었어요")
             f_cs_i = _n(i_raw)
 
             # ── [M] Market Direction (태그만 — regime에서 점수 처리) ─
             #   다른 원칙(C/A/N/S/L/I)과 동일한 'M+이모지 한글설명' 포맷으로
             #   생성해야 프론트가 본문(main)으로 분류한다. (대괄호 포맷은 보조지표로 빠짐)
-            _m_msg = {
-                "STRONG_BULL":  "M🔥 시장 전체가 강한 상승 추세예요 (CAN SLIM의 핵심 조건)",
-                "BULL":         "M✅ 시장이 상승 추세에 있어요",
-                "SIDEWAYS_BULL":"M 시장이 횡보 중이지만 상승 쪽으로 기울어 있어요",
-                "STRONG_BEAR":  "M🚫 시장이 강한 하락 추세예요. 점수에 50% 상한이 걸려요",
-                "BEAR":         "M🚫 시장이 하락 추세예요. 점수에 50% 상한이 걸려요",
-                "SIDEWAYS":     "M 시장이 뚜렷한 방향 없이 횡보 중이에요"}.get(regime.get("regime", "SIDEWAYS"),
-                  "M 시장이 뚜렷한 방향 없이 횡보 중이에요")
+            try:
+                _m_msg = {
+                    "STRONG_BULL":  "M🔥 시장 전체가 강한 상승 추세예요 (CAN SLIM의 핵심 조건)",
+                    "BULL":         "M✅ 시장이 상승 추세에 있어요",
+                    "SIDEWAYS_BULL":"M 시장이 횡보 중이지만 상승 쪽으로 기울어 있어요",
+                    "STRONG_BEAR":  "M🚫 시장이 강한 하락 추세예요. 점수에 50% 상한이 걸려요",
+                    "BEAR":         "M🚫 시장이 하락 추세예요. 점수에 50% 상한이 걸려요",
+                    "SIDEWAYS":     "M 시장이 뚜렷한 방향 없이 횡보 중이에요"}.get(regime.get("regime", "SIDEWAYS"),
+                      "M 시장이 뚜렷한 방향 없이 횡보 중이에요")
+            except Exception:
+                _m_msg = "M 시장 방향 데이터를 확인할 수 없었어요"
             canslim_tags.append(_m_msg)
 
             # ════════════════════════════════════════════════════════════
@@ -5908,14 +5947,17 @@ class QuantNexusApp:
             # STEP 5 — Hurst + Kalman 신뢰도 조정 (±4% 이내 소폭 보정)
             # ════════════════════════════════════════════════════════════
             hurst_kalman_trust = 1.0
-            if hurst["h"] >= 0.60 and kf["signal"] in ("BUY_TREND", "POSSIBLE_REVERSAL"):
-                hurst_kalman_trust = 1.04
-                canslim_tags.append(f"[MATH✅] Hurst {hurst['h']:.2f}≥0.6 + Kalman {kf['signal']}")
-            elif hurst["h"] < 0.45 and kf["signal"] == "SELL_TREND":
-                hurst_kalman_trust = 0.94
-                canslim_tags.append(f"[MATH⚠️] Hurst {hurst['h']:.2f} + Kalman SELL — 신뢰도↓")
-            else:
-                canslim_tags.append(f"[MATH] Hurst {hurst['h']:.2f}  Kalman {kf['signal']}")
+            try:
+                if hurst["h"] >= 0.60 and kf["signal"] in ("BUY_TREND", "POSSIBLE_REVERSAL"):
+                    hurst_kalman_trust = 1.04
+                    canslim_tags.append(f"[MATH✅] Hurst {hurst['h']:.2f}≥0.6 + Kalman {kf['signal']}")
+                elif hurst["h"] < 0.45 and kf["signal"] == "SELL_TREND":
+                    hurst_kalman_trust = 0.94
+                    canslim_tags.append(f"[MATH⚠️] Hurst {hurst['h']:.2f} + Kalman SELL — 신뢰도↓")
+                else:
+                    canslim_tags.append(f"[MATH] Hurst {hurst['h']:.2f}  Kalman {kf['signal']}")
+            except Exception:
+                canslim_tags.append("[MATH] Hurst/Kalman 데이터를 확인할 수 없었어요")
 
             base = max(0.0, min(120.0, base * hurst_kalman_trust))
 
@@ -6151,6 +6193,31 @@ class QuantNexusApp:
                 pass
 
             # ════════════════════════════════════════════════════════════
+            # STEP 10.9 — Bottom-Fishing Score (저점매수 복합 점수)
+            # ════════════════════════════════════════════════════════════
+            _bf_result: dict = {
+                "bf_score": 0.0, "bf_signal": "NEUTRAL",
+                "axis1_value": 0.0, "axis2_tech": 0.0, "axis3_macro": 0.0,
+                "piotroski": {"f_score": 0, "available": False},
+                "altman": {"z_score": None, "zone": "UNKNOWN", "available": False},
+                "bf_tags": [], "breakdown": [],
+            }
+            if _BF_OK:
+                try:
+                    _dart_fin = None
+                    if _is_kr and _DART_OK and _dart_api:
+                        try:
+                            _dart_fin = _dart_api.get_financials_cached(ticker)
+                        except Exception:
+                            pass
+                    _bf_result = _compute_bf(
+                        ticker, mr, flow, ff, qual, atr, hurst, regime, dd,
+                        info, hist, dart_data=_dart_fin,
+                    )
+                except Exception:
+                    pass
+
+            # ════════════════════════════════════════════════════════════
             # STEP 11 — CAN SLIM 시그널 결정
             # ════════════════════════════════════════════════════════════
             if fail_safe_triggered:
@@ -6193,6 +6260,10 @@ class QuantNexusApp:
                 signal += " [VOL🔥]"
             if low_liquidity:
                 signal += " [LOW LIQ]"
+            if _bf_result.get("bf_score", 0) >= 60:
+                signal += " [BF🎯]"
+            for _bft in (_bf_result.get("bf_tags") or [])[:2]:
+                signal += f" [{_bft}]"
 
             # ════════════════════════════════════════════════════════════
             # STEP 12 — Breakdown 구성 (CAN SLIM 원칙 코드 표기)
@@ -6200,7 +6271,8 @@ class QuantNexusApp:
             # vol_impact = 변동성 조정 후 점수 - 슈퍼 그로스 직전 base
             # (괄호 누락 + super_mult 분할 보정의 클리핑 손실 문제 수정)
             vol_impact = va["adj_score"] - base_pre_super
-            breakdown = [
+            try:
+                breakdown = [
                 # ── CAN SLIM 7원칙 ───────────────────────────────────
                 ("[C] EPS 가속도 (Current QE)",
                  None if earn.get("data_missing") else round(earn["c_score"], 1),
@@ -6317,26 +6389,38 @@ class QuantNexusApp:
                   f"갭 방향 {'+위' if sent['gap_bias'] > 0 else '아래'}, "
                   f"종가 강도 {sent['close_strength']:.0%}예요."))]
 
-            # SCALPING 전용 단타 팩터 — 가중치>0 일 때만 Breakdown에 노출
-            if w.get("orb", 0) > 0 or w.get("nr7", 0) > 0 or w.get("bb_revert", 0) > 0:
-                breakdown.extend([
-                    ("[Scalp] ORB 돌파",
-                     round(f_orb * w["orb"], 1),
-                     f"ORB 신호: '{orb.get('signal', 'NONE')}' (점수 {orb.get('score', 0):.1f})"),
-                    ("[Scalp] NR7 압축",
-                     round(f_nr7 * w["nr7"], 1),
-                     f"NR7 신호: '{nr7.get('signal', 'NONE')}' (점수 {nr7.get('score', 0):.1f})"),
-                    ("[Scalp] BB 반등",
-                     round(f_bb_revert * w["bb_revert"], 1),
-                     f"BB 반등 신호: '{bb_rv.get('signal', 'NONE')}' (점수 {bb_rv.get('score', 0):.1f})")])
+                # SCALPING 전용 단타 팩터 — 가중치>0 일 때만 Breakdown에 노출
+                if w.get("orb", 0) > 0 or w.get("nr7", 0) > 0 or w.get("bb_revert", 0) > 0:
+                    breakdown.extend([
+                        ("[Scalp] ORB 돌파",
+                         round(f_orb * w["orb"], 1),
+                         f"ORB 신호: '{orb.get('signal', 'NONE')}' (점수 {orb.get('score', 0):.1f})"),
+                        ("[Scalp] NR7 압축",
+                         round(f_nr7 * w["nr7"], 1),
+                         f"NR7 신호: '{nr7.get('signal', 'NONE')}' (점수 {nr7.get('score', 0):.1f})"),
+                        ("[Scalp] BB 반등",
+                         round(f_bb_revert * w["bb_revert"], 1),
+                         f"BB 반등 신호: '{bb_rv.get('signal', 'NONE')}' (점수 {bb_rv.get('score', 0):.1f})")])
 
-            # CAN SLIM 원칙 요약을 Breakdown 첫 줄에 삽입
-            principle_summary = "\n".join(canslim_tags)
-            breakdown.insert(0, (
-                "══ CAN SLIM 원칙 요약 ══",
-                round(final, 1),
-                principle_summary
-            ))
+                # Bottom-Fishing Breakdown
+                if _bf_result.get("breakdown"):
+                    breakdown.extend(_bf_result["breakdown"])
+
+                # CAN SLIM 원칙 요약을 Breakdown 첫 줄에 삽입
+                principle_summary = "\n".join(canslim_tags)
+                breakdown.insert(0, (
+                    "══ CAN SLIM 원칙 요약 ══",
+                    round(final, 1),
+                    principle_summary
+                ))
+            except Exception:
+                # Breakdown 구성 중 포맷 에러 시 최소한의 원칙 요약만 표시
+                principle_summary = "\n".join(canslim_tags)
+                breakdown = [(
+                    "══ CAN SLIM 원칙 요약 ══",
+                    round(final, 1),
+                    principle_summary
+                )]
 
             # ── Breakdown 항목에 계산식 + 상세 과정 추가 ──────────
             def _md(inputs_str, raw, norm_desc, fv, wv):
@@ -6374,7 +6458,8 @@ class QuantNexusApp:
                 "[Scalp] ORB":      (f_orb,            _w.get("orb", 0)),
                 "[Scalp] NR7":      (f_nr7,            _w.get("nr7", 0)),
                 "[Scalp] BB":       (f_bb_revert,      _w.get("bb_revert", 0))}
-            _detail_inputs = {
+            try:
+                _detail_inputs = {
                 "[C]": (c_raw, f"_n01({c_raw:.1f}, best=60)",
                     f"• EPS 성장률: {earn['eps_growth']:+.0%}\n"
                     f"• 가속 성장: {'예 ✓' if earn.get('eps_acceleration') else '아니오'}\n"
@@ -6435,58 +6520,66 @@ class QuantNexusApp:
                     f"• 심리 신호: {sent['signal']}\n"
                     f"• 상승 거래량 비중: {sent['up_vol_ratio']:.0%}\n"
                     f"• 종가 강도: {sent['close_strength']:.0%}")}
+            except Exception:
+                _detail_inputs = {}
             for idx in range(1, len(breakdown)):
-                lbl, sc, desc = breakdown[idx][:3]
-                detail = ""
-                for prefix, (fv, wv) in _calc_info.items():
-                    if lbl.startswith(prefix):
-                        if wv > 0:
-                            contrib = fv * wv
-                            desc += f"\n📐 점수 {fv:.1f}/100 × 가중치 {wv*100:.1f}% = 기여도 {contrib:.1f}점"
-                        # 상세 과정 생성
-                        di = _detail_inputs.get(prefix)
-                        if di:
-                            raw_val, norm_str, inputs_str = di
-                            detail = _md(inputs_str, raw_val, norm_str, fv, wv)
-                        break
-                if lbl.startswith("[Adj]"):
-                    desc += f"\n📐 변동성 조정 {vol_impact:+.1f}점 · 슈퍼그로스 배율 ×{super_mult:.2f}"
-                    detail = (
-                        f"📊 입력 데이터\n"
-                        f"• 변동성 효율: {va['efficiency']}\n"
-                        f"• 슈퍼그로스 배율: ×{super_mult:.2f}\n"
-                        f"📐 계산 과정\n"
-                        f"① 변동성 조정 점수: {va['adj_score']:.1f}\n"
-                        f"② 조정 전 base: {base_pre_super:.1f}\n"
-                        f"③ 영향: {vol_impact:+.1f}점\n"
-                        f"④ 최종 점수에 {vol_impact:+.1f}점 반영"
-                    )
-                breakdown[idx] = (lbl, sc, desc, detail)
+                try:
+                    lbl, sc, desc = breakdown[idx][:3]
+                    detail = ""
+                    for prefix, (fv, wv) in _calc_info.items():
+                        if lbl.startswith(prefix):
+                            if wv > 0:
+                                contrib = fv * wv
+                                desc += f"\n📐 점수 {fv:.1f}/100 × 가중치 {wv*100:.1f}% = 기여도 {contrib:.1f}점"
+                            # 상세 과정 생성
+                            di = _detail_inputs.get(prefix)
+                            if di:
+                                raw_val, norm_str, inputs_str = di
+                                detail = _md(inputs_str, raw_val, norm_str, fv, wv)
+                            break
+                    if lbl.startswith("[Adj]"):
+                        desc += f"\n📐 변동성 조정 {vol_impact:+.1f}점 · 슈퍼그로스 배율 ×{super_mult:.2f}"
+                        detail = (
+                            f"📊 입력 데이터\n"
+                            f"• 변동성 효율: {va['efficiency']}\n"
+                            f"• 슈퍼그로스 배율: ×{super_mult:.2f}\n"
+                            f"📐 계산 과정\n"
+                            f"① 변동성 조정 점수: {va['adj_score']:.1f}\n"
+                            f"② 조정 전 base: {base_pre_super:.1f}\n"
+                            f"③ 영향: {vol_impact:+.1f}점\n"
+                            f"④ 최종 점수에 {vol_impact:+.1f}점 반영"
+                        )
+                    breakdown[idx] = (lbl, sc, desc, detail)
+                except Exception:
+                    pass  # 개별 항목 상세 실패 시 원본 유지
 
             # ── TopReason: 상위 이유 한줄 요약 생성 ──────────────
-            top_reasons = []
-            if mom["near_52w_high"]:
-                top_reasons.append("52주 신고가 근접")
-            if vol_a["s_confirmed"]:
-                top_reasons.append(f"거래량 {vol_a['ratio']:.1f}x 돌파")
-            if rs["is_leader"]:
-                top_reasons.append(f"RS {rs['rs_rating']} 주도주")
-            if earn["eps_acceleration"]:
-                top_reasons.append("EPS 가속")
-            if ff["roe_pass"]:
-                top_reasons.append(f"ROE {ff['roe']:.0%}")
-            if mr["rsi"] <= 30:
-                top_reasons.append(f"RSI {mr['rsi']:.0f} 과매도")
-            elif mr["rsi"] >= 70:
-                top_reasons.append(f"RSI {mr['rsi']:.0f} 과열")
-            if pt["upside"] and pt["upside"] > 0.15:
-                top_reasons.append(f"DCF +{pt['upside']:.0%}")
-            if fail_safe_triggered:
-                if earn["fail_safe_eps"]:
-                    top_reasons.insert(0, "⛔EPS<0")
-                if rs["fail_safe_rs"]:
-                    top_reasons.insert(0, f"⛔RS{rs['rs_rating']}<40")
-            top_reason_str = " · ".join(top_reasons[:4]) if top_reasons else "-"
+            try:
+                top_reasons = []
+                if mom["near_52w_high"]:
+                    top_reasons.append("52주 신고가 근접")
+                if vol_a["s_confirmed"]:
+                    top_reasons.append(f"거래량 {vol_a['ratio']:.1f}x 돌파")
+                if rs["is_leader"]:
+                    top_reasons.append(f"RS {rs['rs_rating']} 주도주")
+                if earn.get("eps_acceleration"):
+                    top_reasons.append("EPS 가속")
+                if ff.get("roe_pass"):
+                    top_reasons.append(f"ROE {ff['roe']:.0%}")
+                if mr["rsi"] <= 30:
+                    top_reasons.append(f"RSI {mr['rsi']:.0f} 과매도")
+                elif mr["rsi"] >= 70:
+                    top_reasons.append(f"RSI {mr['rsi']:.0f} 과열")
+                if pt.get("upside") and pt["upside"] > 0.15:
+                    top_reasons.append(f"DCF +{pt['upside']:.0%}")
+                if fail_safe_triggered:
+                    if earn.get("fail_safe_eps"):
+                        top_reasons.insert(0, "⛔EPS<0")
+                    if rs.get("fail_safe_rs"):
+                        top_reasons.insert(0, f"⛔RS{rs.get('rs_rating', 0)}<40")
+                top_reason_str = " · ".join(top_reasons[:4]) if top_reasons else "-"
+            except Exception:
+                top_reason_str = "-"
 
             # ── 진입 타이밍 신호 (Entry Timing · V5.1_TUNED) ────────────
             # 인라인 로직은 _compute_entry_status() 순수 함수로 추출됨
@@ -6780,6 +6873,17 @@ class QuantNexusApp:
                 "_DivYield":        _normalize_div_yield(info.get("dividendYield")),
                 "_AvgVol20":        float(hist["Volume"].tail(20).mean()) if len(hist) >= 20 else 0.0,
                 "_AvgDollarVol20":  float((hist["Close"] * hist["Volume"]).tail(20).mean()) if len(hist) >= 20 else 0.0}
+
+            # ── Bottom-Fishing Score 결과 주입 ──
+            result["BFScore"]      = _bf_result.get("bf_score", 0)
+            result["BFSignal"]     = _bf_result.get("bf_signal", "NEUTRAL")
+            result["BFAxis1"]      = _bf_result.get("axis1_value", 0)
+            result["BFAxis2"]      = _bf_result.get("axis2_tech", 0)
+            result["BFAxis3"]      = _bf_result.get("axis3_macro", 0)
+            result["BFTags"]       = _bf_result.get("bf_tags", [])
+            result["PiotroskiF"]   = _bf_result.get("piotroski", {}).get("f_score", 0)
+            result["AltmanZ"]      = _bf_result.get("altman", {}).get("z_score")
+            result["AltmanZone"]   = _bf_result.get("altman", {}).get("zone", "UNKNOWN")
 
             # ── GreedZone 계산 (Zeiierman Pine Script 서버측 재구현) ──
             try:
@@ -11524,6 +11628,9 @@ class QuantNexusApp:
         "LOAN": "맨해튼브리지 캐피탈",
         "RDFN": "레드핀",
         "TERN": "턴즈",
+        "AXTI": "AXT",
+        "IQEPF": "IQE",
+        "SIVEF": "시버스 반도체",
     }
 
     # US_DESC — 미국 종목 한글 설명 (Name 컬럼 옆에 표시)

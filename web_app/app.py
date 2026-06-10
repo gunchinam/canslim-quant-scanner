@@ -172,6 +172,7 @@ _scan_refresh_inflight: set[tuple[str, str, str]] = set()
 _SCAN_RESULTS_TTL_SEC = 300  # 5분
 _scan_results_cache: dict[tuple[str, str, str], dict] = {}
 _scan_results_cache_lock = threading.Lock()
+_SCAN_SNAPSHOT_PATH = os.path.join(_BASE, "cache_v19", "_scan_snapshot.pkl")
 
 # 스캔 JSON 응답에서 제거할 무거운 필드 (상세 패널은 /api/ticker 에서 별도 제공)
 # Breakdown: 점수 분해 배열 (detail에서 /api/ticker로 재취득)
@@ -237,6 +238,50 @@ def _store_scan_cache(key: tuple, ts: int, rows: list) -> bytes:
     with _scan_gz_cache_lock:
         _scan_gz_cache[key] = compressed
     return compressed
+
+
+_scan_snapshot_lock = threading.Lock()
+
+
+def _save_scan_snapshot():
+    """in-memory 스캔 캐시를 단일 파일로 저장 — 서버 재시작 시 즉시 복원용."""
+    if not _scan_snapshot_lock.acquire(blocking=False):
+        return  # 다른 스레드가 이미 저장 중 → 스킵
+    try:
+        with _scan_results_cache_lock:
+            snapshot = dict(_scan_results_cache)
+        if not snapshot:
+            return
+        import pickle
+        tmp = _SCAN_SNAPSHOT_PATH + ".tmp"
+        with open(tmp, "wb") as f:
+            pickle.dump(snapshot, f, protocol=pickle.HIGHEST_PROTOCOL)
+        os.replace(tmp, _SCAN_SNAPSHOT_PATH)
+        logging.info("scan snapshot saved: %d entries", len(snapshot))
+    except Exception as e:
+        logging.warning("scan snapshot save failed: %s", e)
+    finally:
+        _scan_snapshot_lock.release()
+
+
+def _load_scan_snapshot() -> bool:
+    """단일 스냅샷 파일에서 in-memory 캐시 즉시 복원. 성공 시 True."""
+    try:
+        if not os.path.exists(_SCAN_SNAPSHOT_PATH):
+            return False
+        import pickle
+        with open(_SCAN_SNAPSHOT_PATH, "rb") as f:
+            snapshot = pickle.load(f)
+        if not snapshot:
+            return False
+        with _scan_results_cache_lock:
+            _scan_results_cache.update(snapshot)
+        logging.info("scan snapshot loaded: %d entries (instant cold-start)", len(snapshot))
+        return True
+    except Exception as e:
+        logging.warning("scan snapshot load failed: %s", e)
+        return False
+
 
 # ── 검색 인덱스 (앱 시작 시 1회 빌드 — 매 요청 선형 스캔 제거) ──
 # 각 항목: (ticker, display_name, blob) — blob = ticker|name 소문자 결합 문자열
@@ -746,6 +791,7 @@ def _warmup_fill_cache(market: str) -> None:
             _store_scan_cache((market, "BALANCED", ""), ts, results)
             _populate_sector_caches(market, "BALANCED", results, ts)
             logging.info("%s quick-warm done: %d tickers (from pickle)", market, len(results))
+            _save_scan_snapshot()
             # 네이버 실시간 + GreedZone — BG에서 순차 실행 후 캐시 갱신
             def _bg_enrich(_res=list(results), _mkt=market):
                 try:
@@ -1765,9 +1811,10 @@ def _peers_from_finnhub(ticker: str, limit: int) -> dict | None:
                 price = q.get("c") if q else None
             except Exception:
                 price = yi.get("currentPrice") or yi.get("regularMarketPrice")
+            _us_nm = getattr(QuantNexusApp, "US_NAMES", {}).get(tk)
             return {
                 "Ticker":          tk,
-                "Name":            yi.get("shortName") or yi.get("longName") or name_fallback or tk,
+                "Name":            _us_nm or yi.get("shortName") or yi.get("longName") or name_fallback or tk,
                 "Sector":          yi.get("sector") or "",
                 "Industry":        yi.get("industry") or "",
                 "Price":           price,
@@ -1964,7 +2011,17 @@ _TICKER_EVENTS_MAX = 500          # 무제한 증가 차단(FIFO eviction)
 
 
 def _load_macro_events() -> list:
+    """매크로 이벤트 로드 — NFP/CPI 자동 생성 + JSON 교정 병합."""
     global _macro_events_cache, _macro_events_mtime
+    try:
+        from macro_calendar import get_macro_events
+        with _macro_events_lock:
+            # macro_calendar 내부 24h 캐시 사용
+            _macro_events_cache = get_macro_events()
+            return _macro_events_cache
+    except Exception as e:
+        logging.warning("macro_calendar failed, falling back to JSON: %s", e)
+    # fallback: 기존 JSON 직접 로드
     path = os.path.join(os.path.dirname(__file__), "macro_events.json")
     try:
         mt = os.path.getmtime(path)
@@ -2527,16 +2584,20 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
                 except Exception as _e:
                     logging.debug("silent except (app.py): %s", _e)
             if want_chart and not chart_title and market == "US":
-                try:
-                    yt0 = candidates[0] if candidates else ticker
-                    yinfo = _run_with_timeout(
-                        lambda yt0=yt0: yf.Ticker(yt0).info or {},
-                        info_timeout_sec,
-                        f"four_axis info {yt0}",
-                    )
-                    chart_title = (yinfo.get("longName") or yinfo.get("shortName") or "")
-                except Exception as _e:
-                    logging.debug("silent except (app.py): %s", _e)
+                _us_chart_nm = getattr(QuantNexusApp, "US_NAMES", {}).get(ticker)
+                if _us_chart_nm:
+                    chart_title = _us_chart_nm
+                else:
+                    try:
+                        yt0 = candidates[0] if candidates else ticker
+                        yinfo = _run_with_timeout(
+                            lambda yt0=yt0: yf.Ticker(yt0).info or {},
+                            info_timeout_sec,
+                            f"four_axis info {yt0}",
+                        )
+                        chart_title = (yinfo.get("longName") or yinfo.get("shortName") or "")
+                    except Exception as _e:
+                        logging.debug("silent except (app.py): %s", _e)
         except Exception as _e:
             logging.debug("silent except (app.py): %s", _e)
         chart_title = chart_title or ticker
@@ -3092,14 +3153,19 @@ def _cold_start_live_scan(market: str) -> None:
 
 
 def _cold_start_fill():
-    """서버 기동 직후 파일 잠금 없이 US/KR 캐시를 즉시 채운다.
-    파일 잠금 실패로 quick-warm이 건너뛰어질 때도 첫 요청이 캐시 히트하도록 보장.
+    """서버 기동 직후 US/KR 캐시를 즉시 채운다.
 
-    C2: quick-warm(prefer_cache=True, cache_only=True)으로도 캐시가 비어 있으면
-    (pickle 자체가 없는 첫 기동) 즉시 라이브 scan_all을 BG로 트리거해서
-    사용자가 30분 warmup 주기를 기다리지 않도록 한다.
+    Phase 1: 단일 스냅샷 파일(_scan_snapshot.pkl)에서 즉시 복원 → 수 초 이내 API 응답 가능.
+    Phase 2: 개별 pickle에서 최신 데이터로 BG 갱신 (스냅샷 히트 시 join 없이 비동기).
+    Phase 3: pickle도 없으면 라이브 scan_all BG 트리거.
     """
     time.sleep(0.1)  # Flask/SocketIO 초기화 완료 대기
+
+    # Phase 1: 스냅샷 즉시 복원 (단일 파일 → 수 초 이내)
+    _snapshot_hit = _load_scan_snapshot()
+    if _snapshot_hit:
+        _warmup_search_index()
+        _warmup_moat_cache()
 
     def _fill_market(market: str) -> None:
         try:
@@ -3120,17 +3186,22 @@ def _cold_start_fill():
         except Exception as _e:
             logging.warning("cold-start-fill %s failed: %s", market, _e)
 
-    # US/KR 병렬 quick-warm — 순차 대비 ~50% 시간 단축
+    # Phase 2: 개별 pickle에서 최신 데이터로 BG 갱신
     threads = [
         threading.Thread(target=_fill_market, args=(m,), daemon=True, name=f"cold-fill-{m}")
         for m in ("US", "KR")
     ]
     for t in threads:
         t.start()
+
+    if _snapshot_hit:
+        # 스냅샷으로 이미 캐시 채워짐 → BG 갱신은 join 없이 비동기 진행
+        return
+
+    # 스냅샷 없음 → 기존 방식 (pickle 읽기 완료까지 대기 + 스냅샷 저장)
     for t in threads:
         t.join()
-
-    # 캐시 채움 완료 후 2차 초기화 — 서버 응답 가능 시점을 앞당김
+    _save_scan_snapshot()
     _warmup_search_index()
     _warmup_moat_cache()
 

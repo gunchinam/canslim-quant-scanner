@@ -108,3 +108,12 @@ package-lock.json
 
 # 레짐/리드래그 일일 캐시 (런타임 생성물)
 regime_cache/
+
+# 브라우저 자동화 프로파일 (쿠키·세션 — 절대 커밋 금지)
+_cdp_profile*/
+# 검증·디버그용 임시 산출물
+tmp_*.json
+tmp_*.txt
+# 기타 임시/잡파일
+Committed *.txt
+*_harness.html

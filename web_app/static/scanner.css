@@ -38,13 +38,15 @@ html, body {
 }
 
 /* ── Macro Strip (신호등 띠) ───────────────────────────────── */
-.macro-strip {
+/* ── Context Bar (신호등 + 지수 + 매크로 이벤트 + 축약 면책) ── */
+.context-bar {
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 0 24px;
-  height: 38px;
+  height: 36px;
   background: var(--card);
+  border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   font-size: 12.5px;
   white-space: nowrap;
@@ -52,7 +54,31 @@ html, body {
   scrollbar-width: none;
   z-index: 90;
 }
-.macro-strip::-webkit-scrollbar { display: none; }
+.context-bar::-webkit-scrollbar { display: none; }
+/* 컨텍스트 바 안으로 들어온 매크로 이벤트 — 밴드 스타일 해제하고 인라인화 */
+.context-bar .macro-events-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  border: none;
+  overflow: visible;
+}
+.context-bar .macro-events-strip.empty { display: none; }
+.context-bar .macro-meta { margin-left: auto; }
+/* 축약 면책 고지 (항상 노출, 전체 문구는 title 툴팁) */
+.ctx-disclaimer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #C77700;
+  white-space: nowrap;
+  cursor: help;
+  flex: none;
+}
 .macro-signal {
   display: inline-flex;
   align-items: center;

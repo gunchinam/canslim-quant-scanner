@@ -3799,7 +3799,29 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   #hover-sparkline-tip { display: none !important; }
 }
 
-/* ── 뷰 전환 (종목 스캐너 ↔ ETF 현황) — 마켓 토글과 동일한 세그먼트 알약형 ── */
+/* ── Scanner Tab Bar (탭 + 인라인 Stats) ───────────────────── */
+.scanner-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 24px;
+  background: var(--surface-page);
+}
+.scanner-tabbar .tabbar-stats {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+.tabbar-stats .stat-item {
+  padding: 0 14px;
+  margin: 0;
+  border-right: 1px solid var(--border);
+}
+.tabbar-stats .stat-item:last-child { border-right: none; padding-right: 0; }
+.tabbar-stats .stat-label { font-size: 11px; }
+.tabbar-stats .stat-value { font-size: 14px; }
+
+/* 큰 세그먼트 탭 (종목 스캐너 / ETF 현황) */
 .view-tabs {
   display: flex;
   gap: 2px;
@@ -3807,27 +3829,31 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   width: fit-content;
   background: var(--surface-muted);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 11px;
   padding: 3px;
-  margin: 10px 16px 0;
+  margin: 0;
 }
 .view-tab {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 20px;
+  gap: 6px;
+  padding: 8px 18px;
   border: none;
-  border-radius: 7px;
+  border-radius: 8px;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 800;
   cursor: pointer;
   white-space: nowrap;
   transition: background .15s, color .15s;
 }
 .view-tab:hover { color: var(--text-primary); }
-.view-tab.active { background: var(--brand); color: var(--primary-foreground); }
+.view-tab.active {
+  background: var(--brand);
+  color: var(--primary-foreground);
+  box-shadow: 0 2px 8px rgba(0, 113, 227, 0.3);
+}
 @media (max-width: 768px) {
   .view-tabs { margin: 8px 10px 0; }
   .view-tab { padding: 6px 14px; font-size: 12.5px; }

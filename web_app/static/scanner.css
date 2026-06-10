@@ -45,6 +45,36 @@ html, body {
 }
 .context-bar .macro-events-strip.empty { display: none; }
 .context-bar .macro-meta { margin-left: 0; }
+
+/* 줄바꿈 요소: 기본 숨김. 한국탭(.ctx-kr)에서만 강제 줄바꿈 → 2줄 레이아웃 */
+.ctx-break { display: none; }
+.context-bar.ctx-kr .ctx-break {
+  display: block;
+  flex-basis: 100%;
+  width: 100%;
+  height: 0;
+  margin: 0;
+}
+
+/* CNN 공포·탐욕 지수 칩 */
+.macro-fng {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: help;
+}
+.macro-fng .fng-key    { font-size: 12px; font-weight: 700; }
+.macro-fng .fng-score  { font-size: 14.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.macro-fng .fng-rating { font-size: 11px; font-weight: 700; opacity: 0.92; }
+.macro-fng.extreme-fear  { background: rgba(25,113,194,0.15);  color: #1862ab; }
+.macro-fng.fear          { background: rgba(49,130,246,0.13);  color: #2b6fd6; }
+.macro-fng.neutral       { background: var(--surface-page, #f1f3f5); color: var(--text-secondary, #4b5563); }
+.macro-fng.greed         { background: rgba(245,158,11,0.16);  color: #b8740a; }
+.macro-fng.extreme-greed { background: rgba(224,49,49,0.13);   color: #d12f2f; }
 /* 축약 면책 고지 (항상 노출, 전체 문구는 title 툴팁) */
 .ctx-disclaimer {
   display: inline-flex;
@@ -621,6 +651,37 @@ html, body {
   padding: 16px 24px;
   background: var(--card);
 }
+
+/* ── IPO·뉴스 탭 카드 (ETF 카드와 동일 디자인 언어) ─────────── */
+.mc-card {
+  display: block;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  text-decoration: none;
+}
+a.mc-card { transition: background .12s, border-color .12s; }
+a.mc-card:hover { background: var(--surface-subtle); border-color: var(--brand); }
+.mc-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mc-symbol {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--brand);
+  letter-spacing: 0.3px;
+  font-variant-numeric: tabular-nums;
+}
+.mc-coname { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); margin-left: 6px; letter-spacing: 0; }
+.mc-date { font-size: 12px; font-weight: 700; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mc-sub { margin-top: 5px; font-size: 12px; color: var(--text-tertiary); }
+.mc-news-headline { font-size: 13px; font-weight: 600; color: var(--text-primary); line-height: 1.45; }
+.mc-news-source { margin-top: 6px; font-size: 11px; font-weight: 600; color: var(--text-tertiary); }
+.mc-empty { padding: 24px; text-align: center; color: var(--text-tertiary); font-size: 13px; line-height: 1.6; }
 
 /* Stock Table */
 .stock-table-wrap {

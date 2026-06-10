@@ -5432,9 +5432,13 @@ class QuantNexusApp:
                     else (_hist_last if _rt_price > 0 and _hist_last > 0
                           else (safe_get(float(hist["Close"].iloc[-2])) if len(hist) > 1 else cur)))
             # 마지막 봉 종가 결측(NaN/0)으로 cur=0 이 되면 Price=0·DayChg=-1(-100%) 유령이 생긴다.
-            # 전일종가(prev)가 유효하면 그것으로 폴백해 마지막 known 현재가를 보존(등락은 0 처리됨).
+            # 1) 전일종가(prev)가 유효하면 폴백해 마지막 known 현재가를 보존(등락은 0 처리됨).
             if not (cur and cur > 0) and prev and prev > 0:
                 cur = prev
+            # 2) 그래도 유효 현재가가 없으면(rate-limit 등으로 가격 완전 결측) 결과에서 제외 —
+            #    가짜 $0/-100% 행을 만드는 대신 스킵. 데이터 복구되면 다음 스캔에 자연 재등장.
+            if not (cur and cur > 0):
+                return None
             # 한국 종목 종목명 조회 우선순위 (KRX 공식명 우선):
             #   1) swing_scan.config.stock_names (FDR/pykrx → KRX 공식 한글명, 권위 소스)
             #   2) KR_NAMES 하드코딩 사전 (KRX 미스 시 큐레이팅 폴백)

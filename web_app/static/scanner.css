@@ -3626,10 +3626,9 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   .btn-scan { font-size: 12px; gap: 4px; }
   .btn-scan svg { width: 12px; height: 12px; }
 
-  .macro-strip { height: 28px; font-size: 10.5px; gap: 8px; }
+  .context-bar { height: 28px; font-size: 10.5px; gap: 8px; }
   .macro-signal { padding: 2px 8px; font-size: 10.5px; }
 
-  .stats-bar .stat-item:nth-child(n+3):not(:last-child) { display: none; }
   .chip { min-height: 44px; padding: 0 12px; font-size: 12px; }
 
   .stock-table th:nth-child(1), .stock-table td:nth-child(1),

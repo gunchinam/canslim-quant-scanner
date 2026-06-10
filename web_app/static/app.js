@@ -594,6 +594,21 @@ async function runScan() {
   const reqSector = currentSector;
   const reqMarket = currentMarket;
 
+  // localStorage 즉시 표시 — 서버 워밍 대기 없이 이전 결과를 먼저 렌더링
+  // 키 버전(v2): 종목명 누락 등 옛 스키마 캐시를 자동 무효화 (Ctrl+Shift+R로도 안 지워지는 stale 방지)
+  const _lsCacheKey = `_scan_v2_${reqMarket}_${currentStrategy}_${reqSector}`;
+  try {
+    const _lsRaw = localStorage.getItem(_lsCacheKey);
+    if (_lsRaw && allStocks.length === 0) {
+      const _lsData = JSON.parse(_lsRaw);
+      if (Array.isArray(_lsData) && _lsData.length > 0) {
+        allStocks = _lsData;
+        _scanStocks = allStocks;
+        _refreshFilteredView();
+      }
+    }
+  } catch {}
+
   try {
     const p = new URLSearchParams({ market: reqMarket, strategy: currentStrategy });
     if (reqSector) p.set('sector', reqSector);
@@ -638,6 +653,8 @@ async function runScan() {
     }
     _runScanAttempt = 0;  // 성공 시 카운터 리셋
     _warmingRetries = 0;
+    // localStorage에 저장 — 다음 로드 시 서버 워밍 전 즉시 표시용
+    try { localStorage.setItem(_lsCacheKey, JSON.stringify(allStocks)); } catch {}
     _refreshFilteredView();
   } catch (e) {
     console.error('runScan 실패:', e);
@@ -675,11 +692,13 @@ function _matchesFilter(s, f) {
     case 'near_high':   return !!s.NearHighPass;
     case 'pullback':    return s.RSI != null && s.RSI <= 40;
     case 'greedzone':   return !!s.GreedZone;
+    case 'bf_buy':      return (s.BFScore ?? 0) >= 25;            // 저점매수 후보 (25+: 관심, 40+: 적극, 60+: 강력)
     case 'bottleneck':  return (s.BottleneckScore ?? 0) >= 60;   // 공급망 병목 후보(상류 희소층 근접)
     case 'bottleneck_entry': return s.BottleneckEntryPass === true;  // 병목 ∩ 진입타이밍(폭등꼭대기·과매수 제외)
     case 'score_surge': return (s.ScoreDelta ?? -Infinity) >= 3;   // 어제 대비 점수 +3 이상 급등
     case 'new_entry':   return !!s.IsNew;                          // 기준일 이후 새로 진입
-    case 'laggard':     return (s.RSRating ?? 99) < 40 || _signalTier(s.Signal) === 'sell';
+    case 'laggard':     if (s.RSUnknown) return false;  // RS 미상(이력부족)은 낙오로 분류하지 않음
+                        return (s.RSRating ?? 99) < 40 || _signalTier(s.Signal) === 'sell';
     default: return true;
   }
 }
@@ -903,7 +922,7 @@ function _renderPeersCard(payload) {
     const momCls = mom != null ? (mom >= 0 ? 'dp-peers-num-pos' : 'dp-peers-num-neg') : '';
     const momTxt = mom != null ? ((mom >= 0 ? '+' : '') + (mom * 100).toFixed(1) + '%') : '—';
     const score = r.TotalScore != null ? Math.round(r.TotalScore) : '—';
-    const nameTxt = r.Name && r.Name !== r.Ticker ? r.Name : (r.Ticker || '');
+    const nameTxt = _displayName(r) || r.Ticker || '';
     return `<tr class="${cls}">
       <td class="dp-peers-td-name">
         <span class="dp-peers-name">${esc(nameTxt)}</span>
@@ -1049,6 +1068,9 @@ async function _loadMacroStrip(region) {
   const list  = document.getElementById('macro-events-strip-list');
   if (!strip || !list) return;
   const reg = String(region || 'US').toUpperCase();
+  // 한국탭: 컨텍스트 바를 2줄(지표 줄 / 이벤트·갱신·면책 줄)로 분리
+  const ctxBar = document.getElementById('macro-strip');
+  if (ctxBar) ctxBar.classList.toggle('ctx-kr', reg === 'KR');
   try {
     const res = await fetch(`/api/macro-events?region=${encodeURIComponent(reg)}`, { cache: 'no-store' });
     if (!res.ok) { strip.classList.add('empty'); return; }
@@ -1591,6 +1613,42 @@ function _industryKo(ind) {
   return _INDUSTRY_KO[ind] || ind;   // 매핑 없으면 영문 그대로
 }
 
+// ── 미국 종목 표시명: 한글 매핑 우선, 없으면 영문 법인 접미사 정리 ──────────
+// 검색·정렬·데이터(stock.Name)는 원본 유지. 표시(렌더)에서만 _displayName() 사용.
+// 한글 매핑은 점진 확장 — 키는 티커(대문자). 매핑 없으면 영문 접미사만 정리.
+const US_NAME_KO = {
+  AAPL:'애플', MSFT:'마이크로소프트', NVDA:'엔비디아', GOOGL:'알파벳(구글)', GOOG:'알파벳(구글)',
+  AMZN:'아마존', META:'메타', TSLA:'테슬라', AVGO:'브로드컴', 'BRK-B':'버크셔 해서웨이',
+  'BRK-A':'버크셔 해서웨이', JPM:'JP모건', V:'비자', MA:'마스터카드', LLY:'일라이 릴리',
+  UNH:'유나이티드헬스', XOM:'엑슨모빌', JNJ:'존슨앤드존슨', WMT:'월마트', PG:'P&G',
+  HD:'홈디포', COST:'코스트코', ORCL:'오라클', NFLX:'넷플릭스', AMD:'AMD',
+  KO:'코카콜라', PEP:'펩시코', ADBE:'어도비', CRM:'세일즈포스', BAC:'뱅크오브아메리카',
+  DIS:'디즈니', MCD:'맥도날드', INTC:'인텔', CSCO:'시스코', QCOM:'퀄컴',
+  IBM:'IBM', NKE:'나이키', PFE:'화이자', BA:'보잉', GE:'GE',
+  SBUX:'스타벅스', PYPL:'페이팔', T:'AT&T', VZ:'버라이즌', PLTR:'팔란티어',
+  UBER:'우버', SHOP:'쇼피파이', ABNB:'에어비앤비', COIN:'코인베이스', MU:'마이크론',
+};
+// 영문 정식명 끝의 법인 표기(Inc/Corp/Co/Ltd/plc 등) 제거. 한글 포함 이름(한국 종목)은 건드리지 않음.
+const _CORP_SUFFIX_RE = /[,\s]+(?:incorporated|inc|corporation|corp|company|co|limited|ltd|plc|llc|l\.?p|s\.?a|n\.?v|a\.?g|s\.?e)\.?$/i;
+function _cleanCorpName(name) {
+  const orig = String(name == null ? '' : name).trim();
+  let s = orig.replace(/^the\s+/i, '');
+  let prev = null;
+  while (s !== prev && s.length > 1) {          // "... Co., Ltd" 처럼 중첩 접미사 반복 제거
+    prev = s;
+    s = s.replace(_CORP_SUFFIX_RE, '').trim().replace(/[.,]+$/, '').trim();
+  }
+  return s || orig;
+}
+function _displayName(stock) {
+  if (!stock) return '';
+  const ticker = String(stock.Ticker || '').toUpperCase();
+  const raw = stock.Name || stock.Ticker || '';
+  if (US_NAME_KO[ticker]) return US_NAME_KO[ticker];   // 1) 한글 매핑
+  if (/[가-힣]/.test(raw)) return raw;                  // 2) 이미 한글(한국 종목) → 원본
+  return _cleanCorpName(raw);                           // 3) 영문 → 접미사 정리
+}
+
 function renderStockRow(stock, rank) {
   const rankClass  = rank <= 3 ? `rank-${rank}` : 'rank-other';
   const score      = Math.round(stock.TotalScore || 0);
@@ -1651,7 +1709,7 @@ function renderStockRow(stock, rank) {
   <td class="center"><input type="checkbox" ${checked ? 'checked' : ''} onclick="toggleSelectStock('${t}', event)" style="cursor:pointer;width:16px;height:16px;accent-color:#3182F6;"></td>
   <td class="center"><span class="rank-cell ${rankClass}">${rank}</span></td>
   <td class="name-cell" onmouseenter="showStockPopup('${t}', event)" onmouseleave="hideStockPopup()">
-    <span class="stock-name">${logoHtml}${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}${_greedBadge(stock)}${_bottleneckBadge(stock)}</span>
+    <span class="stock-name">${logoHtml}${esc(_displayName(stock))}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}${_greedBadge(stock)}${_bottleneckBadge(stock)}</span>
     <span class="stock-code">${t}</span>
   </td>
   <td class="desc-cell">${esc(stock.Desc || _industryKo(stock.Industry) || '')}</td>
@@ -1701,7 +1759,7 @@ function renderMobileCard(stock, rank) {
     <div class="stock-card-main">
       <span class="stock-card-rank">${rank}</span>
       <div class="stock-card-name">
-        <span class="stock-card-name-main">${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬</span>` : ''}</span>
+        <span class="stock-card-name-main">${esc(_displayName(stock))}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬</span>` : ''}</span>
         <span class="stock-card-ticker">${t}${stock.Sector ? ` · ${esc(stock.Sector)}` : ''}</span>
       </div>
     </div>
@@ -1727,7 +1785,7 @@ function showStockPopup(ticker, ev) {
   const pop = document.getElementById('stock-popup');
   if (!pop) return;
 
-  const name = esc(s.Name || ticker);
+  const name = esc(_displayName(s) || ticker);
   const industry = esc(s.Industry || '');
   const info = esc(s.CompanyInfo || '');
 
@@ -2287,7 +2345,7 @@ async function loadDetail(ticker) {
 }
 
 function populateDetail(d) {
-  setText('detail-name',   d.Name   || d.Ticker || '—');
+  setText('detail-name',   _displayName(d) || d.Ticker || '—');
   setText('detail-ticker', d.Ticker || '—');
   setText('detail-sector', d.Sector || '—');
   const ol = document.getElementById('detail-oneliner');
@@ -2921,7 +2979,7 @@ function _clearPanelDetail() {
 function _populatePanelDetail(d, skipFourAxis) {
   _lastDetailData = d;
   _renderHeroWatermark(d);
-  setText('dp-name',    d.Name   || d.Ticker || '—');
+  setText('dp-name',    _displayName(d) || d.Ticker || '—');
   setText('dp-ticker',  d.Ticker || '—');
   setText('dp-sector',  d.Sector || '—');
   const aboutText = d.Desc || d.About || _industryKo(d.Industry) || '';
@@ -3052,6 +3110,7 @@ function _populatePanelDetail(d, skipFourAxis) {
   _renderTechTab(d);
   _renderFinanceTab(d);
   _renderDetailFeatures(d);
+  _renderBFScore(d);
   _renderRiskGauge(d);
   _renderDrawdownRisk(d);
 
@@ -3119,7 +3178,7 @@ function _renderFhNews(d) {
     if (!anchor || !anchor.parentNode) return;
     wrap = document.createElement('div');
     wrap.id = 'dp-fh-news';
-    wrap.style.cssText = 'padding:8px 24px 12px;';
+    wrap.className = 'dp-fh-news-card';
     anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
   }
   const rows = d._FH_Headlines.slice(0, 5).map(n => {
@@ -3515,6 +3574,47 @@ function _renderDetailFeatures(d) {
 
 }
 
+// Bottom-Fishing Score card
+function _renderBFScore(d) {
+  const card = document.getElementById('dp-bf-card');
+  if (!card) return;
+  const bf = d.BFScore != null ? Number(d.BFScore) : null;
+  if (bf == null || bf === 0) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const col = bf >= 75 ? '#16A34A' : bf >= 60 ? '#2563EB' : bf >= 45 ? '#F59E0B' : bf >= 30 ? '#6B7280' : '#DC2626';
+  const sigMap = { STRONG_BUY: '적극 매수', BUY: '매수', WATCH: '관심', NEUTRAL: '중립', AVOID: '회피' };
+  const sigEl = document.getElementById('dp-bf-signal');
+  if (sigEl) {
+    sigEl.textContent = sigMap[d.BFSignal] || d.BFSignal || '';
+    sigEl.style.color = col;
+    sigEl.style.background = col + '18';
+  }
+  const scoreEl = document.getElementById('dp-bf-score');
+  if (scoreEl) { scoreEl.textContent = Math.round(bf); scoreEl.style.color = col; }
+  const fill = document.getElementById('dp-bf-fill');
+  if (fill) { fill.style.width = bf + '%'; fill.style.background = col; }
+  const a1 = document.getElementById('dp-bf-a1');
+  const a2 = document.getElementById('dp-bf-a2');
+  const a3 = document.getElementById('dp-bf-a3');
+  if (a1) a1.textContent = d.BFAxis1 != null ? Math.round(d.BFAxis1) : 0;
+  if (a2) a2.textContent = d.BFAxis2 != null ? Math.round(d.BFAxis2) : 0;
+  if (a3) a3.textContent = d.BFAxis3 != null ? Math.round(d.BFAxis3) : 0;
+  const tagsEl = document.getElementById('dp-bf-tags');
+  if (tagsEl) {
+    const tags = d.BFTags || [];
+    tagsEl.innerHTML = tags.map(t =>
+      `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:${col}18;color:${col};font-weight:600;">${esc(t)}</span>`
+    ).join('');
+  }
+  const detEl = document.getElementById('dp-bf-detail');
+  if (detEl) {
+    const parts = [];
+    if (d.PiotroskiF != null && d.PiotroskiF > 0) parts.push(`F-Score ${d.PiotroskiF}/9`);
+    if (d.AltmanZ != null) parts.push(`Altman Z ${Number(d.AltmanZ).toFixed(1)} (${d.AltmanZone || ''})`);
+    detEl.textContent = parts.join(' · ');
+  }
+}
+
 // P4-P12: 드로다운 리스크 메트릭 카드 (상세 패널)
 function _renderDrawdownRisk(d) {
   const host = document.getElementById('dp-drawdown-risk');
@@ -3523,61 +3623,75 @@ function _renderDrawdownRisk(d) {
   const mdd = ep.mdd_current;
   if (mdd == null && ep.cvar_95 == null) { host.innerHTML = ''; return; }
   const rows = [];
-  // 기본 낙폭
+
+  // 공통 행 빌더: 쉬운 한국어 라벨 + 한 줄 설명 + 값. 전문용어는 작은 회색 태그로 부가.
+  const _tag = (t) => `<span style="font-weight:500;color:var(--text-tertiary);font-size:10px;">· ${t}</span>`;
+  const _row = (name, desc, valueHtml, valColor) => `<tr>
+      <td style="padding:7px 12px 7px 0;vertical-align:top;border-top:1px solid var(--border-subtle,#eee);">
+        <div style="font-weight:600;color:var(--text-primary);font-size:12.5px;">${name}</div>
+        ${desc ? `<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:2px;line-height:1.45;">${desc}</div>` : ''}
+      </td>
+      <td style="padding:7px 0;text-align:right;vertical-align:top;white-space:nowrap;font-weight:700;font-size:13px;border-top:1px solid var(--border-subtle,#eee);${valColor ? `color:${valColor};` : ''}">${valueHtml}</td>
+    </tr>`;
+
+  // 고점 대비 현재 낙폭 (MDD current)
   if (mdd != null) {
     const col = mdd < -20 ? '#DC2626' : mdd < -10 ? '#F59E0B' : 'var(--text-primary)';
-    rows.push(`<tr><td>현재 MDD</td><td style="color:${col};font-weight:600">${mdd.toFixed(1)}%</td></tr>`);
+    rows.push(_row('고점 대비 하락', `사상 최고가에서 지금까지 빠진 폭 ${_tag('MDD')}`, `${mdd.toFixed(1)}%`, col));
   }
-  // P6: 수면하 체류
+  // P6: 수면하 체류 → "전고점 회복 대기"
   if (ep.underwater_days > 0) {
     const col = ep.underwater_days > 120 ? '#DC2626' : ep.underwater_days > 60 ? '#F59E0B' : 'var(--text-secondary)';
-    rows.push(`<tr><td>수면하 체류</td><td style="color:${col}">${ep.underwater_days}일</td></tr>`);
+    rows.push(_row('전고점 회복 대기', `직전 최고가를 아직 못 넘은 지 ${_tag('수면하 체류')}`, `${ep.underwater_days}일째`, col));
   }
   // P4: 급락 속도
   if (ep.dd_velocity_5d != null && ep.dd_velocity_5d < -2) {
-    rows.push(`<tr><td>5일 낙폭 속도</td><td style="color:#DC2626;font-weight:600">${ep.dd_velocity_5d.toFixed(1)}%p</td></tr>`);
+    rows.push(_row('최근 급락 속도', '최근 5일 사이 빠르게 빠지는 중', `${ep.dd_velocity_5d.toFixed(1)}%p`, '#DC2626'));
   }
-  // P7: Calmar
+  // P7: Calmar → "하락 위험 대비 수익"
   if (ep.calmar_ratio != null && ep.calmar_ratio !== 0) {
     const col = ep.calmar_ratio > 1.5 ? '#16A34A' : ep.calmar_ratio > 0.5 ? 'var(--text-primary)' : '#F59E0B';
     const lbl = ep.calmar_ratio > 1.5 ? '우수' : ep.calmar_ratio > 0.5 ? '보통' : '부진';
-    rows.push(`<tr><td>고통 대비 보상</td><td style="color:${col}">${ep.calmar_ratio.toFixed(2)} (${lbl})</td></tr>`);
+    rows.push(_row('하락 위험 대비 수익', `큰 하락을 견딘 만큼 수익이 났는지 ${_tag('Calmar')}`, `${ep.calmar_ratio.toFixed(2)} <span style="font-size:11px;">(${lbl})</span>`, col));
   }
-  // P8: CVaR 금액 번역
-  // P8: CVaR(ES95) — 라벨 정정. '최악의 날'이 아니라 '하위 5% 나쁜 날들의 평균 손실'.
+  // P8: CVaR(ES95) — '가장 나쁜 하루'가 아니라 '하위 5% 나쁜 날들의 평균 손실'.
   if (ep.cvar_95 != null && ep.cvar_95 !== 0) {
     const remain = Math.round(1000000 * (1 + ep.cvar_95 / 100));  // 나쁜 날 잔액 (100만원 기준)
-    rows.push(`<tr><td title="하위 5% 나쁜 날들의 평균 손실 (CVaR/Expected Shortfall 95%). '가장 나쁜 하루'가 아니라 '나쁜 날이면 평균 이 정도' 입니다. 최근 1년 기준.">나쁜 날 손실 <span style="font-size:10px;color:var(--text-tertiary);">(하위5%·ES)</span></td><td style="color:#DC2626">${ep.cvar_95.toFixed(2)}% <span style="color:var(--text-tertiary);font-size:11px;">(100만원→${remain.toLocaleString()}원)</span></td></tr>`);
+    rows.push(_row('나쁜 날 평균 손실', `안 좋은 날(하위 5%)엔 하루 평균 이만큼 빠져요 ${_tag('CVaR')}`, `${ep.cvar_95.toFixed(1)}%<br><span style="color:var(--text-tertiary);font-size:10.5px;font-weight:500;">100만원→${remain.toLocaleString()}원</span>`, '#DC2626'));
   }
-  // B1: 진짜 단일 최악일 (최근 1년 중 하루 최대 낙폭) — '최악의 날'은 이쪽이 정확
+  // B1: 진짜 단일 최악일 (최근 1년 중 하루 최대 낙폭)
   if (ep.worst_day != null && ep.worst_day !== 0) {
     const wremain = Math.round(1000000 * (1 + ep.worst_day / 100));  // 최악의 날 잔액 (100만원 기준)
-    rows.push(`<tr><td title="최근 1년간 실제 하루 최대 낙폭 (단일 최악일)">최근 1년 최악의 날</td><td style="color:#B91C1C;font-weight:600">${ep.worst_day.toFixed(2)}% <span style="color:var(--text-tertiary);font-size:11px;font-weight:400;">(100만원→${wremain.toLocaleString()}원)</span></td></tr>`);
+    rows.push(_row('최근 1년 최악의 하루', '지난 1년 중 하루 만에 가장 크게 빠진 날', `${ep.worst_day.toFixed(1)}%<br><span style="color:var(--text-tertiary);font-size:10.5px;font-weight:500;">100만원→${wremain.toLocaleString()}원</span>`, '#B91C1C'));
   }
-  // P9: 하방 베타
+  // P9: 하방 베타 → "시장 하락에 민감한 정도"
   if (ep.downside_beta != null) {
     const col = ep.downside_beta > 1.5 ? '#DC2626' : ep.downside_beta > 1.0 ? '#F59E0B' : '#16A34A';
-    rows.push(`<tr><td>하방 민감도(β)</td><td style="color:${col}">${ep.downside_beta.toFixed(2)}×</td></tr>`);
+    rows.push(_row('시장 하락에 민감한 정도', `시장이 1% 빠질 때 약 ${ep.downside_beta.toFixed(1)}배로 움직여요 ${_tag('하방 β')}`, `${ep.downside_beta.toFixed(2)}×`, col));
   }
-  // P12: 체감형 스트레스 시나리오 (Goldman P3)
+  // P12: 체감형 스트레스 시나리오 — "이런 폭락이 또 오면?"
   if (ep.stress_2008 != null) {
     const inv = 100; // 100만원 기준
-    rows.push(`<tr><td colspan="2" style="padding-top:6px;font-size:10px;color:var(--text-tertiary);font-weight:600;">과거 위기 재현 시 (100만원 투자 기준) <span style="font-weight:400;opacity:.75;">※ 하방β 선형 추정치 — 실제 손실은 더 클 수 있음</span></td></tr>`);
+    rows.push(`<tr><td colspan="2" style="padding:10px 0 2px;font-size:11px;color:var(--text-secondary);font-weight:700;border-top:1px solid var(--border-subtle,#eee);">📉 이런 폭락이 또 오면? <span style="font-weight:400;color:var(--text-tertiary);">100만원 넣었다면 (추정치)</span></td></tr>`);
     const _stress = (label, v) => {
       const pct = (v * 100).toFixed(0);
       const remain = Math.round(inv * (1 + v));
       const barW = Math.min(100, Math.abs(v) * 200);
-      return `<tr><td>${label}</td><td><div style="display:flex;align-items:center;gap:4px;"><div style="width:60px;height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${barW}%;background:#DC2626;border-radius:3px;"></div></div><span style="color:#DC2626;font-weight:600;">${pct}%</span><span style="font-size:10px;color:var(--text-tertiary);">${remain}만원</span></div></td></tr>`;
+      return `<tr><td style="padding:5px 0;font-size:12px;">${label}</td><td style="padding:5px 0;"><div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;"><div style="width:56px;height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${barW}%;background:#DC2626;border-radius:3px;"></div></div><span style="color:#DC2626;font-weight:700;">${pct}%</span><span style="font-size:11px;color:var(--text-tertiary);">${remain}만원</span></div></td></tr>`;
     };
     rows.push(_stress('2008 금융위기', ep.stress_2008));
     rows.push(_stress('2020 코로나', ep.stress_2020));
     rows.push(_stress('2022 금리인상', ep.stress_2022));
   }
   if (!rows.length) { host.innerHTML = ''; return; }
-  host.innerHTML = `<table style="width:100%;font-size:12px;line-height:1.8;border-collapse:collapse;">${rows.join('')}</table>`;
+  host.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:2px;display:flex;align-items:center;gap:6px;">📉 떨어질 때 얼마나 아픈가 <span style="font-weight:500;color:var(--text-tertiary);font-size:10.5px;">— 하락 위험을 쉬운 말로</span></div>
+  <table style="width:100%;font-size:12px;border-collapse:collapse;">${rows.join('')}</table>`;
 }
 
 // P1: Composite Risk Score — Hero 카드 내 Dual Display
+// (제거됨) '🛡 Risk N/99 주의' 필이 종합 점수와 방향이 반대인 0~99 숫자라 혼란을 줘 UI에서 뺌.
+// scanner.html의 #dp-risk-gauge 엘리먼트를 삭제했으므로 아래 가드에서 즉시 no-op 처리됨.
+// composite_risk 데이터는 백엔드에 보존 — 엘리먼트를 되살리면 그대로 복원 가능.
 function _renderRiskGauge(d) {
   const el = document.getElementById('dp-risk-gauge');
   if (!el) return;
@@ -3820,7 +3934,21 @@ function _renderFinanceTab(d) {
 function _renderRsRating(rs) {
   const wrap = document.getElementById('rs-rating-wrap');
   if (!wrap || !rs) return;
-  const r = rs.rating || 50;
+  // 산정 불가(이력부족·데이터 결측) — 숫자/게이지 대신 '보류' 표시 (낙오주로 위조 금지)
+  if (rs.rs_unknown || rs.rating == null) {
+    wrap.innerHTML = `
+      <div style="background:var(--surface-page,#f1f3f5);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-top:4px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:.05em;">RS RATING</div>
+          <div style="font-size:15px;font-weight:800;color:var(--text-tertiary);line-height:1;">—<span style="font-size:11px;font-weight:600;margin-left:4px;">산정 보류</span></div>
+        </div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">${esc(rs.label || '이력부족')}</div>
+        <div style="font-size:11px;color:var(--text-tertiary);line-height:1.5;">상장·분사 이력이 짧거나 수익률 데이터가 부족해 상대강도(RS)를 아직 산정할 수 없어요. 데이터가 쌓이면 자동 표시됩니다. <b>낙오주 아님.</b></div>
+      </div>`;
+    wrap.style.display = '';
+    return;
+  }
+  const r = rs.rating;
   // 등급별 색상
   const color = r >= 80 ? '#22c55e' : r >= 70 ? '#84cc16' : r >= 50 ? '#94a3b8' : r >= 30 ? '#f97316' : '#ef4444';
   const bg    = r >= 80 ? 'rgba(34,197,94,.08)' : r >= 70 ? 'rgba(132,204,22,.08)' : r >= 50 ? 'rgba(148,163,184,.08)' : r >= 30 ? 'rgba(249,115,22,.08)' : 'rgba(239,68,68,.08)';
@@ -5652,6 +5780,24 @@ function renderMacro(d) {
 
   const ind = d.indicators || {};
   const parts = [];
+
+  // CNN 공포·탐욕 지수 칩 (데이터 있을 때만 맨 앞에)
+  const fng = d.fng;
+  if (fng && fng.score != null) {
+    const _fngEmoji = { 'extreme-fear':'😱', 'fear':'😨', 'neutral':'😐', 'greed':'😏', 'extreme-greed':'🤑' };
+    const emo = _fngEmoji[fng.zone] || '🧭';
+    const tip = 'CNN 공포·탐욕 지수 — 시장 심리를 0(극도의 공포)~100(극도의 탐욕)으로 나타낸 역발상 참고지표.\n'
+      + '낮을수록 과매도(공포), 높을수록 과열(탐욕).'
+      + (fng.prev != null ? `\n전일 ${fng.prev}` : '');
+    parts.push(
+      `<span class="macro-fng ${esc(fng.zone || 'neutral')}" title="${esc(tip)}">`
+      + `<span class="fng-key">${emo} 공탐</span>`
+      + `<span class="fng-score">${Math.round(fng.score)}</span>`
+      + (fng.label ? `<span class="fng-rating">${esc(fng.label)}</span>` : '')
+      + `</span><span class="macro-sep"></span>`
+    );
+  }
+
   _MACRO_DEFS.forEach((def, i) => {
     const cell = ind[def.key];
     if (i > 0) parts.push('<span class="macro-sep"></span>');
@@ -5750,7 +5896,7 @@ async function loadComparePage(tickers) {
 
       card.innerHTML = `
         <div class="compare-card-header">
-          <div class="compare-name">${esc(detail.Name || detail.Ticker || ticker)}</div>
+          <div class="compare-name">${esc(_displayName(detail) || ticker)}</div>
           <div class="compare-ticker">${esc(detail.Ticker || ticker)}</div>
           <span class="compare-signal" style="color:${signalColor(base)};background:${signalBg(base)}">${esc(_trKo(base || '—'))}</span>
         </div>
@@ -5904,7 +6050,7 @@ async function generateShareCard() {
     const { base } = _splitSignal(s.Signal);
     const sigText = _trKo(base || '—');
     const sig = _shareCardSignalColor(s.Signal);
-    const name = (s.Name || s.Ticker || '').slice(0, 16);
+    const name = (_displayName(s) || s.Ticker || '').slice(0, 16);
     const ticker = s.Ticker || '';
 
     rowsHtml += `
@@ -5987,6 +6133,16 @@ function downloadShareCard() {
   a.click();
 }
 
+// ── 캡쳐모드 토글 (핵심 컬럼만 표시) ──────────────────────────────────
+function toggleCaptureMode() {
+  const wrap = document.querySelector('.stock-table-wrap');
+  if (!wrap) return;
+  const on = wrap.classList.toggle('capture-mode');
+  // 토글 버튼 시각 피드백
+  const btn = document.querySelector('[data-action="toggleCaptureMode"]');
+  if (btn) btn.classList.toggle('active-item', on);
+}
+
 // ── 종목 목록 캡쳐 ─────────────────────────────────────────────
 async function captureStockList() {
   try { await _ensureHtml2Canvas(); } catch { alert('html2canvas 라이브러리 로드 실패'); return; }
@@ -6021,8 +6177,12 @@ async function captureStockList() {
     const clone = target.cloneNode(true);
     clone.style.maxHeight = 'none';
     clone.style.overflow = 'visible';
-    // 원본 사이즈 보장 — 좁은 화면에서도 데스크탑급 1600px 보장 (붙여넣기 시 흐릿하지 않게)
-    clone.style.width = isMobile ? '480px' : Math.max(target.scrollWidth, 1600) + 'px';
+    // 캡쳐모드 활성 시 클론에도 적용 — 좁은 폭으로 글자 크게
+    const isCaptureMode = target.classList.contains('capture-mode');
+    if (isCaptureMode) clone.classList.add('capture-mode');
+    const defaultWidth = isCaptureMode ? 800 : 1600;
+    // 원본 사이즈 보장 — 좁은 화면에서도 데스크탑급 보장 (붙여넣기 시 흐릿하지 않게)
+    clone.style.width = isMobile ? '480px' : Math.max(target.scrollWidth, defaultWidth) + 'px';
 
     // 헤더 박스(브랜드 + 메타데이터) 추가
     const now = new Date();

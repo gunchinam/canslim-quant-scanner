@@ -4149,6 +4149,12 @@ def _raw_bucket(d: dict) -> str:
     if "AVOID" in signal or (score and score < 30):
         # RED grade / 명시적 AVOID signal은 면제 없이 AVOID
         grade = (d.get("Grade") or "").upper()
+        # 단기 추세가 뚜렷이 살아있는 종목(최근 3개월 급등 + RSI 양호 + 큰 낙폭 없음)에는
+        # '그냥 손실/인생 끝' 류 단정을 쓰지 않고 관망·추격주의(NEUTRAL)로 완화한다.
+        # 분사 직후 등 12개월 이력 부재(Mom12M=None)로 RS Rating이 비정상적으로 낮아
+        # LAGGARD(AVOID)로 오인되는 경우가 대표적(예: SanDisk). 명시적 RED 위험은 예외.
+        if grade != "RED" and mom3 >= 20 and rsi >= 50 and dd_pct > -10:
+            return "NEUTRAL"
         if "AVOID" in signal or grade == "RED":
             return "AVOID"
         # 딥테크 수주형 종목은 STORY_STOCK으로 라우팅

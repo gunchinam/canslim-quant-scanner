@@ -2709,11 +2709,47 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
             import numpy as _np
             _c = hist["Close"]
             _n = len(_c)
+            # 이력/데이터 부족 게이트 — quant_nexus relative_strength() 와 동일 임계.
+            # 126 거래일 미만이면 RS '산정 불가'(미상): rating=None, label="이력부족".
+            # rs=0/최하위로 떨어뜨려 LAGGARD 오판하지 않는다.
+            _RS_MIN_PARTIAL = 126
+            _RS_MIN_HISTORY = 252
+            # 데이터 가용성 게이트 — 이유 불문 RS를 실제 수익률로 산정할 수 없으면 '미상'.
+            def _rs_unknown_payload(_est=False, _rets=None):
+                _r = {"rating": None, "is_leader": False, "rs_unknown": True,
+                      "rs_estimated": _est, "label": "이력부족"}
+                if _rets:
+                    _r.update(_rets)
+                else:
+                    _r.update({"ret_pct": None, "r1_pct": None, "r3_pct": None,
+                               "r6_pct": None, "r12_pct": None})
+                return _r
+
+            def _bad(_x) -> bool:
+                try:
+                    return _x is None or not _np.isfinite(float(_x))
+                except (TypeError, ValueError):
+                    return True
+
+            # (1) 이력 일수 부족
+            if _n < _RS_MIN_PARTIAL:
+                payload["rs_rating_data"] = _rs_unknown_payload()
+                return payload, None
+            # (2) 이력은 충분해도 핵심 종가/기준점이 None/NaN → 산정 불가
+            if _bad(_c.iloc[-1]) or _bad(_c.iloc[-21] if _n >= 21 else None) \
+                    or _bad(_c.iloc[-63] if _n >= 63 else None):
+                payload["rs_rating_data"] = _rs_unknown_payload()
+                return payload, None
             _r1  = (float(_c.iloc[-1]) / float(_c.iloc[-21])  - 1) if _n >= 21  else 0.0
             _r3  = (float(_c.iloc[-1]) / float(_c.iloc[-63])  - 1) if _n >= 63  else _r1
             _r6  = (float(_c.iloc[-1]) / float(_c.iloc[-126]) - 1) if _n >= 126 else _r3
-            _r12 = (float(_c.iloc[-1]) / float(_c.iloc[-252]) - 1) if _n >= 252 else _r6
+            _rs_estimated = _n < _RS_MIN_HISTORY
+            _r12 = (float(_c.iloc[-1]) / float(_c.iloc[-252]) - 1) if _n >= 252 else _r6 * 0.8
             _wret = _r1 * 0.25 + _r3 * 0.40 + _r6 * 0.20 + _r12 * 0.15
+            # (3) 가중수익률이 NaN/Inf → 산정 불가
+            if _bad(_wret):
+                payload["rs_rating_data"] = _rs_unknown_payload(_est=_rs_estimated)
+                return payload, None
             if   _wret > 0.90: _rsr_calc = 99
             elif _wret > 0.60: _rsr_calc = 97
             elif _wret > 0.38: _rsr_calc = 93
@@ -2725,20 +2761,41 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
             elif _wret > -0.07: _rsr_calc = 38
             elif _wret > -0.18: _rsr_calc = 25
             else:               _rsr_calc = 12
-            # 스캔 캐시에 퍼센타일 기반 RSRating이 있으면 우선 사용
+            # 스캔 캐시에 퍼센타일 기반 RSRating이 있으면 우선 사용.
+            # 단, 캐시 행이 rs_unknown(미상)이면 미상 유지(수치로 덮지 않음).
+            _cache_unknown = False
             with _scan_results_cache_lock:
                 _all_cached = list(_scan_results_cache.values())
             for _entry in _all_cached:
                 for _row in (_entry.get("data") or []):
                     if str(_row.get("Ticker", "")).upper() == ticker.upper():
-                        _v = _row.get("RSRating")
-                        if isinstance(_v, (int, float)) and 1 <= _v <= 99:
-                            _rsr_calc = int(_v)
+                        if _row.get("RSUnknown"):
+                            _cache_unknown = True
+                        else:
+                            _v = _row.get("RSRating")
+                            if isinstance(_v, (int, float)) and 1 <= _v <= 99:
+                                _rsr_calc = int(_v)
                         break
+            if _cache_unknown:
+                payload["rs_rating_data"] = {
+                    "rating": None,
+                    "is_leader": False,
+                    "rs_unknown": True,
+                    "rs_estimated": _rs_estimated,
+                    "label": "이력부족",
+                    "ret_pct": round(_wret * 100, 1),
+                    "r1_pct":  round(_r1  * 100, 1),
+                    "r3_pct":  round(_r3  * 100, 1),
+                    "r6_pct":  round(_r6  * 100, 1),
+                    "r12_pct": round(_r12 * 100, 1),
+                }
+                return payload, None
             _rsr = _rsr_calc
             payload["rs_rating_data"] = {
                 "rating": _rsr,
                 "is_leader": _rsr >= 80,
+                "rs_unknown": False,
+                "rs_estimated": _rs_estimated,
                 "label": (
                     "주도주" if _rsr >= 80 else
                     "준주도주" if _rsr >= 70 else

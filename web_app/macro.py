@@ -12,6 +12,7 @@ macro.py — 매크로(거시) 시장 지표 수집 모듈
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import threading
@@ -316,11 +317,78 @@ def _leading_signal(yf_data: dict) -> dict:
     }
 
 
+# ── CNN 공포·탐욕 지수 (Fear & Greed Index) ──────────────────────────
+# CNN의 비공식 JSON 엔드포인트. 브라우저 UA가 없으면 403 → UA/Referer 필수.
+# 0(극도의 공포) ~ 100(극도의 탐욕). 역발상 참고 심리지표.
+_CNN_FNG_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+_FNG_RATING_KO = {
+    "extreme fear": "극도의 공포",
+    "fear":         "공포",
+    "neutral":      "중립",
+    "greed":        "탐욕",
+    "extreme greed": "극도의 탐욕",
+}
+
+
+def _fng_zone(score: float) -> str:
+    """점수 → 구간 키 (색상·이모지 매핑용). CNN 기준."""
+    if score < 25:   return "extreme-fear"
+    if score < 45:   return "fear"
+    if score <= 55:  return "neutral"
+    if score <= 75:  return "greed"
+    return "extreme-greed"
+
+
+def _fetch_cnn_fng() -> dict | None:
+    """CNN 공포·탐욕 지수 수집. 실패 시 None (스캔/매크로 절대 안 깨짐)."""
+    try:
+        req = urllib.request.Request(
+            _CNN_FNG_URL,
+            headers={
+                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                               "AppleWebKit/537.36 (KHTML, like Gecko) "
+                               "Chrome/124.0.0.0 Safari/537.36"),
+                "Accept": "application/json, text/plain, */*",
+                "Origin": "https://edition.cnn.com",
+                "Referer": "https://edition.cnn.com/markets/fear-and-greed",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = json.loads(resp.read().decode("utf-8", "ignore"))
+    except Exception as e:
+        _LOG.warning("macro: CNN F&G fetch failed: %s", e)
+        return None
+
+    try:
+        fg = data.get("fear_and_greed") or {}
+        raw = fg.get("score")
+        if raw is None:
+            return None
+        score = float(raw)
+        if not (0.0 <= score <= 100.0):
+            _LOG.warning("macro: CNN F&G score out of range (%s)", score)
+            return None
+        rating = str(fg.get("rating") or "").strip().lower()
+        prev = fg.get("previous_close")
+        prev = float(prev) if prev is not None else None
+        return {
+            "score": round(score, 1),
+            "rating": rating,
+            "label": _FNG_RATING_KO.get(rating, ""),
+            "zone": _fng_zone(score),
+            "prev": round(prev, 1) if prev is not None else None,
+        }
+    except Exception as e:
+        _LOG.warning("macro: CNN F&G parse failed: %s", e)
+        return None
+
+
 def _build() -> dict:
     """지표를 새로 수집해 payload 조립. 부분 실패 허용."""
     yf_data = _fetch_yf()
     kr_rate = _fetch_kr_rate()
     us_rate = _fetch_us_rate()
+    fng = _fetch_cnn_fng()
 
     def cell(key):
         d = yf_data.get(key)
@@ -362,6 +430,7 @@ def _build() -> dict:
     return {
         "signal": _signal(vix, usdkrw, us10y_chg=us10y_chg, dxy_chg=dxy_chg, vix_prev=vix_prev),
         "leading": _leading_signal(yf_data),
+        "fng": fng,
         "indicators": indicators,
         "ts": datetime.now(_KST).isoformat(timespec="seconds"),
         "stale": False,
@@ -397,6 +466,7 @@ def get_macro(force: bool = False) -> dict:
                 return stale
         return {
             "signal": _SIG_UNKNOWN,
+            "fng": None,
             "indicators": {k: None for k in _ALL_KEYS},
             "ts": datetime.now(_KST).isoformat(timespec="seconds"),
             "stale": True,

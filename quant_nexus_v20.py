@@ -681,6 +681,8 @@ CANSLIM = {
     "VOL_BREAKOUT_MIN":  0.40,   # S: 돌파 거래량 40% 이상
     "RS_LEADER_MIN":     80,     # L: 주도주 RS Rating 최솟값
     "RS_LAGGARD_MAX":    40,     # L: 낙오주 RS Rating 상한
+    "RS_MIN_HISTORY":    252,    # L: 완전 RS 산정에 필요한 최소 거래일(12M)
+    "RS_MIN_PARTIAL":    126,    # L: 부분 외삽 허용 하한(<126 → 산정 불가)
     "SCORE_CEIL_LAGGARD":50,     # Fail-Safe: 낙오주 점수 천장
     "SCORE_CEIL_MOMENTUM_OVERRIDE": 70,  # 극강 모멘텀 종목 FailSafe 완화 천장
     "SUPER_MULT_MIN":    1.20,   # 슈퍼 그로스 최소 승수
@@ -2962,21 +2964,69 @@ class WallStreetQuantStrategies:
             "rs_rating":     50,
             "is_leader":     False,
             "fail_safe_rs":  False,   # RS < 40 → Ceiling 트리거
+            "rs_unknown":    False,   # True → 이력 부족으로 RS '산정 불가'(≠ 진짜 약세)
+            "rs_estimated":  False,   # True → 126~252일 외삽 추정치(불확실)
             "l_tag":         "NEUTRAL"}
         try:
-            if len(hist) < 60:
-                return result
             c = hist["Close"]
             n = len(c)
+
+            # ── [데이터 공백 게이트] 유효 이력 부족 → RS '산정 불가' ──────────
+            # earnings_momentum()의 data_missing 패턴을 모방: 데이터가 사실상
+            # 부재하면 rs=0.0/최하위로 떨어뜨리지 않고 '미상'으로 조기 반환하며
+            # fail_safe_rs 를 켜지 않는다(징벌적 LAGGARD 천장 부당 적용 방지).
+            if n < CANSLIM["RS_MIN_PARTIAL"]:   # < 126 거래일 (분사·신규상장 등)
+                result["rs"]          = None
+                result["rs_rating"]   = None
+                result["rs_unknown"]  = True
+                result["fail_safe_rs"] = False
+                result["rank"]        = "DATA_LIMITED"
+                result["l_tag"]       = "DATA_LIMITED"
+                return result
+
+            # ── [데이터 가용성 게이트] 핵심 입력이 None/NaN → RS '산정 불가' ──
+            # 이력 일수는 충분해도 종가 시계열이 비거나 NaN 이면(yfinance throttle/
+            # 결측 등) 수익률을 실제로 산정할 수 없다. 이 경우에도 12/최하위로 떨어뜨려
+            # LAGGARD 오판하지 말고 '미상'으로 처리한다.
+            def _bad(x) -> bool:
+                try:
+                    return x is None or not np.isfinite(float(x))
+                except (TypeError, ValueError):
+                    return True
+
+            _px_last = float(c.iloc[-1]) if len(c) else None
+            # 가중수익률 핵심 기준점들(현재가·1M·3M)이 유효해야 산정 가능.
+            if _bad(_px_last) or _bad(c.iloc[-21] if n >= 21 else None) \
+                    or _bad(c.iloc[-63] if n >= 63 else None):
+                result["rs"]           = None
+                result["rs_rating"]    = None
+                result["rs_unknown"]   = True
+                result["fail_safe_rs"] = False
+                result["rank"]         = "DATA_LIMITED"
+                result["l_tag"]        = "DATA_LIMITED"
+                return result
 
             # 1M·3M·6M·12M 수익률 가중 RS 계산 (스윙 호흡 — 단기 가속도 강조)
             r1  = (float(c.iloc[-1]) - float(c.iloc[-21])) / float(c.iloc[-21])  if n >= 21  else 0.0
             r3  = (float(c.iloc[-1]) - float(c.iloc[-63])) / float(c.iloc[-63])  if n >= 63  else r1
             r6  = (float(c.iloc[-1]) - float(c.iloc[-126])) / float(c.iloc[-126]) if n >= 126 else r3
-            r12 = (float(c.iloc[-1]) - float(c.iloc[-252])) / float(c.iloc[-252]) if n >= 252 else r6 * 0.8
+            if n >= CANSLIM["RS_MIN_HISTORY"]:   # >= 252 → 완전 12M 수익률
+                r12 = (float(c.iloc[-1]) - float(c.iloc[-252])) / float(c.iloc[-252])
+            else:                                # 126~252 → 외삽 추정 (추정 플래그 ON)
+                r12 = r6 * 0.8
+                result["rs_estimated"] = True
 
             # 가중 수익률 — 단기(1M·3M) 비중 ↑, 장기(12M)는 momentum 팩터가 담당하므로 축소
             weighted_ret = r1 * 0.25 + r3 * 0.40 + r6 * 0.20 + r12 * 0.15
+            # 산출 결과가 NaN/Inf 이면(예: 0가격 분모) 산정 불가 처리.
+            if _bad(weighted_ret):
+                result["rs"]           = None
+                result["rs_rating"]    = None
+                result["rs_unknown"]   = True
+                result["fail_safe_rs"] = False
+                result["rank"]         = "DATA_LIMITED"
+                result["l_tag"]        = "DATA_LIMITED"
+                return result
             result["rs"] = weighted_ret
 
             # RS Rating 계산 (시장 기준 SPY 연 10% 가정)
@@ -3020,9 +3070,12 @@ class WallStreetQuantStrategies:
                 result["l_tag"]      = "LAGGARD (RS {})".format(rsr)
             else:                                     # 0~39
                 score -= 20
-                result["fail_safe_rs"] = True
                 result["rank"]         = "STRONG_LAGGARD"
                 result["l_tag"]        = "📉 LAGGARD (RS {}) — AVOID".format(rsr)
+                # 외삽 추정(126~252일)은 불확실 → 징벌적 fail_safe_rs 천장 부당.
+                # 완전 이력(>=252일)일 때만 fail_safe_rs 를 켠다.
+                if not result["rs_estimated"]:
+                    result["fail_safe_rs"] = True
 
             result["score"] = score
 
@@ -4719,10 +4772,16 @@ class QuantNexusApp:
                 sector_name = self._ticker_sector_map.get(ticker, "") or ""
         except Exception:
             sector_name = ""
+        # '지수보강' 버킷 라벨(예: "🗂️ S&P600 스몰캡 (지수보강)")은 실제 섹터가 아니다.
+        # 섹터 힌트에서 제외 → 아래에서 info 기반 GICS 섹터로 해석한다.
+        if "지수보강" in sector_name:
+            sector_name = ""
         if not sector_name and hasattr(self, "sectors"):
             try:
                 for subs in self.sectors.values():
                     for sec_name, sec_tickers in subs.items():
+                        if "지수보강" in str(sec_name):
+                            continue  # 보강 버킷은 실제 섹터원이 아님 → 건너뜀
                         if ticker in sec_tickers:
                             sector_name = str(sec_name or "")
                             raise StopIteration
@@ -5048,7 +5107,17 @@ class QuantNexusApp:
                          self.lbl_progress.config(text=f"{t}... ({c}/{tot})")))
 
                 if res:
-                    res["Sector"] = self._ticker_sector_map.get(ticker, "")
+                    _mapped_sec = self._ticker_sector_map.get(ticker, "")
+                    if "지수보강" in _mapped_sec:
+                        # 보강 버킷: 내부 그룹 라벨을 Sector 칼럼에 노출하지 않는다.
+                        # 분석이 info로 구한 실제 GICS 섹터를 유지하고,
+                        # 그마저 없으면 라벨에서 이모지·'(지수보강)'만 떼어 지수명을 남긴다.
+                        if not str(res.get("Sector") or "").strip():
+                            _clean = re.sub(r"\s*\(지수보강\)\s*", "", _mapped_sec)
+                            _clean = re.sub(r"^[^\w가-힣]+\s*", "", _clean).strip()
+                            res["Sector"] = _clean
+                    else:
+                        res["Sector"] = _mapped_sec
                     results.append(res)
                     # 로그는 배치로 (과도한 GUI 점유 방지)
                     if completed % UPDATE_BATCH == 0 or completed == total:
@@ -5131,7 +5200,10 @@ class QuantNexusApp:
             w = STRATEGY_WEIGHTS.get(self._scan_strategy,
                                      STRATEGY_WEIGHTS["BALANCED"])
             rs_total_w = w["rs"] + w["cs_l"]  # RS 관련 가중치 합
-            sorted_rs = sorted(results,
+            # rs_unknown(이력 부족) 종목은 백분위 모집단에서 제외 — rs=None 이
+            # 최하위로 들어가 부당한 1~12 백분위를 받는 오염을 차단한다.
+            ranked_rs = [r for r in results if not r.get("RSUnknown", False)]
+            sorted_rs = sorted(ranked_rs,
                                key=lambda x: x.get("RS_WeightedRet", 0))
             n_rs = len(sorted_rs)
             for i, r in enumerate(sorted_rs):
@@ -5142,16 +5214,20 @@ class QuantNexusApp:
                 r["IsLeader"] = new_rs_rating >= 80
                 # 점수 델타 보정 (RS Rating 변화 → 최종 점수 반영)
                 # delta_rs(0~98 범위) → [0,100] 스케일에서 가중치 비율만큼 반영
-                delta_rs = new_rs_rating - old_rs_rating
+                # old_rs_rating 이 None(직전 미상)일 수 있으나 ranked_rs 는
+                # rs_unknown 제외분이라 정상 수치 보장.
+                delta_rs = new_rs_rating - (old_rs_rating or new_rs_rating)
                 score_adj = (delta_rs / 98.0) * 100.0 * rs_total_w
                 r["TotalScore"] = max(0.0, min(100.0,
                                                r["TotalScore"] + score_adj))
             # ── RS 백분위 후 Signal/FailSafe 재계산 ─────────────
             for r in results:
+                rs_unknown = r.get("RSUnknown", False)
                 new_rs = r["RSRating"]
                 final  = r["TotalScore"]
-                # FailSafe 재평가: RS < 40 이면 재트리거
-                rs_fail = new_rs < CANSLIM["RS_LAGGARD_MAX"]
+                # FailSafe 재평가: RS < 40 이면 재트리거.
+                # '미상'(None) 은 약세가 아니므로 rs_fail 로 보지 않는다.
+                rs_fail = (new_rs is not None) and new_rs < CANSLIM["RS_LAGGARD_MAX"]
                 eps_fail = r.get("FailSafe", False) and not rs_fail  # 기존 EPS 원인 보존
                 # 원래 FailSafe가 EPS 원인이었으면 유지
                 if r.get("_fail_eps", False):
@@ -5181,6 +5257,14 @@ class QuantNexusApp:
                     else:              sig = "📉 LAGGARD (AVOID)"
                 elif bear_cap:
                     sig = "🚫 BEAR MARKET — AVOID"
+                elif rs_unknown:
+                    # RS 미상: 점수 기반 신호만 사용, LAGGARD/AVOID 접미 금지.
+                    if   final >= 82:  sig = "⭐⭐⭐ STRONG LEADER"
+                    elif final >= 72:  sig = "⭐⭐ LEADER"
+                    elif final >= 60:  sig = "⭐ WATCH LIST — Accumulate"
+                    elif final >= 48:  sig = "⏸ NEUTRAL — Hold"
+                    else:              sig = "⏸ NEUTRAL"
+                    sig += " [RS 이력부족]"
                 elif final >= 90 and fulfilled == 3:
                     sig = "⭐⭐⭐⭐ CAN SLIM BREAKOUT"
                 elif final >= 82:
@@ -5356,6 +5440,25 @@ class QuantNexusApp:
                     stale = dict(stale)
                     stale.setdefault("DataSource", "cache")
                     stale.setdefault("DataStatus", "STALE_CACHE")
+                    # 방어: RS 수정 이전(pre-fix)에 적재된 캐시는 RSUnknown 키가 없고
+                    # 12M 모멘텀이 None 이면서 RS를 최하위(<40)로 기록했을 수 있다.
+                    # 실데이터로 RS를 검증할 수 없는 상태이므로 '낙오'가 아니라 '미상'으로
+                    # 정규화한다(LAGGARD/AVOID 오판 제거). 정상 캐시는 영향 없음.
+                    if "RSUnknown" not in stale:
+                        _rsr = stale.get("RSRating")
+                        _m12 = stale.get("Mom12M")
+                        _rs_uncomputable = (_m12 is None) and (
+                            _rsr is None or (isinstance(_rsr, (int, float))
+                                             and _rsr < CANSLIM["RS_LAGGARD_MAX"]))
+                        if _rs_uncomputable:
+                            stale["RSUnknown"] = True
+                            stale["RSRating"] = None
+                            stale["FailSafe"] = bool(stale.get("_fail_eps", False))
+                            _sig = str(stale.get("Signal", "") or "")
+                            if ("LAGGARD" in _sig) or ("AVOID" in _sig):
+                                stale["Signal"] = "⏸ NEUTRAL [RS 이력부족]"
+                        else:
+                            stale["RSUnknown"] = False
                     return stale
                 if is_us:
                     try:
@@ -5845,7 +5948,9 @@ class QuantNexusApp:
             # ── [L] Leader or Laggard (RS 80+) ──────────────────────
             try:
                 l_raw = rs["score"]
-                if rs["is_leader"]:
+                if rs.get("rs_unknown"):
+                    canslim_tags.append("L 상대강도(RS) 이력 부족으로 산정 보류예요")
+                elif rs["is_leader"]:
                     canslim_tags.append(f"L⭐ 상대강도 {rs['rs_rating']}점으로 시장 주도주예요")
                 elif rs["fail_safe_rs"]:
                     canslim_tags.append(f"L📉 상대강도 {rs['rs_rating']}점으로 시장 대비 뒤처지고 있어요")
@@ -5990,15 +6095,19 @@ class QuantNexusApp:
                 "_RevenueGrowth": safe_get(info.get("revenueGrowth"), 0.0),
                 "_MarketCap": safe_get(info.get("marketCap"), 0)}
             _is_deeptech = _is_deeptech_story(ticker, _deeptech_row)
+            # RS 미상(이력 부족): fail_safe_rs 는 위에서 False 보장 → 천장 미적용.
+            _rs_unknown = rs.get("rs_unknown", False)
             fail_safe_triggered = (
                 (earn["fail_safe_eps"] and not _is_holdco and not _is_deeptech)
                 or rs["fail_safe_rs"]
             )
             fail_safe_label = ""
             # 극강 모멘텀 종목: EPS FailSafe 완화 (RS≥90, 12M수익률>200%, Hurst>0.65)
+            # rs_rating 이 None(미상)이면 비교 불가 → 오버라이드 대상 아님.
             _momentum_override = (
                 earn["fail_safe_eps"]
                 and not rs["fail_safe_rs"]
+                and rs["rs_rating"] is not None
                 and rs["rs_rating"] >= 90
                 and mom["mom_12m"] > 2.0
                 and hurst["h"] > 0.65
@@ -6234,6 +6343,14 @@ class QuantNexusApp:
                 else:                  signal = "📉 LAGGARD (AVOID)"
             elif bear_cap_applied:
                 signal = "🚫 BEAR MARKET — AVOID"
+            elif _rs_unknown:
+                # RS 미상(이력 부족): 점수 기반 신호만, LAGGARD/AVOID 접미 금지.
+                if   final >= 82:  signal = "⭐⭐⭐ STRONG LEADER"
+                elif final >= 72:  signal = "⭐⭐ LEADER"
+                elif final >= 60:  signal = "⭐ WATCH LIST — Accumulate"
+                elif final >= 48:  signal = "⏸ NEUTRAL — Hold"
+                else:              signal = "⏸ NEUTRAL"
+                signal += " [RS 이력부족]"
             elif final >= 90 and fulfilled == 3:
                 signal = "⭐⭐⭐⭐ CAN SLIM BREAKOUT"
             elif final >= 82:
@@ -6307,8 +6424,10 @@ class QuantNexusApp:
 
                 ("[L] 주도주 판별 (Leader/Laggard)",
                  round(rs["score"], 1),
-                 f"시장 대비 상대강도(RS) {rs['rs_rating']}점이에요. "
-                 f"{'시장을 이끄는 주도주예요.' if rs.get('is_leader') else '시장보다 많이 뒤처지고 있어요.' if rs.get('fail_safe_rs') else '시장과 비슷한 흐름이에요.'}"),
+                 ("상대강도(RS)는 상장 이력이 짧아 산정을 보류했어요(데이터 부족)."
+                  if rs.get("rs_unknown") else
+                  f"시장 대비 상대강도(RS) {rs['rs_rating']}점이에요. "
+                  f"{'시장을 이끄는 주도주예요.' if rs.get('is_leader') else '시장보다 많이 뒤처지고 있어요.' if rs.get('fail_safe_rs') else '시장과 비슷한 흐름이에요.'}")),
 
                 ("[I] 기관 수급 (Institutional)",
                  round(f_smart_money, 1),
@@ -6483,7 +6602,7 @@ class QuantNexusApp:
                     f"• 거래량 비율: {vol_a['ratio']:.1f}x\n"
                     f"• 돌파 확인: {'예 ✓' if vol_a['s_confirmed'] else '아니오'}"),
                 "[L]": (l_raw, f"_n({l_raw:.1f})",
-                    f"• RS Rating: {rs['rs_rating']}\n"
+                    f"• RS Rating: {'이력부족' if rs.get('rs_unknown') else rs['rs_rating']}\n"
                     f"• 주도주: {'예 ✓' if rs.get('is_leader') else '아니오'}"),
                 "[I]": (i_raw, f"_n({i_raw:.1f})",
                     f"• 자금 흐름: {flow['signal']}\n"
@@ -6807,6 +6926,8 @@ class QuantNexusApp:
                 "Drawdown":         dd["current_dd"],
                 # CAN SLIM 메타 (통계용)
                 "RSRating":         rs["rs_rating"],
+                "RSUnknown":        rs.get("rs_unknown", False),   # 이력 부족 → RS 산정 불가
+                "RSEstimated":      rs.get("rs_estimated", False), # 126~252일 외삽 추정치
                 "RS_WeightedRet":   rs["rs"],          # 백분위 재계산용 raw
                 "RS_OldScore":      rs["score"],       # 절대 RS score (delta용)
                 "IsLeader":         rs["is_leader"],
@@ -7370,7 +7491,7 @@ class QuantNexusApp:
             r for r in data
             if r.get("Signal", "") in ("STRONG_BUY", "BUY")
             and r.get("TotalScore", 0) >= 60
-            and r.get("RSRating", 0) >= 70
+            and (r.get("RSRating") or 0) >= 70
             and r.get("Regime", "") not in _BEAR
             and not r.get("FailSafe", False)
         ]

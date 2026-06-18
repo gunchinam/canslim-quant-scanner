@@ -274,6 +274,20 @@ def _load_scan_snapshot() -> bool:
             snapshot = pickle.load(f)
         if not snapshot:
             return False
+        try:
+            from quant_nexus_v20 import QuantNexusApp
+            _us_nm_snap = getattr(QuantNexusApp, "US_NAMES", {})
+        except Exception:
+            _us_nm_snap = {}
+        if _us_nm_snap:
+            for _sk, _sv in snapshot.items():
+                if not isinstance(_sk, tuple) or len(_sk) < 1 or _sk[0] != "US":
+                    continue
+                for _row in (_sv.get("data") or []):
+                    _tk = _row.get("Ticker") or ""
+                    _fixed = _us_nm_snap.get(_tk)
+                    if _fixed and _row.get("Name") != _fixed:
+                        _row["Name"] = _fixed
         with _scan_results_cache_lock:
             _scan_results_cache.update(snapshot)
         logging.info("scan snapshot loaded: %d entries (instant cold-start)", len(snapshot))
@@ -1101,6 +1115,11 @@ def detail(ticker: str):
     })
 
 
+@app.route("/pyramid")
+def pyramid_page():
+    return _render_static_template("pyramid.html")
+
+
 @app.route("/compare")
 def compare_page():
     raw = request.args.get("tickers", "")
@@ -1558,6 +1577,14 @@ def api_ticker(ticker: str):
             # 네이버 투자자 동향은 /api/investor_flow/<ticker>로 분리 (lazy-load)
             result["_Investor_Available"] = False
         else:
+            # US 종목: US_NAMES 한글명 우선 적용
+            try:
+                from quant_nexus_v20 import QuantNexusApp
+                _us_nm = getattr(QuantNexusApp, "US_NAMES", {}).get(ticker)
+                if _us_nm:
+                    result["Name"] = _us_nm
+            except Exception as _e:
+                logging.debug("silent except (app.py): %s", _e)
             # US 종목: yfinance + Finnhub 센티먼트는 /api/sentiment/<ticker>로 분리 (lazy-load).
             # 종목 상세 패널 첫 paint 지연(5~10s yfinance .info hang)을 제거하기 위함.
             # 프론트는 sentiment 응답 도착 시 _YF_*/_FH_* 키를 머지.
@@ -1868,6 +1895,29 @@ def api_peers(ticker: str):
     if market == "US" and not is_kr:
         fh_payload = _peers_from_finnhub(ticker, limit)
         if fh_payload:
+            # Finnhub/yfinance 개별 호출 실패 시 None 필드를 스캔 캐시로 보충
+            _fill_fields = [("MarketCap", "_MarketCap"), ("PER", "_PER"),
+                            ("PBR", "_PBR"), ("ROE", "_ROE"),
+                            ("OperatingMargin", "_OperatingMargin"),
+                            ("Mom12M", "Mom12M"), ("DivYield", "_DivYield")]
+            cache_rows = []
+            with _scan_results_cache_lock:
+                for strat in ("BALANCED", "AGGRESSIVE", "CONSERVATIVE"):
+                    _cc = _scan_results_cache.get((market, strat, ""))
+                    if _cc and _cc.get("data"):
+                        cache_rows = _cc["data"]
+                        break
+            if cache_rows:
+                _cmap = {r.get("Ticker"): r for r in cache_rows}
+                for _pr in [fh_payload.get("self")] + (fh_payload.get("peers") or []):
+                    if not _pr:
+                        continue
+                    _cr = _cmap.get(_pr.get("Ticker"))
+                    if not _cr:
+                        continue
+                    for _fk, _ck in _fill_fields:
+                        if _pr.get(_fk) is None:
+                            _pr[_fk] = _cr.get(_ck)
             return jsonify(fh_payload)
 
     # KR 또는 Finnhub 실패 시 기존 스캔 캐시 폴백
@@ -1914,19 +1964,29 @@ def api_peers(ticker: str):
     ))
     peers = candidates[:limit]
 
+    try:
+        from quant_nexus_v20 import QuantNexusApp as _QNA
+        _us_names_peer = getattr(_QNA, "US_NAMES", {}) if market == "US" else {}
+    except Exception:
+        _us_names_peer = {}
+
     def _row(r: dict) -> dict:
+        _tk = r.get("Ticker") or ""
+        # 0 은 '데이터 없음' — None 으로 변환해 프론트에서 '—' 표시
+        def _nz(v):
+            return v if v else None
         return {
-            "Ticker":          r.get("Ticker") or "",
-            "Name":            r.get("Name") or "",
+            "Ticker":          _tk,
+            "Name":            _us_names_peer.get(_tk) or r.get("Name") or "",
             "Sector":          r.get("Sector") or "",
             "Industry":        r.get("Industry") or "",
             "Price":           r.get("Price"),
             "TotalScore":      r.get("TotalScore"),
-            "MarketCap":       r.get("_MarketCap"),
-            "PER":             r.get("_PER"),
-            "PBR":             r.get("_PBR"),
-            "ROE":             r.get("_ROE"),
-            "OperatingMargin": r.get("_OperatingMargin"),
+            "MarketCap":       _nz(r.get("_MarketCap")),
+            "PER":             _nz(r.get("_PER")),
+            "PBR":             _nz(r.get("_PBR")),
+            "ROE":             _nz(r.get("_ROE")),
+            "OperatingMargin": _nz(r.get("_OperatingMargin")),
             "Mom12M":          r.get("Mom12M"),
             "DivYield":        r.get("_DivYield"),
         }

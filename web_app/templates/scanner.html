@@ -49,12 +49,24 @@
             </svg>
             CSV 내보내기
           </button>
+          <button class="topbar-more-item" data-action="toggleCaptureMode" title="캡쳐모드 — 핵심 컬럼만 남겨 크게 보기 (토글)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>
+            </svg>
+            캡쳐모드
+          </button>
           <button id="btn-capture-list" class="topbar-more-item" data-action="captureStockList" title="현재 종목 목록을 이미지로 캡쳐">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
             </svg>
             <span class="capture-label">목록 캡쳐</span>
           </button>
+          <a href="/pyramid" class="topbar-more-item" style="text-decoration:none;color:inherit" title="피라미딩 계산기">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 19 21 5 21"/><line x1="12" y1="8" x2="12" y2="13"/>
+            </svg>
+            피라미딩 계산기
+          </a>
           <button id="btn-share" class="topbar-more-item" data-action="generateShareCard" title="선택 종목 공유 카드 생성">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
@@ -91,6 +103,7 @@
   <div class="view-tabs" role="tablist" aria-label="화면 전환">
     <button class="view-tab active" data-view="stock" data-action="showStockView">📈 종목 스캐너</button>
     <button class="view-tab" data-view="etf" data-action="openEtfView" title="미국·한국 인기 ETF를 한눈에 — 구성종목·섹터·수수료·수익률">📊 ETF 현황</button>
+    <button class="view-tab" data-view="news" data-action="openNewsView" title="예정 IPO 캘린더 + 미국 시장 뉴스 (Finnhub)">📰 뉴스</button>
   </div>
 
   <!-- Stats Bar -->
@@ -120,6 +133,7 @@
         <button class="chip chip-delta" data-filter="score_surge" title="어제 대비 종합점수 +3 이상 급등">📈 점수급등</button>
         <button class="chip chip-delta" data-filter="new_entry" title="기준일 이후 목록에 새로 진입한 종목">🆕 신규진입</button>
         <button class="chip" data-filter="breakout" title="추세 돌파 감지 종목">🚀 돌파</button>
+        <button class="chip" data-filter="bf_buy" title="저점매수 점수 25점 이상 — 과매도+재무건전 후보 (40+: 적극, 60+: 강력)">🎣 저점매수</button>
         <button class="chip" data-filter="laggard" title="RS Rating 40 미만 또는 위험 등급 — 주의 대상">⛔ 위험</button>
       </div>
     </div>
@@ -206,8 +220,15 @@
             <div id="etf-list-kr" class="etf-list"></div>
           </section>
         </div>
-        <div id="market-context" style="display:none; margin-top:12px;">
-          <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin:8px 0;">🆕 IPO 캘린더 · 시장 뉴스</div>
+      </div>
+
+      <!-- ── 뉴스 (인라인 탭 — 종목 표 자리에 표시) ──────────────────── -->
+      <div id="news-view" class="etf-view" hidden>
+        <div class="etf-view-header">
+          <div class="etf-view-title">📰 시장 뉴스 · IPO <span id="news-meta" class="etf-view-meta"></span></div>
+          <button class="etf-view-close" data-action="closeNewsView" aria-label="종목 목록으로">← 종목 목록</button>
+        </div>
+        <div id="market-context" class="news-view-body">
           <div id="market-context-body"></div>
         </div>
       </div>
@@ -343,6 +364,9 @@
         <div class="dp-thermo-scale"><span>극도공포</span><span>공포</span><span>중립</span><span>탐욕</span><span>극도탐욕</span></div>
       </div>
 
+      <!-- 진입 판단 종합 카드 -->
+      <div id="dp-entry-verdict" class="card" style="display:none;margin:12px 20px;overflow:hidden;"></div>
+
       <div id="dp-fouraxis-loading">분석 불러오는 중...</div>
       <div id="dp-fouraxis-error"></div>
       <div id="dp-fouraxis-header">
@@ -367,7 +391,33 @@
       <div id="dp-investor-card" style="display:none;">
         <div class="card" style="padding:0;overflow:hidden;">
           <div style="padding:12px 16px 8px;font-size:12px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.03em;">투자자 동향</div>
-          <div id="dp-investor-grid" style="display:grid;column-gap:40px;padding:2px 16px 12px;"></div>
+          <div id="dp-investor-grid" style="display:grid;column-gap:16px;padding:2px 16px 12px;"></div>
+        </div>
+      </div>
+
+      <!-- 저점매수(BF) Score -->
+      <div id="dp-bf-card" class="card" style="display:none;margin:8px 20px 16px;">
+        <div style="padding:12px 16px 8px;display:flex;align-items:center;gap:8px;">
+          <span style="font-size:14px;">🎣</span>
+          <span style="font-size:12px;font-weight:700;color:var(--text-primary);">저점매수 점수</span>
+          <span id="dp-bf-signal" style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;margin-left:auto;"></span>
+        </div>
+        <div style="padding:0 16px 6px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div id="dp-bf-score" style="font-size:28px;font-weight:800;min-width:48px;text-align:center;"></div>
+            <div style="flex:1;">
+              <div id="dp-bf-bar" style="height:6px;border-radius:3px;background:var(--surface-muted,#e5e7eb);overflow:hidden;">
+                <div id="dp-bf-fill" style="height:100%;border-radius:3px;transition:width .3s;"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--text-tertiary);">
+                <span>가치/퀄리티 <b id="dp-bf-a1">0</b>/40</span>
+                <span>기술/통계 <b id="dp-bf-a2">0</b>/35</span>
+                <span>매크로/수급 <b id="dp-bf-a3">0</b>/25</span>
+              </div>
+            </div>
+          </div>
+          <div id="dp-bf-tags" style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;"></div>
+          <div id="dp-bf-detail" style="margin-top:6px;font-size:11px;color:var(--text-secondary);line-height:1.5;"></div>
         </div>
       </div>
     </section>

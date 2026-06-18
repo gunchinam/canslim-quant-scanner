@@ -2,7 +2,7 @@ name: Daily Stock Briefing
 
 on:
   schedule:
-    - cron: '30 7 * * 1-5'  # KST 16:30 평일 (UTC 07:30)
+    - cron: '30 23 * * 0-4'  # KST 08:30 평일 아침 (UTC 전날 23:30)
   workflow_dispatch:         # 수동 실행 버튼
 
 jobs:

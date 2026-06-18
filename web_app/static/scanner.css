@@ -890,7 +890,7 @@ td.score-col {
 
 /* === 디테일 페이지 — 핵심 해자 카드 === */
 .dp-moat-card {
-  margin: 0 20px 16px;
+  margin: 0 20px 8px;
   padding: 0;
   background: var(--card);
   border-radius: var(--radius);
@@ -996,6 +996,28 @@ td.score-col {
   line-height: 1.5;
 }
 
+
+/* === 진입 판단 종합 카드 === */
+#dp-entry-verdict { padding:0; }
+.ev-head { display:flex; align-items:center; gap:8px; padding:12px 16px 6px; }
+.ev-icon { font-size:14px; line-height:1; }
+.ev-title { font-size:12px; font-weight:700; color:var(--text-primary); }
+.ev-label { font-size:13px; font-weight:700; margin-left:auto; }
+.ev-conf { font-size:10px; font-weight:600; padding:2px 6px; border-radius:4px; margin-left:6px; white-space:nowrap; }
+.ev-pills { display:flex; flex-wrap:wrap; gap:4px; padding:2px 16px 10px; }
+.ev-pill { font-size:10px; padding:1px 6px; border-radius:3px; font-weight:600; }
+.ev-pro { background:#16A34A18; color:#16A34A; }
+.ev-con { background:#DC262618; color:#DC2626; }
+.ev-split { padding:8px 16px 12px; border-top:1px solid var(--border); }
+.ev-split-head { font-size:11px; font-weight:700; margin-bottom:6px; color:var(--text-tertiary); letter-spacing:0.03em; }
+.ev-tr { display:flex; align-items:center; gap:6px; font-size:11px; padding:4px 0; color:var(--text-secondary); }
+.ev-tr-n { width:24px; font-weight:600; flex-shrink:0; }
+.ev-tr-bar { flex:1; height:4px; border-radius:2px; background:var(--surface-muted,#e5e7eb); overflow:hidden; min-width:0; }
+.ev-tr-fill { height:100%; border-radius:2px; display:block; }
+.ev-tr-pct { width:28px; text-align:right; font-weight:600; flex-shrink:0; }
+.ev-tr-price { width:64px; text-align:right; font-variant-numeric:tabular-nums; flex-shrink:0; }
+.ev-tr-lbl { width:48px; text-align:right; font-size:10px; color:var(--text-tertiary); flex-shrink:0; }
+.ev-split-foot { font-size:10px; color:var(--text-tertiary); margin-top:6px; padding-top:6px; border-top:1px dashed var(--border); }
 
 /* === 경쟁사 비교 카드 === */
 .dp-peers-card {
@@ -1205,7 +1227,7 @@ td.score-col {
 
 /* === 오너십 지도 카드 (보라 톤) === */
 .dp-ownership-card {
-  margin: 12px 20px 0;
+  margin: 12px 20px;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: var(--card);
@@ -1330,7 +1352,7 @@ td.score-col {
 
 /* === 인사이더 거래 타임라인 (핑크 톤) === */
 .dp-insider-card {
-  margin: 12px 20px 0;
+  margin: 12px 20px;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: var(--card);
@@ -1458,7 +1480,7 @@ td.score-col {
 
 /* === 이벤트 캘린더 카드 (앰버 톤) === */
 .dp-events-card {
-  margin: 12px 20px 0;
+  margin: 12px 20px;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: var(--card);
@@ -1849,7 +1871,7 @@ td.score-col {
   border-bottom: 1px solid var(--border);
 }
 .dp-section-company .dp-about-bar {
-  padding: 10px 20px 8px;
+  padding: 8px 20px;
 }
 .dp-section-company .dp-peers-card,
 .dp-section-company .dp-segments-card {
@@ -1860,7 +1882,7 @@ td.score-col {
 /* ── ② 결론 ──────────────────────────────────────────────── */
 /* ── 결론+타이밍 통합 카드 ────────────────────────────────── */
 .dp-hero-card {
-  margin: 12px 20px 0;
+  margin: 12px 20px 16px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -1899,7 +1921,7 @@ td.score-col {
   pointer-events: none; z-index: 2;
 }
 .dp-section-conclusion > .dp-oneliner-poster {
-  margin: 16px 0 12px;
+  margin: 16px 16px 12px;
   border-radius: 18px;
 }
 
@@ -2195,7 +2217,7 @@ td.score-col {
 
 /* ── About Bar ──────────────────────────────────────────────── */
 .dp-about-bar {
-  padding: 6px 20px 8px;
+  padding: 8px 20px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
 }
@@ -2319,20 +2341,20 @@ td.score-col {
 /* ── 4축 타이밍 분석 ─────────────────────────────────────── */
 #dp-fouraxis-loading {
   text-align: center;
-  padding: 40px;
+  padding: 40px 20px;
   color: var(--text-tertiary);
   display: none;
 }
 #dp-fouraxis-error {
   text-align: center;
-  padding: 24px;
+  padding: 24px 20px;
   color: var(--destructive);
   display: none;
 }
 #dp-fouraxis-header {
   display: none;
   padding: 14px 16px;
-  margin: 14px 20px 8px;
+  margin: 8px 20px;
   background: var(--card);
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -2375,7 +2397,7 @@ td.score-col {
 #dp-fouraxis-obs {
   display: none;
   padding: 14px 16px;
-  margin: 0 20px 16px;
+  margin: 8px 20px 16px;
   background: var(--card);
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -2428,8 +2450,8 @@ td.score-col {
 .dp-news-bar {
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
-  margin: 0 16px 8px;
+  padding: 10px 16px;
+  margin: 0 20px 8px;
   background: var(--surface-page);
   border-radius: 12px;
   border: 1px solid var(--border);
@@ -2460,7 +2482,7 @@ td.score-col {
 
 /* ── Earnings Card ───────────────────────────────────────── */
 .dp-earnings-card {
-  margin: 8px 20px;
+  margin: 12px 20px;
   padding: 14px;
   background: var(--card);
   border: 1px solid var(--border);
@@ -2501,7 +2523,7 @@ td.score-col {
 }
 #dp-investor-card,
 #dp-midcap-card {
-  margin: 8px 20px;
+  margin: 12px 20px;
 }
 .detail-panel .card,
 #dp-fouraxis-header,
@@ -2509,8 +2531,8 @@ td.score-col {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 .dp-disclaimer {
-  margin: 20px 20px 12px;
-  padding: 10px 14px;
+  margin: 12px 20px;
+  padding: 10px 16px;
   background: var(--surface-subtle, #F5F5F7);
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -2519,7 +2541,7 @@ td.score-col {
   color: var(--text-tertiary);
 }
 .dp-drawdown-wrap {
-  margin: 8px 20px;
+  margin: 12px 20px;
   padding: 14px 16px;
   background: var(--card);
   border: 1px solid var(--border);
@@ -2529,7 +2551,7 @@ td.score-col {
   display: none;
 }
 .dp-consensus-card {
-  margin: 8px 20px;
+  margin: 12px 20px;
   padding: 16px;
   background: var(--card);
   border: 1px solid var(--border);
@@ -3399,7 +3421,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
     -webkit-overflow-scrolling: touch;
   }
   .index-bar::-webkit-scrollbar { display: none; }
-  .index-chip { min-height: 38px; flex: 0 0 auto; }
+  .index-chip { min-height: 44px; flex: 0 0 auto; }
 
   .content { grid-template-columns: 1fr; }
   .sidebar {
@@ -3505,9 +3527,12 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   .stock-card-ticker {
     display: block;
     margin-top: 4px;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-tertiary);
     line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .stock-card-meta {
     display: flex;
@@ -3543,6 +3568,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
     box-shadow: 1px 1px 0 #1a1a1a;
     border-radius: 8px;
     overflow: hidden;
+    overflow-wrap: anywhere;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -3593,6 +3619,10 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   .dp-score-unit { font-size: 14px; }
   #dp-quadrant-card { display: none !important; }
   .dp-section-btn { min-height: 44px; }
+  /* 드로어 닫기 버튼 — 모바일 44x44 터치 타겟 */
+  .dp-close-btn { width: 44px; height: 44px; }
+  /* 세그먼트 컨트롤(뷰 전환) — 모바일 터치 타겟 확보 */
+  .btn-seg { min-height: 40px; padding: 0 14px; display: inline-flex; align-items: center; }
 
   /* 탭바 — 모바일에서 섹션네비 아래 고정 */
   .dp-tab-nav { top: 38px; }
@@ -3605,9 +3635,9 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   }
   #dp-fouraxis-header { padding: 10px 14px 6px; }
   #dp-fouraxis-chart-wrap { padding: 8px 14px; }
-  #dp-fouraxis-obs { margin: 0 12px 12px; padding: 12px; }
+  #dp-fouraxis-obs { margin: 0 16px 12px; padding: 12px; }
 
-  .dp-oneliner-poster { font-size: clamp(20px, 5vw, 36px); margin: 10px 14px; padding: 18px 14px; }
+  .dp-oneliner-poster { font-size: clamp(20px, 5vw, 36px); margin: 10px 16px; padding: 18px 16px; }
 
   /* Loading screen mobile */
   .scan-loading { padding: 40px 16px 32px; }
@@ -3621,7 +3651,7 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 /* ── Responsive: Small Mobile (≤480px) ─────────────────────── */
 @media (max-width: 480px) {
   .topbar-logo { display: none; }
-  .btn-seg { padding: 0 8px; font-size: 11px; height: 28px; }
+  .btn-seg { padding: 0 8px; font-size: 11px; min-height: 40px; }
   .btn-scan { font-size: 12px; gap: 4px; }
   .btn-scan svg { width: 12px; height: 12px; }
 
@@ -4221,8 +4251,93 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   border-radius: 5px;
 }
 
+/* ── 뉴스 뷰 ────────────────────────────────────────── */
+.news-view-body { padding: 0; }
+.news-view-body #market-context-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 20px;
+}
+.news-col-title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.news-col-title .news-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  background: var(--surface-2, rgba(0,0,0,0.05));
+  border-radius: 8px;
+  padding: 1px 7px;
+}
+.news-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 11px 14px;
+  transition: border-color .15s;
+}
+.news-card:hover { border-color: var(--brand); }
+.news-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.news-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.45;
+  text-decoration: none;
+}
+a.news-card-title:hover { color: var(--brand); }
+.news-card-date {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.news-card-source {
+  display: inline-block;
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  background: var(--surface-2, rgba(0,0,0,0.05));
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.news-card-ipo .news-card-ticker {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand);
+}
+.news-card-ipo .news-card-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: 6px;
+}
+.news-card-ipo .news-card-price {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.news-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
 @media (max-width: 768px) {
   .etf-view-body { grid-template-columns: 1fr; gap: 16px; padding: 14px; }
+  .news-view-body #market-context-body { grid-template-columns: 1fr; gap: 16px; padding: 14px; }
   .etf-rot-grid { grid-template-columns: 1fr; gap: 14px; }
   .capture-label { display: none; }
 }
@@ -4620,4 +4735,34 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   .action-cards { grid-template-columns: 1fr; }
   .mece-inner { padding: 12px; }
   .price-map-val { min-width: 60px; font-size: 11px; }
+}
+
+/* ── 캡쳐모드: 핵심 컬럼만 표시 ── */
+.capture-mode .stock-table th:nth-child(1),
+.capture-mode .stock-table td:nth-child(1),
+.capture-mode .stock-table th:nth-child(4),
+.capture-mode .stock-table td:nth-child(4),
+.capture-mode .stock-table th:nth-child(5),
+.capture-mode .stock-table td:nth-child(5),
+.capture-mode .stock-table th:nth-child(10),
+.capture-mode .stock-table td:nth-child(10),
+.capture-mode .stock-table th:nth-child(11),
+.capture-mode .stock-table td:nth-child(11),
+.capture-mode .stock-table th:nth-child(12),
+.capture-mode .stock-table td:nth-child(12),
+.capture-mode .stock-table th:nth-child(13),
+.capture-mode .stock-table td:nth-child(13),
+.capture-mode .stock-table th:nth-child(14),
+.capture-mode .stock-table td:nth-child(14) { display: none !important; }
+
+.capture-mode .stock-table { font-size: 15px; }
+.capture-mode .stock-table th,
+.capture-mode .stock-table td { padding: 10px 14px; }
+.capture-mode .stock-table .name-cell .stock-name { font-size: 15px; }
+.capture-mode .stock-table .score-num { font-size: 16px; }
+
+.topbar-more-item.active-item {
+  background: #EDE9FE;
+  color: #6B21A8;
+  font-weight: 700;
 }

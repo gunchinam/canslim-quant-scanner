@@ -1,5 +1,6 @@
 yfinance
 pandas
 requests
+lxml
 groq
 APScheduler

@@ -65,59 +65,133 @@ def _trading_date() -> str:
 # 1단계: 강세 종목 스크리닝
 # ═══════════════════════════════════════════════════════════
 
-def get_domestic_top(n: int = 30, min_vol_krw: float = 10_000_000_000) -> pd.DataFrame:
-    """pykrx로 KOSPI + KOSDAQ 전종목 조회 후 거래대금·상승률 필터."""
-    from pykrx import stock
+# 주요 KOSPI + KOSDAQ 종목 (ticker → (name, market))
+_KR_TICKERS: dict[str, tuple[str, str]] = {
+    # KOSPI
+    "005930.KS": ("삼성전자",     "KOSPI"), "000660.KS": ("SK하이닉스",      "KOSPI"),
+    "207940.KS": ("삼성바이오",   "KOSPI"), "005380.KS": ("현대차",          "KOSPI"),
+    "000270.KS": ("기아",         "KOSPI"), "373220.KS": ("LG에너지솔루션",  "KOSPI"),
+    "006400.KS": ("삼성SDI",      "KOSPI"), "051910.KS": ("LG화학",          "KOSPI"),
+    "035420.KS": ("NAVER",        "KOSPI"), "005490.KS": ("POSCO홀딩스",     "KOSPI"),
+    "012330.KS": ("현대모비스",   "KOSPI"), "068270.KS": ("셀트리온",        "KOSPI"),
+    "105560.KS": ("KB금융",       "KOSPI"), "055550.KS": ("신한지주",        "KOSPI"),
+    "028260.KS": ("삼성물산",     "KOSPI"), "066570.KS": ("LG전자",          "KOSPI"),
+    "003550.KS": ("LG",           "KOSPI"), "017670.KS": ("SK텔레콤",        "KOSPI"),
+    "030200.KS": ("KT",           "KOSPI"), "086790.KS": ("하나금융지주",    "KOSPI"),
+    "316140.KS": ("우리금융지주", "KOSPI"), "034730.KS": ("SK",              "KOSPI"),
+    "011200.KS": ("HMM",          "KOSPI"), "010130.KS": ("고려아연",        "KOSPI"),
+    "009150.KS": ("삼성전기",     "KOSPI"), "018260.KS": ("삼성SDS",         "KOSPI"),
+    "000810.KS": ("삼성화재",     "KOSPI"), "003490.KS": ("대한항공",        "KOSPI"),
+    "090430.KS": ("아모레퍼시픽", "KOSPI"), "036570.KS": ("엔씨소프트",      "KOSPI"),
+    "035720.KS": ("카카오",       "KOSPI"), "259960.KS": ("크래프톤",        "KOSPI"),
+    "293490.KS": ("카카오뱅크",   "KOSPI"), "352820.KS": ("하이브",          "KOSPI"),
+    "003670.KS": ("포스코퓨처엠", "KOSPI"), "012450.KS": ("한화에어로스페이스","KOSPI"),
+    "042700.KS": ("한미반도체",   "KOSPI"), "000100.KS": ("유한양행",        "KOSPI"),
+    "267250.KS": ("현대중공업",   "KOSPI"), "329180.KS": ("HD현대중공업",    "KOSPI"),
+    "009540.KS": ("HD한국조선해양","KOSPI"), "010950.KS": ("S-Oil",           "KOSPI"),
+    "097950.KS": ("CJ제일제당",   "KOSPI"), "034020.KS": ("두산에너빌리티",  "KOSPI"),
+    "000720.KS": ("현대건설",     "KOSPI"), "078930.KS": ("GS",              "KOSPI"),
+    "004020.KS": ("현대제철",     "KOSPI"), "096770.KS": ("SK이노베이션",    "KOSPI"),
+    "251270.KS": ("넷마블",       "KOSPI"), "032830.KS": ("삼성생명",        "KOSPI"),
+    "024110.KS": ("기업은행",     "KOSPI"), "015760.KS": ("한국전력",        "KOSPI"),
+    "011170.KS": ("롯데케미칼",   "KOSPI"), "139480.KS": ("이마트",          "KOSPI"),
+    "047050.KS": ("포스코인터내셔널","KOSPI"), "011790.KS": ("SKC",           "KOSPI"),
+    "051900.KS": ("LG생활건강",   "KOSPI"), "071050.KS": ("한국금융지주",    "KOSPI"),
+    "161390.KS": ("한국타이어",   "KOSPI"), "001040.KS": ("CJ",              "KOSPI"),
+    "375500.KS": ("DL이앤씨",     "KOSPI"), "302440.KS": ("SK바이오사이언스","KOSPI"),
+    "326030.KS": ("SK바이오팜",   "KOSPI"), "180640.KS": ("한진칼",          "KOSPI"),
+    "000880.KS": ("한화",         "KOSPI"), "009830.KS": ("한화솔루션",      "KOSPI"),
+    "003410.KS": ("쌍용C&E",      "KOSPI"), "138040.KS": ("메리츠금융지주",  "KOSPI"),
+    "005940.KS": ("NH투자증권",   "KOSPI"), "006800.KS": ("미래에셋증권",    "KOSPI"),
+    "016360.KS": ("삼성증권",     "KOSPI"), "030000.KS": ("제일기획",        "KOSPI"),
+    # KOSDAQ
+    "086520.KQ": ("에코프로",     "KOSDAQ"), "247540.KQ": ("에코프로비엠",   "KOSDAQ"),
+    "041510.KQ": ("SM",           "KOSDAQ"), "035900.KQ": ("JYP Ent.",       "KOSDAQ"),
+    "122870.KQ": ("와이지엔터",   "KOSDAQ"), "263750.KQ": ("펄어비스",       "KOSDAQ"),
+    "112040.KQ": ("위메이드",     "KOSDAQ"), "357780.KQ": ("솔브레인",       "KOSDAQ"),
+    "066970.KQ": ("L&F",          "KOSDAQ"), "196170.KQ": ("알테오젠",       "KOSDAQ"),
+    "039030.KQ": ("이오테크닉스", "KOSDAQ"), "078340.KQ": ("컴투스",         "KOSDAQ"),
+    "950130.KQ": ("엑스페릭스",   "KOSDAQ"), "403870.KQ": ("HPSP",           "KOSDAQ"),
+    "036540.KQ": ("SFA반도체",    "KOSDAQ"), "000250.KQ": ("삼천당제약",     "KOSDAQ"),
+    "054040.KQ": ("한국컴퓨터",   "KOSDAQ"), "058470.KQ": ("리노공업",       "KOSDAQ"),
+    "237690.KQ": ("에스티팜",     "KOSDAQ"), "214150.KQ": ("클래시스",       "KOSDAQ"),
+    "039200.KQ": ("오스코텍",     "KOSDAQ"), "145020.KQ": ("휴젤",           "KOSDAQ"),
+    "031860.KQ": ("엔씨엔",       "KOSDAQ"), "067160.KQ": ("아프리카TV",     "KOSDAQ"),
+    "060310.KQ": ("3S",           "KOSDAQ"), "101490.KQ": ("에스앤에스텍",   "KOSDAQ"),
+    "028300.KQ": ("HLB",          "KOSDAQ"), "091990.KQ": ("셀트리온헬스케어","KOSDAQ"),
+    "108380.KQ": ("이노에너지",   "KOSDAQ"), "950160.KQ": ("코오롱티슈진",   "KOSDAQ"),
+    "064760.KQ": ("티씨케이",     "KOSDAQ"), "240810.KQ": ("원익IPS",        "KOSDAQ"),
+    "036930.KQ": ("주성엔지니어링","KOSDAQ"), "131970.KQ": ("두산테스나",     "KOSDAQ"),
+    "058650.KQ": ("세경하이테크", "KOSDAQ"), "285130.KQ": ("SK바이오팜",     "KOSDAQ"),
+    "178930.KQ": ("에이프로",     "KOSDAQ"), "336570.KQ": ("원익머트리얼즈", "KOSDAQ"),
+    "131290.KQ": ("코스모로보틱스","KOSDAQ"), "064290.KQ": ("인텍플러스",     "KOSDAQ"),
+    "140860.KQ": ("파크시스템스", "KOSDAQ"), "039290.KQ": ("태경케미컬",     "KOSDAQ"),
+}
 
-    date_str = _trading_date()
-    log.info("국내 시세 수집 중 (%s)...", date_str)
+
+def get_domestic_top(n: int = 30, min_vol_krw: float = 10_000_000_000) -> pd.DataFrame:
+    """yfinance로 주요 KOSPI + KOSDAQ 종목 시세 조회 후 거래대금·상승률 필터."""
+    import yfinance as yf
+
+    log.info("국내 시세 수집 중 (yfinance)...")
+    tickers = list(_KR_TICKERS.keys())
+
+    try:
+        raw = yf.download(
+            tickers,
+            period="2d",
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+            threads=True,
+        )
+    except Exception as e:
+        log.error("yfinance 국내 다운로드 실패: %s", e)
+        return pd.DataFrame()
+
+    try:
+        if isinstance(raw.columns, pd.MultiIndex):
+            close  = raw["Close"]
+            volume = raw["Volume"]
+        else:
+            close  = raw[["Close"]]
+            volume = raw[["Volume"]]
+    except KeyError:
+        close  = raw.xs("Close",  axis=1, level=0)
+        volume = raw.xs("Volume", axis=1, level=0)
+
+    if len(close) < 2:
+        log.error("국내: 시세 행 부족 (%d행)", len(close))
+        return pd.DataFrame()
+
+    pct        = close.pct_change().iloc[-1] * 100
+    last_close = close.iloc[-1]
+    last_vol   = volume.iloc[-1]
+    vol_krw    = last_close * last_vol  # 주가(KRW) × 거래량 = 거래대금
 
     rows = []
-    for market in ("KOSPI", "KOSDAQ"):
-        try:
-            df = stock.get_market_ohlcv_by_ticker(date_str, market=market)
-            if df is None or df.empty:
-                log.warning("%s: 빈 응답", market)
-                continue
-
-            rename = {}
-            for col in df.columns:
-                c = str(col)
-                if "종가" in c:
-                    rename[col] = "종가"
-                elif "등락" in c:
-                    rename[col] = "등락률"
-                elif "거래대금" in c:
-                    rename[col] = "거래대금"
-            df = df.rename(columns=rename)
-
-            missing = [c for c in ["종가", "등락률", "거래대금"] if c not in df.columns]
-            if missing:
-                log.warning("%s: 컬럼 누락 %s", market, missing)
-                continue
-
-            df = df[["종가", "등락률", "거래대금"]].copy()
-            df["시장"] = market
-            df.index.name = "티커"
-            df.reset_index(inplace=True)
-
-            names = {t: stock.get_market_ticker_name(t) for t in df["티커"]}
-            df["종목명"] = df["티커"].map(names)
-            rows.append(df)
-            log.info("%s: %d개 종목 수집", market, len(df))
-
-        except Exception as e:
-            log.warning("%s 수집 실패: %s", market, e)
+    for t in tickers:
+        if t not in pct.index:
+            continue
+        name, market = _KR_TICKERS[t]
+        rows.append({
+            "티커":    t,
+            "종목명":  name,
+            "시장":    market,
+            "등락률":  pct.get(t, float("nan")),
+            "종가":    last_close.get(t, float("nan")),
+            "거래대금": vol_krw.get(t, 0.0),
+        })
 
     if not rows:
         log.error("국내 데이터 수집 실패")
         return pd.DataFrame()
 
-    all_df = pd.concat(rows, ignore_index=True)
-    all_df = all_df[all_df["거래대금"] >= min_vol_krw]
-    all_df = all_df[all_df["등락률"] > 0]
-    all_df = all_df.sort_values("등락률", ascending=False).head(n).reset_index(drop=True)
-    all_df["순위"] = all_df.index + 1
+    df = pd.DataFrame(rows).dropna(subset=["등락률", "종가"])
+    df = df[df["거래대금"] >= min_vol_krw]
+    df = df[df["등락률"] > 0]
+    df = df.sort_values("등락률", ascending=False).head(n).reset_index(drop=True)
+    df["순위"] = df.index + 1
     log.info("국내 상위 %d개 추출 완료", len(all_df))
     return all_df
 

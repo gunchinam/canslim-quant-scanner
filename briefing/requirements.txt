@@ -1,4 +1,3 @@
-pykrx
 yfinance
 pandas
 requests

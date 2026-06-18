@@ -1,0 +1,6 @@
+pykrx
+yfinance
+pandas
+requests
+groq
+APScheduler

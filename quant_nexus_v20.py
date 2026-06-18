@@ -5305,6 +5305,19 @@ class QuantNexusApp:
                 fixed_name = self._resolve_display_name(ticker, cached.get("Name", ""))
                 if fixed_name and cached.get("Name") != fixed_name:
                     cached["Name"] = fixed_name
+                # 캐시 히트 시 DayChg 실시간 갱신 (장중 등락 역전 방지)
+                # fast_info는 yfinance의 경량 API라 rate-limit 부담이 낮음
+                try:
+                    if _YF_COOLDOWN["until"] <= time.time():
+                        _fi = yf.Ticker(ticker).fast_info
+                        _rt = getattr(_fi, "last_price", None)
+                        _pc = getattr(_fi, "previous_close", None)
+                        if _rt and _pc and _pc > 0:
+                            _live_chg = (_rt - _pc) / _pc
+                            cached["DayChg"] = _live_chg
+                            cached["_DayChgPct"] = _live_chg * 100
+                except Exception:
+                    pass
                 return cached
             with self._stats_lock:
                 self.stats["cache_misses"] += 1
@@ -10031,6 +10044,16 @@ class QuantNexusApp:
     # US_NAMES — 미국 종목 한글명 (yfinance 영문명 대신 표시)
     # ─────────────────────────────────────────────────────────────────────
     US_NAMES: dict[str, str] = {
+        # 지수 밖 신규 상장·인기 종목 보강 (2026-06)
+        "QNT": "퀀티넘",
+        "FIG": "피그마",
+        "BLSH": "불리시",
+        "SBET": "샤프링크",
+        "DEFT": "디파이 테크놀로지스",
+        "SPIR": "스파이어 글로벌",
+        "NXE": "넥스젠 에너지",
+        "OMDA": "오마다 헬스",
+        "LINE": "리니지 (콜드체인 리츠)",
         "AA": "알코아",
         "AAL": "아메리칸 항공",
         "AAPL": "애플",
@@ -11636,6 +11659,16 @@ class QuantNexusApp:
     # US_DESC — 미국 종목 한글 설명 (Name 컬럼 옆에 표시)
     # ─────────────────────────────────────────────────────────────────────
     US_DESC: dict[str, str] = {
+        # 지수 밖 신규 상장·인기 종목 보강 (2026-06)
+        "QNT":  "양자컴퓨터 · 하니웰 스핀오프",
+        "FIG":  "협업 UI/UX 디자인 SaaS",
+        "BLSH": "기관용 암호화폐 거래소",
+        "SBET": "이더리움(ETH) 트레저리",
+        "DEFT": "DeFi 디지털자산 운용",
+        "SPIR": "위성 우주 데이터",
+        "NXE":  "우라늄 광산 개발",
+        "OMDA": "만성질환 디지털 헬스케어",
+        "LINE": "콜드체인 물류 리츠",
         # 공급망 병목(화합물반도체 기판·에피·레이저) — CPO/광 I-O 상류 희소층
         "AXTI": "InP·GaAs 화합물반도체 기판(substrate) · CPO 광통신 핵심소재",
         "SIVEF": "Sivers 반도체 · CW/DFB 머천트 레이저 광원 · CPO",
@@ -13340,7 +13373,7 @@ class QuantNexusApp:
                                       "S","SAIL","TENB","VRNS","ZS"],
                 "SaaS & Software":      ["ADBE","ADSK","APP","APPF","BILL","BL","BSY","CDNS","CRM","CTSH","CWAN","DOCU","DUOL",
                                       "EPAM","FFIV","FRSH","GLOB","GTLB","HUBS","JKHY","LPSN",
-                                      "MANH","MGNI","MNDY","NOW","PCOR","PCTY","PTC","RAMP",
+                                      "FIG","MANH","MGNI","MNDY","NOW","PCOR","PCTY","PTC","RAMP",
                                       "RNG","SHOP","SNPS","TRMB","TTD","TWLO","TYL","VEEV",
                                       "YEXT","ZBRA","ZM"]
             },
@@ -13357,13 +13390,13 @@ class QuantNexusApp:
                 "Memory & Packaging":   ["AMKR","CEVA","MU","NTAP","NVTS","PSTG","SIMO","SMCI","SNDK","STX","WDC"],
                 # 공급망 병목(상류 희소층) — 화합물반도체 기판·에피·머천트 레이저. CPO/광 I-O 슈퍼사이클 길목.
                 "Compound Semi & Substrates": ["AXTI","SIVEF","IQEPF"],
-                "Quantum Computing":    ["ARQQ","INFQ","IONQ","QBTS","QUBT","RGTI","XNDU"]
+                "Quantum Computing":    ["ARQQ","INFQ","IONQ","QBTS","QNT","QUBT","RGTI","XNDU"]
             },
 
             # ── 3. 핀테크 & 금융 ───────────────────────────────────────────────
             "💰 Finance & Fintech": {
-                "Crypto & Blockchain":  ["BITF","BMNR","BTBT","BTDR","CIFR","CLSK","COIN","CORZ","CRCL","HOOD","HUT","IREN","MARA",
-                                      "MSTR","RIOT","SOLS","WULF"],
+                "Crypto & Blockchain":  ["BITF","BLSH","BMNR","BTBT","BTDR","CIFR","CLSK","COIN","CORZ","CRCL","DEFT","GLXY","HOOD","HUT","IREN","MARA",
+                                      "MSTR","RIOT","SBET","SOLS","WULF"],
                 "Fintech & Payments":   ["AFRM","ALLY","AXP","BILL","COF","DLO","EVTC","FISV","FLUT","FLYW","FOUR","GDOT","GPN","IBKR",
                                       "IMXI","MA","MELI","MQ","NU","PAYO","PGY","PSFE","PYPL",
                                       "RELY","RPAY","SE","SOFI","SYF","TOST","UPST","V","XYZ"],
@@ -13391,7 +13424,7 @@ class QuantNexusApp:
                 "Aerospace & Defense":  ["ACHR","AIR","ASTS","AVAV","AXON","BA","BAH","BKSY","BWXT","CACI","CRS","CW","DCO","DRS",
                                       "ESLT","GD","GE","HAYW","HII","HWM","HXL","JOBY","KTOS",
                                       "LDOS","LHX","LMT","LPTH","LUNR","MOG-A","MRCY","NOC",
-                                      "PL","RDW","RKLB","RTX","SAIC","TDG","TXT","VSEC"],
+                                      "PL","RDW","RKLB","RTX","SAIC","SPIR","TDG","TXT","VSEC"],
                 "Power Grid & Infra":   ["ATKR","AYI","EME","ETN","FLUX","GEV","GNE","GNRC","HON","HUBB","NVT","POWL","PRIM",
                                       "PWR","SHLS","SPXC","TPC","VRT","WATT","XPEL"],
                 "Industrials":          ["AAON","ACA","AGCO","AIT","ALLE","ALSN","AME","AMRC","AOS","APG","ASGN","B","BCPC","BLD",
@@ -13420,7 +13453,7 @@ class QuantNexusApp:
                                       "WES","WMB"],
                 "Clean Energy":         ["ARRY","BE","CSIQ","DQ","ENPH","FCEL","FLNC","FSLR","GEV","JKS","MAXN","NEE","NXT",
                                       "PLUG","RUN","SEDG","SHLS","SPWR","STEM"],
-                "Nuclear & Uranium":    ["BWXT","CCJ","CEG","DNN","EU","GLATF","LEU","NNE","OKLO","SMR","TLN","UEC",
+                "Nuclear & Uranium":    ["BWXT","CCJ","CEG","DNN","EU","GLATF","LEU","NNE","NXE","OKLO","SMR","TLN","UEC",
                                       "UUUU","VST"],
                 "Utilities":            ["AEE","AEP","AES","ATO","AVA","AWK","BEP","BKH","CLNE","CMS","CNP","CWT","D","DTE","DUK","ED",
                                       "EIX","ES","ETR","EVRG","EXC","FE","HE","IDA","LNT","MDU",
@@ -13452,7 +13485,7 @@ class QuantNexusApp:
                                       "TMDX","TMO","TNDM","VCYT","WAT","WRBY","ZBH","ZTS"],
                 "Healthcare Services":  ["ACHC","AMN","AMWL","CCRN","CHE","CI","CNC","COR","CVS","DVA","ELV","ENSG","EVH","GDRX",
                                       "HCA","HIMS","HUM","INVA","IQV","MCK","MD","MDRX","MOH",
-                                      "OPCH","OSCR","PNTG","PRCT","SDGR","SGRY","SHC","TDOC",
+                                      "OMDA","OPCH","OSCR","PNTG","PRCT","SDGR","SGRY","SHC","TDOC",
                                       "THC","UHS","UNH","USPH"]
             },
 
@@ -13511,7 +13544,7 @@ class QuantNexusApp:
             # ── 10. 부동산 ───────────────────────────────────────────────────
             "🏠 Real Estate": {
                 "Data Center REITs":    ["AMT","CCI","DLR","EQIX","IRM","SBAC","UNIT"],
-                "Industrial REITs":     ["COLD","CUBE","EGP","EXR","FR","GTY","IIPR","LAND","LTC","NSA","PLD","PSA","REXR","SLG","STAG",
+                "Industrial REITs":     ["COLD","CUBE","EGP","EXR","FR","GTY","IIPR","LAND","LINE","LTC","NSA","PLD","PSA","REXR","SLG","STAG",
                                       "TRNO"],
                 "Residential REITs":    ["AMH","APLE","AVB","BRT","CPT","CSR","ELME","ELS","EQR","ESS","INVH","IRT","MAA","NHI","NXRT",
                                       "SUI","UDR"],

@@ -404,10 +404,32 @@ def summarize_with_groq(dom_df: pd.DataFrame, for_df: pd.DataFrame,
         return ""
 
 
+def _parse_explain_response(text: str) -> dict:
+    """compound-beta 응답 파싱 → {"headline": str, "bullets": [str]}"""
+    headline = ""
+    bullets  = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.upper().startswith("HEADLINE:"):
+            headline = line.split(":", 1)[1].strip().strip('"\'')
+        elif line.startswith("▷"):
+            bullets.append(line[1:].strip())
+        elif line.startswith("•") or line.startswith("-"):
+            bullets.append(line.lstrip("•- ").strip())
+    # HEADLINE 태그 없이 첫 줄이 제목인 경우 fallback
+    if not headline and text:
+        first = text.splitlines()[0].strip().strip('"\'')
+        if len(first) <= 40:
+            headline = first
+    return {"headline": headline, "bullets": bullets[:3]}
+
+
 def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict:
-    """compound-beta(실시간 웹 검색)로 종목별 오늘 상승 이유 한 줄 생성.
-    compound-beta 실패 시 llama-3.3-70b-versatile + news_map 배치 방식으로 fallback.
-    returns: {티커: 설명}"""
+    """compound-beta(실시간 웹 검색)로 종목별 이슈 헤드라인 + 상세 불렛 생성.
+    compound-beta 실패 시 llama-3.3-70b-versatile + news_map 배치 fallback.
+    returns: {티커: {"headline": str, "bullets": [str]}}"""
     if not stocks or not api_key:
         return {}
 
@@ -417,7 +439,7 @@ def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict
     client  = Groq(api_key=api_key)
     today_s = datetime.now(KST).strftime("%Y년 %m월 %d일")
 
-    def _explain_one(s: dict) -> tuple[str, str]:
+    def _explain_one(s: dict) -> tuple[str, dict]:
         ticker = s["티커"]
         name   = s["종목명"]
         rate   = s["등락률"]
@@ -425,48 +447,54 @@ def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict
 
         if market in ("KOSPI", "KOSDAQ"):
             prompt = (
-                f"오늘({today_s}) {name}({ticker}) 주가가 +{rate:.1f}% 급등했습니다. "
-                f"웹 검색으로 오늘 상승 원인을 찾아, "
-                f"핵심 이유를 20자 이내 한국어 한 줄로만 답하세요. "
-                f"다른 설명 없이 이유 텍스트만 출력하세요."
+                f"오늘({today_s}) {name}({ticker}) 주가가 +{rate:.1f}% 급등했습니다.\n"
+                f"웹 검색으로 오늘 상승 원인을 찾아 아래 형식으로 한국어로 답하세요.\n\n"
+                f"HEADLINE: [20자 이내 핵심 이슈 제목]\n"
+                f"▷ [상세 설명 1 — 구체적 공시·수치·배경 2~3문장]\n"
+                f"▷ [상세 설명 2 — 추가 배경 또는 전망 1~2문장]\n\n"
+                f"HEADLINE과 ▷ 항목만 출력하고 다른 내용은 쓰지 마세요."
             )
         else:
             prompt = (
-                f"Today({today_s}), {name}({ticker}) surged +{rate:.1f}%. "
-                f"Search the web for the reason, then answer in Korean "
-                f"within 20 characters. Output only the reason, nothing else."
+                f"Today({today_s}), {name}({ticker}) surged +{rate:.1f}%.\n"
+                f"Search the web and respond in Korean with this exact format:\n\n"
+                f"HEADLINE: [핵심 이슈 20자 이내]\n"
+                f"▷ [상세 설명 1 — 구체적 수치/뉴스 포함 2~3문장]\n"
+                f"▷ [상세 설명 2 — 추가 배경 1~2문장]\n\n"
+                f"Only output HEADLINE and ▷ lines."
             )
 
         try:
             resp = client.chat.completions.create(
                 model="compound-beta",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=80,
+                max_tokens=300,
                 temperature=0.3,
             )
-            reason = resp.choices[0].message.content.strip().strip('"\'').rstrip(".")
-            log.info("compound-beta [%s]: %s", ticker, reason)
-            return ticker, reason
+            text   = resp.choices[0].message.content.strip()
+            parsed = _parse_explain_response(text)
+            log.info("compound-beta [%s] headline: %s", ticker, parsed["headline"])
+            return ticker, parsed
         except Exception as e:
             log.warning("compound-beta 실패 [%s]: %s", ticker, e)
-            return ticker, ""
+            return ticker, {}
 
     # compound-beta 병렬 호출 (최대 5개 동시)
-    result: dict[str, str] = {}
+    result: dict[str, dict] = {}
     targets = stocks[:15]
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
         futs = {ex.submit(_explain_one, s): s for s in targets}
         for fut in concurrent.futures.as_completed(futs):
             try:
-                ticker, reason = fut.result()
-                if reason:
-                    result[ticker] = reason
+                ticker, parsed = fut.result()
+                if parsed.get("headline"):
+                    result[ticker] = parsed
             except Exception as e:
                 log.warning("explain future 실패: %s", e)
 
-    log.info("compound-beta 종목 설명 완료: %d/%d개", len(result), len(targets))
+    log.info("compound-beta 완료: %d/%d개", len(result), len(targets))
 
-    # compound-beta가 절반 이상 실패했으면 배치 fallback
+    # compound-beta가 절반 이상 실패 → 배치 fallback
     if len(result) < len(targets) // 2:
         log.info("compound-beta 결과 부족 → llama-3.3 배치 fallback")
         result = _explain_stocks_batch_fallback(stocks, client, news_map)
@@ -475,7 +503,8 @@ def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict
 
 
 def _explain_stocks_batch_fallback(stocks: list, client, news_map: dict) -> dict:
-    """llama-3.3-70b-versatile + news_map 힌트 배치 방식 (compound-beta fallback)."""
+    """llama-3.3-70b-versatile + news_map 힌트 배치 방식 (compound-beta fallback).
+    returns: {티커: {"headline": str, "bullets": [str]}}"""
     indexed = {str(i + 1): s for i, s in enumerate(stocks)}
     lines   = []
     for i, s in indexed.items():
@@ -484,18 +513,17 @@ def _explain_stocks_batch_fallback(stocks: list, client, news_map: dict) -> dict
         lines.append(f"{i}. {s['종목명']} ({s['시장']}) +{s['등락률']:.1f}%{hint}")
 
     prompt = (
-        "다음 급등 종목들의 오늘 상승 이유를 섹터·테마·재료 관점에서 "
-        "각각 20자 이내 한국어 한 줄로 작성하세요.\n"
-        "출력 형식: 번호. 이유\n예시:\n1. AI 반도체 수급 부족\n2. 신약 임상 3상 성공\n\n"
+        "다음 급등 종목들의 오늘 상승 이유를 각각 아래 형식으로 작성하세요.\n"
+        "형식:\n번호. HEADLINE: [20자 이내 제목] | ▷ [상세 설명 1] | ▷ [상세 설명 2]\n\n"
         + "\n".join(lines)
-        + "\n\n번호와 이유만 출력하세요."
+        + "\n\n위 형식대로만 출력하세요."
     )
 
     try:
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=600,
+            max_tokens=800,
             temperature=0.4,
         )
         text   = resp.choices[0].message.content.strip()
@@ -504,19 +532,31 @@ def _explain_stocks_batch_fallback(stocks: list, client, news_map: dict) -> dict
             line = line.strip()
             if not line or not line[0].isdigit():
                 continue
-            for sep in [". ", ") ", "."]:
+            # "1. HEADLINE: xxx | ▷ yyy | ▷ zzz"
+            for sep in [". ", ") "]:
                 if sep in line:
-                    num, reason = line.split(sep, 1)
+                    num, rest = line.split(sep, 1)
                     num = num.strip().rstrip(".")
-                    if num in indexed:
-                        result[indexed[num]["티커"]] = reason.strip()
+                    if num not in indexed:
+                        break
+                    parts   = [p.strip() for p in rest.split("|")]
+                    headline = ""
+                    bullets  = []
+                    for p in parts:
+                        if p.upper().startswith("HEADLINE:"):
+                            headline = p.split(":", 1)[1].strip()
+                        elif p.startswith("▷"):
+                            bullets.append(p[1:].strip())
+                    if not headline and parts:
+                        headline = parts[0].replace("HEADLINE:", "").strip()
+                    result[indexed[num]["티커"]] = {"headline": headline, "bullets": bullets}
                     break
         if not result:
             plain = [l.strip() for l in text.splitlines() if l.strip()]
             for i, s in enumerate(stocks):
                 if i < len(plain):
-                    result[s["티커"]] = plain[i]
-        log.info("배치 fallback 종목 설명: %d개", len(result))
+                    result[s["티커"]] = {"headline": plain[i], "bullets": []}
+        log.info("배치 fallback 완료: %d개", len(result))
         return result
     except Exception as e:
         log.warning("배치 fallback 실패: %s", e)
@@ -645,30 +685,34 @@ def build_telegram_message(dom_df, for_df, dom_news, for_news,
     lines += ["─" * 28, "", "<b>🏆 국내 TOP 3</b>", ""]
 
     for _, r in dom_df.head(3).iterrows():
-        nl  = dom_news.get(r["티커"], [])
-        ai  = ai_explanations.get(r["티커"], "")
-        reason = f"🤖 {ai}" if ai else ("📰 " + nl[0]["title"][:35] if nl else "이슈 확인 필요")
-        news_line = "📰 " + nl[0]["title"][:50] if nl and ai else ""
-        lines += [
-            f"▶ <b>{r['종목명']} ({r['티커']})</b> +{r['등락률']:.2f}%",
-            reason,
-            f"▷ {news_line}" if news_line else "",
-            "",
-        ]
+        ai = ai_explanations.get(r["티커"], {})
+        nl = dom_news.get(r["티커"], [])
+        lines.append(f"▶ <b>{r['종목명']} ({r['티커']})</b> +{r['등락률']:.2f}%")
+        if ai.get("headline"):
+            lines.append(f"<b>{ai['headline']}</b>")
+            for b in ai.get("bullets", [])[:2]:
+                lines.append(f"▷ {b}")
+        elif nl:
+            lines.append(f"📰 {nl[0]['title'][:50]}")
+        else:
+            lines.append("이슈 확인 필요")
+        lines.append("")
 
     lines += ["─" * 28, "", "<b>🌐 해외 TOP 3</b>", ""]
 
     for _, r in for_df.head(3).iterrows():
-        nl  = for_news.get(r["티커"], [])
-        ai  = ai_explanations.get(r["티커"], "")
-        reason = f"🤖 {ai}" if ai else ("📰 " + nl[0]["title"][:35] if nl else "이슈 확인 필요")
-        news_line = "📰 " + nl[0]["title"][:50] if nl and ai else ""
-        lines += [
-            f"▶ <b>{r['티커']} ({r['시장']})</b> +{r['등락률']:.2f}%",
-            reason,
-            f"▷ {news_line}" if news_line else "",
-            "",
-        ]
+        ai = ai_explanations.get(r["티커"], {})
+        nl = for_news.get(r["티커"], [])
+        lines.append(f"▶ <b>{r['티커']} ({r['시장']})</b> +{r['등락률']:.2f}%")
+        if ai.get("headline"):
+            lines.append(f"<b>{ai['headline']}</b>")
+            for b in ai.get("bullets", [])[:2]:
+                lines.append(f"▷ {b}")
+        elif nl:
+            lines.append(f"📰 {nl[0]['title'][:50]}")
+        else:
+            lines.append("이슈 확인 필요")
+        lines.append("")
 
     lines.append("─" * 28)
     top_dom = " · ".join(dom_df.head(3)["종목명"].tolist()) if not dom_df.empty else "-"
@@ -676,10 +720,11 @@ def build_telegram_message(dom_df, for_df, dom_news, for_news,
     lines.append(f"💡 <b>오늘의 테마:</b> {top_dom} / {top_for}")
 
     if not dom_df.empty:
-        r0  = dom_df.iloc[0]
-        n0  = dom_news.get(r0["티커"], [])
-        ai0 = ai_explanations.get(r0["티커"], "")
-        action = n0[0]["title"][:35] if n0 else (ai0 if ai0 else "뉴스 확인")
+        r0   = dom_df.iloc[0]
+        n0   = dom_news.get(r0["티커"], [])
+        ai0  = ai_explanations.get(r0["티커"], {})
+        action = (ai0.get("headline") or
+                  (n0[0]["title"][:35] if n0 else "뉴스 확인"))
         lines.append(f"📌 <b>주목 액션:</b> {r0['종목명']} — {action}")
 
     lines.append("─" * 28)

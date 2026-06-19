@@ -254,36 +254,43 @@ def get_foreign_top(n: int = 30, min_vol_usd: float = 50_000_000) -> pd.DataFram
 # ═══════════════════════════════════════════════════════════
 
 def fetch_domestic_news(ticker: str, name: str, count: int = 3) -> list:
-    """Google News RSS로 국내 종목 뉴스 수집 (KST 오늘자)"""
+    """Google News RSS로 국내 종목 뉴스 수집 (오늘 우선, 없으면 최근 기사)"""
     from xml.etree import ElementTree as ET
     from email.utils import parsedate_to_datetime
 
-    today_kst = datetime.now(KST).date()
+    today_kst     = datetime.now(KST).date()
+    yesterday_kst = today_kst - timedelta(days=1)
     query = quote(f"{name} 주가")
     url = (
         f"https://news.google.com/rss/search"
-        f"?q={query}+when:1d&hl=ko&gl=KR&ceid=KR:ko"
+        f"?q={query}+when:3d&hl=ko&gl=KR&ceid=KR:ko"
     )
     try:
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
         root  = ET.fromstring(resp.content)
         items = root.findall(".//item")
-        news  = []
-        for item in items[:count * 3]:
+
+        today_news, fallback_news = [], []
+        for item in items[:count * 5]:
             title = item.findtext("title", "").strip()
             link  = item.findtext("link",  "").strip()
             pub   = item.findtext("pubDate", "").strip()
+            if not title:
+                continue
             try:
                 pub_date = parsedate_to_datetime(pub).astimezone(KST).date()
-                if pub_date != today_kst:
-                    continue
+                if pub_date == today_kst:
+                    today_news.append({"title": title, "url": link})
+                elif pub_date == yesterday_kst:
+                    fallback_news.append({"title": title, "url": link})
+                else:
+                    fallback_news.append({"title": title, "url": link})
             except Exception:
-                pass
-            news.append({"title": title, "url": link})
-            if len(news) >= count:
-                break
-        return news
+                fallback_news.append({"title": title, "url": link})
+
+        result = today_news if today_news else fallback_news
+        return result[:count]
     except Exception as e:
         log.warning("국내 뉴스 실패 [%s]: %s", name, e)
         return []
@@ -317,29 +324,33 @@ def fetch_foreign_news(ticker: str, count: int = 3) -> list:
         log.warning("해외 뉴스 실패 [%s]: %s", ticker, e)
         return []
 
-    result = []
-    for item in raw_news[:count * 3]:
+    today_news, fallback_news = [], []
+    for item in raw_news[:count * 5]:
         content = item.get("content", {})
         title   = content.get("title", "") or item.get("title", "")
         url     = (content.get("canonicalUrl", {}).get("url", "")
                    or item.get("link", ""))
         pub_ts  = content.get("pubDate", "") or item.get("providerPublishTime", 0)
+        if not title:
+            continue
+
+        kor_title = _translate_ko(title)
+        entry = {"title": kor_title, "title_en": title, "url": url}
 
         try:
             if isinstance(pub_ts, (int, float)):
                 pub_date = datetime.fromtimestamp(pub_ts, tz=KST).date()
             else:
                 pub_date = datetime.fromisoformat(pub_ts).astimezone(KST).date()
-            if pub_date != today_kst:
-                continue
+            if pub_date == today_kst:
+                today_news.append(entry)
+            else:
+                fallback_news.append(entry)
         except Exception:
-            pass
+            fallback_news.append(entry)
 
-        kor_title = _translate_ko(title)
-        result.append({"title": kor_title, "title_en": title, "url": url})
-        if len(result) >= count:
-            break
-    return result
+    result = today_news if today_news else fallback_news
+    return result[:count]
 
 
 # ═══════════════════════════════════════════════════════════
@@ -391,6 +402,69 @@ def summarize_with_groq(dom_df: pd.DataFrame, for_df: pd.DataFrame,
     except Exception as e:
         log.warning("Groq 요약 실패: %s", e)
         return ""
+
+
+def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict:
+    """모든 종목에 대해 Groq AI로 오늘 상승 이유 한 줄 생성.
+    news_map: {티커: [{title, url}, ...]} — 뉴스가 있으면 컨텍스트로 활용
+    returns: {티커: 설명} — 실패 시 빈 dict"""
+    if not stocks or not api_key:
+        return {}
+
+    indexed = {str(i+1): s for i, s in enumerate(stocks)}
+    lines = []
+    for i, s in indexed.items():
+        news = news_map.get(s["티커"], [])
+        news_hint = f" | 뉴스: {news[0]['title'][:30]}" if news else ""
+        lines.append(f"{i}. {s['종목명']} ({s['시장']}) +{s['등락률']:.1f}%{news_hint}")
+
+    prompt = (
+        "다음은 오늘 급등한 주식 종목들입니다. "
+        "뉴스 힌트가 있으면 참고하고, 각 종목이 오늘 오른 핵심 이유를 "
+        "섹터·테마·재료·수급 관점에서 20자 이내 한국어로 작성하세요.\n"
+        "출력 형식 (반드시 이 형식): 번호. 이유\n"
+        "예시:\n1. AI 반도체 수급 부족 테마\n2. 신약 임상 3상 성공 발표\n\n"
+        + "\n".join(lines)
+        + "\n\n각 번호마다 한 줄씩, 번호와 이유만 출력하세요."
+    )
+
+    try:
+        from groq import Groq
+        client = Groq(api_key=api_key)
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=600,
+            temperature=0.4,
+        )
+        text = resp.choices[0].message.content.strip()
+        log.info("Groq 원문 응답:\n%s", text)
+
+        result = {}
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or not line[0].isdigit():
+                continue
+            for sep in [". ", ") ", "."]:
+                if sep in line:
+                    num, reason = line.split(sep, 1)
+                    num = num.strip().rstrip(".")
+                    if num in indexed:
+                        result[indexed[num]["티커"]] = reason.strip()
+                    break
+
+        # 파싱 실패 시 순서대로 매핑
+        if not result:
+            plain_lines = [l.strip() for l in text.splitlines() if l.strip()]
+            for i, s in enumerate(stocks):
+                if i < len(plain_lines):
+                    result[s["티커"]] = plain_lines[i]
+
+        log.info("Groq 종목 설명 생성: %d개", len(result))
+        return result
+    except Exception as e:
+        log.warning("Groq 종목 설명 실패: %s", e)
+        return {}
 
 
 # ═══════════════════════════════════════════════════════════
@@ -502,39 +576,41 @@ def send_telegram(message: str, max_retry: int = 3) -> bool:
 
 
 def build_telegram_message(dom_df, for_df, dom_news, for_news,
-                           today: str, groq_summary: str = "") -> str:
+                           today: str, groq_summary: str = "",
+                           ai_explanations: dict = {}) -> str:
     lines = [
         f"<b>📈 오늘의 강세주★ (KOSPI/KOSDAQ)</b>",
         f"{today} 장마감 기준 · 거래대금 100억↑",
     ]
 
-    # Groq AI 요약 (있을 때만 표시)
     if groq_summary:
         lines += ["─" * 28, f"🤖 <b>AI 시황:</b> {groq_summary}"]
 
     lines += ["─" * 28, "", "<b>🏆 국내 TOP 3</b>", ""]
 
     for _, r in dom_df.head(3).iterrows():
-        nl = dom_news.get(r["티커"], [])
-        issue  = nl[0]["title"][:25] if nl else "이슈 확인 필요"
-        detail = nl[1]["title"][:55] if len(nl) > 1 else (nl[0]["title"][:55] if nl else "")
+        nl  = dom_news.get(r["티커"], [])
+        ai  = ai_explanations.get(r["티커"], "")
+        reason = f"🤖 {ai}" if ai else ("📰 " + nl[0]["title"][:35] if nl else "이슈 확인 필요")
+        news_line = "📰 " + nl[0]["title"][:50] if nl and ai else ""
         lines += [
             f"▶ <b>{r['종목명']} ({r['티커']})</b> +{r['등락률']:.2f}%",
-            issue,
-            f"▷ {detail}" if detail else "",
+            reason,
+            f"▷ {news_line}" if news_line else "",
             "",
         ]
 
     lines += ["─" * 28, "", "<b>🌐 해외 TOP 3</b>", ""]
 
     for _, r in for_df.head(3).iterrows():
-        nl = for_news.get(r["티커"], [])
-        issue  = nl[0]["title"][:25] if nl else "이슈 확인 필요"
-        detail = nl[1]["title"][:55] if len(nl) > 1 else (nl[0]["title"][:55] if nl else "")
+        nl  = for_news.get(r["티커"], [])
+        ai  = ai_explanations.get(r["티커"], "")
+        reason = f"🤖 {ai}" if ai else ("📰 " + nl[0]["title"][:35] if nl else "이슈 확인 필요")
+        news_line = "📰 " + nl[0]["title"][:50] if nl and ai else ""
         lines += [
             f"▶ <b>{r['티커']} ({r['시장']})</b> +{r['등락률']:.2f}%",
-            issue,
-            f"▷ {detail}" if detail else "",
+            reason,
+            f"▷ {news_line}" if news_line else "",
             "",
         ]
 
@@ -544,9 +620,10 @@ def build_telegram_message(dom_df, for_df, dom_news, for_news,
     lines.append(f"💡 <b>오늘의 테마:</b> {top_dom} / {top_for}")
 
     if not dom_df.empty:
-        r0 = dom_df.iloc[0]
-        n0 = dom_news.get(r0["티커"], [])
-        action = n0[0]["title"][:35] if n0 else "뉴스 확인"
+        r0  = dom_df.iloc[0]
+        n0  = dom_news.get(r0["티커"], [])
+        ai0 = ai_explanations.get(r0["티커"], "")
+        action = n0[0]["title"][:35] if n0 else (ai0 if ai0 else "뉴스 확인")
         lines.append(f"📌 <b>주목 액션:</b> {r0['종목명']} — {action}")
 
     lines.append("─" * 28)
@@ -584,8 +661,19 @@ def run_briefing():
         for_news[r["티커"]] = fetch_foreign_news(r["티커"])
         time.sleep(0.2)
 
-    # 2.5단계: Groq AI 요약
+    # 2.5단계: Groq AI — 시황 요약 + 전체 종목 상승 이유 생성
+    api_key = os.environ.get("GROQ_API_KEY", "")
     groq_summary = summarize_with_groq(dom_df, for_df, dom_news, for_news)
+
+    all_stocks = [
+        {"종목명": r["종목명"], "티커": r["티커"], "등락률": r["등락률"], "시장": r["시장"]}
+        for _, r in dom_df.head(10).iterrows()
+    ] + [
+        {"종목명": r["티커"], "티커": r["티커"], "등락률": r["등락률"], "시장": r["시장"]}
+        for _, r in for_df.head(5).iterrows()
+    ]
+    combined_news = {**dom_news, **for_news}
+    ai_explanations = groq_explain_stocks(all_stocks, api_key, news_map=combined_news)
 
     # 3단계
     md = build_markdown(dom_df, for_df, dom_news, for_news, today)
@@ -597,7 +685,8 @@ def run_briefing():
 
     # 4단계
     msg = build_telegram_message(dom_df, for_df, dom_news, for_news,
-                                  today, groq_summary=groq_summary)
+                                  today, groq_summary=groq_summary,
+                                  ai_explanations=ai_explanations)
     ok  = send_telegram(msg)
     log.info("텔레그램 발송 %s", "완료 ✅" if ok else "실패 ❌")
     log.info("=" * 50)

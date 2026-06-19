@@ -576,7 +576,7 @@ def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict
 
     # compound-beta 병렬 호출 (최대 5개 동시)
     result: dict[str, dict] = {}
-    targets = stocks[:15]
+    targets = stocks
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
         futs = {ex.submit(_explain_one, s): s for s in targets}
         for fut in concurrent.futures.as_completed(futs):
@@ -783,9 +783,9 @@ def build_telegram_message(dom_df, for_df, dom_news, for_news,
     if groq_summary:
         lines += ["─" * 28, f"🤖 <b>AI 시황:</b> {groq_summary}"]
 
-    lines += ["─" * 28, "", "<b>🏆 국내 TOP 3</b>", ""]
+    lines += ["─" * 28, "", "<b>🏆 국내 TOP 30</b>", ""]
 
-    for _, r in dom_df.head(3).iterrows():
+    for _, r in dom_df.iterrows():
         ai = ai_explanations.get(r["티커"], {})
         nl = dom_news.get(r["티커"], [])
         lines.append(f"▶ <b>{r['종목명']} ({r['티커']})</b> +{r['등락률']:.2f}%")
@@ -799,9 +799,9 @@ def build_telegram_message(dom_df, for_df, dom_news, for_news,
             lines.append("이슈 확인 필요")
         lines.append("")
 
-    lines += ["─" * 28, "", "<b>🌐 해외 TOP 3</b>", ""]
+    lines += ["─" * 28, "", "<b>🌐 해외 TOP 30</b>", ""]
 
-    for _, r in for_df.head(3).iterrows():
+    for _, r in for_df.iterrows():
         ai = ai_explanations.get(r["티커"], {})
         nl = for_news.get(r["티커"], [])
         lines.append(f"▶ <b>{r['티커']} ({r['시장']})</b> +{r['등락률']:.2f}%")
@@ -816,8 +816,8 @@ def build_telegram_message(dom_df, for_df, dom_news, for_news,
         lines.append("")
 
     lines.append("─" * 28)
-    top_dom = " · ".join(dom_df.head(3)["종목명"].tolist()) if not dom_df.empty else "-"
-    top_for = " · ".join(for_df.head(3)["티커"].tolist())  if not for_df.empty else "-"
+    top_dom = " · ".join(dom_df.head(5)["종목명"].tolist()) if not dom_df.empty else "-"
+    top_for = " · ".join(for_df.head(5)["티커"].tolist())  if not for_df.empty else "-"
     lines.append(f"💡 <b>오늘의 테마:</b> {top_dom} / {top_for}")
 
     if not dom_df.empty:
@@ -863,14 +863,14 @@ def run_briefing():
         for_news[r["티커"]] = fetch_foreign_news(r["티커"])
         time.sleep(0.2)
 
-    # 2.7단계: DART 공시 수집 (국내 TOP 10)
+    # 2.7단계: DART 공시 수집 (국내 전체)
     dart_map = {}
     if not dom_df.empty:
         dart_api_key = os.environ.get("DART_API_KEY", "")
         if dart_api_key:
             log.info("DART 공시 수집 중...")
             today_compact = now_kst.strftime("%Y%m%d")
-            for _, r in dom_df.head(10).iterrows():
+            for _, r in dom_df.iterrows():
                 disclosures = fetch_dart_disclosures(r["종목명"], today_compact, dart_api_key)
                 if disclosures:
                     dart_map[r["티커"] + "_dart"] = disclosures
@@ -884,10 +884,10 @@ def run_briefing():
 
     all_stocks = [
         {"종목명": r["종목명"], "티커": r["티커"], "등락률": r["등락률"], "시장": r["시장"]}
-        for _, r in dom_df.head(10).iterrows()
+        for _, r in dom_df.iterrows()
     ] + [
         {"종목명": r["티커"], "티커": r["티커"], "등락률": r["등락률"], "시장": r["시장"]}
-        for _, r in for_df.head(5).iterrows()
+        for _, r in for_df.iterrows()
     ]
     combined_news = {**dom_news, **for_news, **dart_map}
     ai_explanations = groq_explain_stocks(all_stocks, api_key, news_map=combined_news)

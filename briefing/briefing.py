@@ -423,6 +423,11 @@ def _parse_explain_response(text: str) -> dict:
         first = text.splitlines()[0].strip().strip('"\'')
         if len(first) <= 40:
             headline = first
+    # "종목명: ..." 형태로 종목명이 앞에 붙은 경우 제거
+    if headline and ":" in headline:
+        parts = headline.split(":", 1)
+        if len(parts[0].strip()) <= 12:
+            headline = parts[1].strip()
     return {"headline": headline, "bullets": bullets[:3]}
 
 
@@ -448,20 +453,26 @@ def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict
         if market in ("KOSPI", "KOSDAQ"):
             prompt = (
                 f"오늘({today_s}) {name}({ticker}) 주가가 +{rate:.1f}% 급등했습니다.\n"
-                f"웹 검색으로 오늘 상승 원인을 찾아 아래 형식으로 한국어로 답하세요.\n\n"
-                f"HEADLINE: [20자 이내 핵심 이슈 제목]\n"
-                f"▷ [상세 설명 1 — 구체적 공시·수치·배경 2~3문장]\n"
-                f"▷ [상세 설명 2 — 추가 배경 또는 전망 1~2문장]\n\n"
-                f"HEADLINE과 ▷ 항목만 출력하고 다른 내용은 쓰지 마세요."
+                f"'{name} 급등', '{name} {today_s}', '{name} 공시', '{name} 뉴스'로 웹 검색하여 "
+                f"오늘의 실제 급등 재료를 찾으세요.\n\n"
+                f"반드시 아래 형식으로 답하세요:\n"
+                f"HEADLINE: [종목명 없이, 구체적 재료·이슈 20자 이내]\n"
+                f"▷ [실제 공시·뉴스 내용 — 기관명·수치·날짜 포함 2~3문장]\n"
+                f"▷ [추가 배경 또는 시장 반응 1~2문장]\n\n"
+                f"주의: '섹터 상승', '산업 호조', '증권가 분석' 같은 추상적 표현 금지. "
+                f"검색으로 찾은 구체적 사실만 작성. HEADLINE과 ▷만 출력."
             )
         else:
             prompt = (
                 f"Today({today_s}), {name}({ticker}) surged +{rate:.1f}%.\n"
-                f"Search the web and respond in Korean with this exact format:\n\n"
-                f"HEADLINE: [핵심 이슈 20자 이내]\n"
-                f"▷ [상세 설명 1 — 구체적 수치/뉴스 포함 2~3문장]\n"
-                f"▷ [상세 설명 2 — 추가 배경 1~2문장]\n\n"
-                f"Only output HEADLINE and ▷ lines."
+                f"Search the web for '{ticker} stock surge {today_s}', '{ticker} news today', "
+                f"'{ticker} earnings announcement' to find the actual catalyst.\n\n"
+                f"Respond in Korean with this exact format:\n"
+                f"HEADLINE: [specific catalyst, no ticker name, within 20 chars]\n"
+                f"▷ [actual news/announcement — include company names, figures, dates]\n"
+                f"▷ [additional context or market reaction]\n\n"
+                f"No generic phrases like '섹터 호조' or '산업 성장'. "
+                f"Only real facts from search results. Output HEADLINE and ▷ lines only."
             )
 
         try:

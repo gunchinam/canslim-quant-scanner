@@ -210,6 +210,45 @@ def _load_index_membership() -> dict[str, list[str]]:
         return rev
 
 
+# 지수보강 버킷 식별 마커 — _augment_index_universe 라벨에 모두 포함됨.
+_AUGMENT_MARKER = "지수보강"
+
+# yfinance 영문 GICS 섹터 → 한글. 지수보강 종목은 큐레이션 섹터가 없으므로
+# 분석이 채운 섹터를 표시하되, 영문이 새어나가지 않도록 정규화한다.
+# (quant_nexus_v20._nomura_sector_hint 의 _GICS_KR 과 동일 키)
+_GICS_KR_DISPLAY = {
+    "TECHNOLOGY": "기술", "COMMUNICATION SERVICES": "커뮤니케이션",
+    "CONSUMER CYCLICAL": "경기소비재", "CONSUMER DISCRETIONARY": "경기소비재",
+    "CONSUMER DEFENSIVE": "필수소비재", "CONSUMER STAPLES": "필수소비재",
+    "CONSUMER GOODS": "필수소비재", "FINANCIAL SERVICES": "금융",
+    "FINANCIAL": "금융", "FINANCIALS": "금융", "HEALTHCARE": "바이오",
+    "HEALTH CARE": "바이오", "INDUSTRIALS": "산업재", "INDUSTRIAL GOODS": "산업재",
+    "BASIC MATERIALS": "소재", "MATERIALS": "소재", "ENERGY": "에너지",
+    "UTILITIES": "유틸리티", "REAL ESTATE": "부동산", "CONGLOMERATES": "지주·복합",
+}
+
+
+def _is_augment_bucket(sector: str) -> bool:
+    """지수보강 버킷 라벨인지 판별 (🗂️ … (지수보강))."""
+    return _AUGMENT_MARKER in (sector or "")
+
+
+def _display_sector(row: dict, bucket: str) -> str:
+    """결과 행에 표시할 섹터를 결정한다.
+
+    큐레이션 섹터 버킷이면 버킷 라벨로 고정(영문 yfinance 섹터 누출 방지).
+    지수보강 버킷이면 가짜 '지수보강' 라벨 대신 분석이 산출한 진짜 섹터를
+    쓰되, 영문 GICS 면 한글로 정규화한다. (지수 편입 정보는 Indices 필드로
+    별도 표시되므로 손실 없음.)
+    """
+    if not _is_augment_bucket(bucket):
+        return bucket
+    real = (row.get("Sector") or "").strip()
+    if not real:
+        return ""
+    return _GICS_KR_DISPLAY.get(real.upper(), real)
+
+
 def _attach_midcap_alpha(rows: list[dict]) -> None:
     """SP400 편입 종목에 미드캡 알파 시그널을 부착한다.
 
@@ -606,10 +645,18 @@ class ScanAdapter:
                 strategy_key = f"{ticker}__{self._scan_strategy}__{_date}"
                 cached = self.cache.get(strategy_key, max_age_minutes=60 * 24 * (_days_back + 1))
                 if cached:
+                    if self._market == "US":
+                        _us_nm = getattr(_qn.QuantNexusApp, "US_NAMES", {}).get(ticker)
+                        if _us_nm and cached.get("Name") != _us_nm:
+                            cached["Name"] = _us_nm
                     return apply_to_row(cached)
             if cache_only:
                 return None
         result = _qn.QuantNexusApp._analyze_ticker(self, ticker)
+        if result and self._market == "US":
+            _us_nm = getattr(_qn.QuantNexusApp, "US_NAMES", {}).get(ticker)
+            if _us_nm and result.get("Name") != _us_nm:
+                result["Name"] = _us_nm
         return apply_to_row(result) if result else result
 
     def scan_sector(self, sector: str, *, max_workers: int = int(os.environ.get("SCAN_WORKERS", "8")), prefer_cache: bool = False, cache_only: bool = False) -> list[dict]:
@@ -626,7 +673,7 @@ class ScanAdapter:
                 try:
                     r = fut.result()
                     if r:
-                        r["Sector"] = sector
+                        r["Sector"] = _display_sector(r, sector)
                         results.append(r)
                 except Exception as e:
                     logging.error("scan_sector error: %s", e)
@@ -665,7 +712,8 @@ class ScanAdapter:
                         # 표시 섹터는 큐레이션된 내부 분류로 고정.
                         # (_analyze_ticker가 노무라용으로 채운 yfinance
                         #  영문 섹터가 새어나오지 않도록 scan_sector와 동일하게 덮어쓴다)
-                        r["Sector"] = sector
+                        # 단, 지수보강 버킷은 가짜 라벨 대신 진짜 섹터를 표시.
+                        r["Sector"] = _display_sector(r, sector)
                         results.append(r)
                 except Exception as e:
                     logging.error("scan_all [%s] error: %s", ticker, e)

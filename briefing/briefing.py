@@ -405,41 +405,100 @@ def summarize_with_groq(dom_df: pd.DataFrame, for_df: pd.DataFrame,
 
 
 def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict:
-    """모든 종목에 대해 Groq AI로 오늘 상승 이유 한 줄 생성.
-    news_map: {티커: [{title, url}, ...]} — 뉴스가 있으면 컨텍스트로 활용
-    returns: {티커: 설명} — 실패 시 빈 dict"""
+    """compound-beta(실시간 웹 검색)로 종목별 오늘 상승 이유 한 줄 생성.
+    compound-beta 실패 시 llama-3.3-70b-versatile + news_map 배치 방식으로 fallback.
+    returns: {티커: 설명}"""
     if not stocks or not api_key:
         return {}
 
-    indexed = {str(i+1): s for i, s in enumerate(stocks)}
-    lines = []
+    from groq import Groq
+    import concurrent.futures
+
+    client  = Groq(api_key=api_key)
+    today_s = datetime.now(KST).strftime("%Y년 %m월 %d일")
+
+    def _explain_one(s: dict) -> tuple[str, str]:
+        ticker = s["티커"]
+        name   = s["종목명"]
+        rate   = s["등락률"]
+        market = s["시장"]
+
+        if market in ("KOSPI", "KOSDAQ"):
+            prompt = (
+                f"오늘({today_s}) {name}({ticker}) 주가가 +{rate:.1f}% 급등했습니다. "
+                f"웹 검색으로 오늘 상승 원인을 찾아, "
+                f"핵심 이유를 20자 이내 한국어 한 줄로만 답하세요. "
+                f"다른 설명 없이 이유 텍스트만 출력하세요."
+            )
+        else:
+            prompt = (
+                f"Today({today_s}), {name}({ticker}) surged +{rate:.1f}%. "
+                f"Search the web for the reason, then answer in Korean "
+                f"within 20 characters. Output only the reason, nothing else."
+            )
+
+        try:
+            resp = client.chat.completions.create(
+                model="compound-beta",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=80,
+                temperature=0.3,
+            )
+            reason = resp.choices[0].message.content.strip().strip('"\'').rstrip(".")
+            log.info("compound-beta [%s]: %s", ticker, reason)
+            return ticker, reason
+        except Exception as e:
+            log.warning("compound-beta 실패 [%s]: %s", ticker, e)
+            return ticker, ""
+
+    # compound-beta 병렬 호출 (최대 5개 동시)
+    result: dict[str, str] = {}
+    targets = stocks[:15]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+        futs = {ex.submit(_explain_one, s): s for s in targets}
+        for fut in concurrent.futures.as_completed(futs):
+            try:
+                ticker, reason = fut.result()
+                if reason:
+                    result[ticker] = reason
+            except Exception as e:
+                log.warning("explain future 실패: %s", e)
+
+    log.info("compound-beta 종목 설명 완료: %d/%d개", len(result), len(targets))
+
+    # compound-beta가 절반 이상 실패했으면 배치 fallback
+    if len(result) < len(targets) // 2:
+        log.info("compound-beta 결과 부족 → llama-3.3 배치 fallback")
+        result = _explain_stocks_batch_fallback(stocks, client, news_map)
+
+    return result
+
+
+def _explain_stocks_batch_fallback(stocks: list, client, news_map: dict) -> dict:
+    """llama-3.3-70b-versatile + news_map 힌트 배치 방식 (compound-beta fallback)."""
+    indexed = {str(i + 1): s for i, s in enumerate(stocks)}
+    lines   = []
     for i, s in indexed.items():
         news = news_map.get(s["티커"], [])
-        news_hint = f" | 뉴스: {news[0]['title'][:30]}" if news else ""
-        lines.append(f"{i}. {s['종목명']} ({s['시장']}) +{s['등락률']:.1f}%{news_hint}")
+        hint = f" | 뉴스: {news[0]['title'][:30]}" if news else ""
+        lines.append(f"{i}. {s['종목명']} ({s['시장']}) +{s['등락률']:.1f}%{hint}")
 
     prompt = (
-        "다음은 오늘 급등한 주식 종목들입니다. "
-        "뉴스 힌트가 있으면 참고하고, 각 종목이 오늘 오른 핵심 이유를 "
-        "섹터·테마·재료·수급 관점에서 20자 이내 한국어로 작성하세요.\n"
-        "출력 형식 (반드시 이 형식): 번호. 이유\n"
-        "예시:\n1. AI 반도체 수급 부족 테마\n2. 신약 임상 3상 성공 발표\n\n"
+        "다음 급등 종목들의 오늘 상승 이유를 섹터·테마·재료 관점에서 "
+        "각각 20자 이내 한국어 한 줄로 작성하세요.\n"
+        "출력 형식: 번호. 이유\n예시:\n1. AI 반도체 수급 부족\n2. 신약 임상 3상 성공\n\n"
         + "\n".join(lines)
-        + "\n\n각 번호마다 한 줄씩, 번호와 이유만 출력하세요."
+        + "\n\n번호와 이유만 출력하세요."
     )
 
     try:
-        from groq import Groq
-        client = Groq(api_key=api_key)
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=600,
             temperature=0.4,
         )
-        text = resp.choices[0].message.content.strip()
-        log.info("Groq 원문 응답:\n%s", text)
-
+        text   = resp.choices[0].message.content.strip()
         result = {}
         for line in text.splitlines():
             line = line.strip()
@@ -452,18 +511,15 @@ def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict
                     if num in indexed:
                         result[indexed[num]["티커"]] = reason.strip()
                     break
-
-        # 파싱 실패 시 순서대로 매핑
         if not result:
-            plain_lines = [l.strip() for l in text.splitlines() if l.strip()]
+            plain = [l.strip() for l in text.splitlines() if l.strip()]
             for i, s in enumerate(stocks):
-                if i < len(plain_lines):
-                    result[s["티커"]] = plain_lines[i]
-
-        log.info("Groq 종목 설명 생성: %d개", len(result))
+                if i < len(plain):
+                    result[s["티커"]] = plain[i]
+        log.info("배치 fallback 종목 설명: %d개", len(result))
         return result
     except Exception as e:
-        log.warning("Groq 종목 설명 실패: %s", e)
+        log.warning("배치 fallback 실패: %s", e)
         return {}
 
 

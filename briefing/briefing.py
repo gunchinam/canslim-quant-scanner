@@ -354,6 +354,49 @@ def fetch_foreign_news(ticker: str, count: int = 3) -> list:
 
 
 # ═══════════════════════════════════════════════════════════
+# 2.7단계: DART 공시 수집
+# ═══════════════════════════════════════════════════════════
+
+def fetch_dart_disclosures(stock_name: str, date: str, api_key: str = "") -> list:
+    """DART OpenAPI로 종목 당일 공시 수집.
+    api_key 없으면 빈 리스트 반환 (graceful degradation).
+    date 형식: 'YYYYMMDD'
+    returns: [{"title": 공시제목, "date": 접수일자, "corp": 회사명}]"""
+    if not api_key:
+        return []
+
+    try:
+        resp = requests.get(
+            "https://opendart.fss.or.kr/api/list.json",
+            params={
+                "crtfc_key": api_key,
+                "corp_name": stock_name,
+                "bgn_de": date,
+                "end_de": date,
+                "page_count": 5,
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("status") != "000":
+            log.info("DART 공시 없음 [%s]: %s", stock_name, data.get("message", ""))
+            return []
+        result = []
+        for item in data.get("list", [])[:5]:
+            result.append({
+                "title": item.get("report_nm", "").strip(),
+                "date":  item.get("rcept_dt", "").strip(),
+                "corp":  item.get("corp_name", "").strip(),
+            })
+        log.info("DART 공시 [%s]: %d건", stock_name, len(result))
+        return result
+    except Exception as e:
+        log.warning("DART 공시 실패 [%s]: %s", stock_name, e)
+        return []
+
+
+# ═══════════════════════════════════════════════════════════
 # 2.5단계: Groq AI 시황 요약
 # ═══════════════════════════════════════════════════════════
 
@@ -451,28 +494,52 @@ def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict
         market = s["시장"]
 
         if market in ("KOSPI", "KOSDAQ"):
+            dart_hints = news_map.get(ticker + "_dart", [])
+            dart_context = ""
+            if dart_hints:
+                dart_context = (
+                    "\n\n[오늘 DART 공시 — 아래 사실을 우선 반영]\n"
+                    + "\n".join(f"- {d['title']}" for d in dart_hints[:3])
+                )
             prompt = (
-                f"오늘({today_s}) {name}({ticker}) 주가가 +{rate:.1f}% 급등했습니다.\n"
-                f"'{name} 급등', '{name} {today_s}', '{name} 공시', '{name} 뉴스'로 웹 검색하여 "
-                f"오늘의 실제 급등 재료를 찾으세요.\n\n"
-                f"반드시 아래 형식으로 답하세요:\n"
-                f"HEADLINE: [종목명 없이, 구체적 재료·이슈 20자 이내]\n"
-                f"▷ [실제 공시·뉴스 내용 — 기관명·수치·날짜 포함 2~3문장]\n"
-                f"▷ [추가 배경 또는 시장 반응 1~2문장]\n\n"
-                f"주의: '섹터 상승', '산업 호조', '증권가 분석' 같은 추상적 표현 금지. "
-                f"검색으로 찾은 구체적 사실만 작성. HEADLINE과 ▷만 출력."
+                f"오늘({today_s}) {name}({ticker}) 주가가 +{rate:.1f}% 급등했습니다."
+                f"{dart_context}\n\n"
+                f"[검색 전략]\n"
+                f"1) 공시 우선: '{name} 공시 {today_s}', '{name} DART'로 공시명·규모·날짜를 먼저 확보. "
+                f"위 DART 공시가 있으면 그 사실을 최우선 반영.\n"
+                f"2) 뉴스 보완: '{name} 급등 이유', '{name} {today_s}'로 재료 확인.\n"
+                f"3) 수급 확인: '{name} 외국인 기관 순매수', '{name} 거래량'으로 수급 방향 파악.\n\n"
+                f"[출력 형식 — 아래 그대로]\n"
+                f"HEADLINE: [핵심 재료 20자 이내, 종목명 제외, 가능하면 수치 포함]\n"
+                f"▷ [공시/재료] 구체적 공시명·규모·날짜 (예: 2026-06-19 CB 발행 200억원 결정)\n"
+                f"▷ [수급/시장] 외국인·기관 순매수 방향 또는 거래량 이상 여부 "
+                f"(예: 외국인 3거래일 순매수, 거래량 평소 5배)\n\n"
+                f"[절대 금지]\n"
+                f"- '업종 강세', '섹터 상승', '산업 호조', '증권가 전망' 등 추상 표현 금지\n"
+                f"- 검색결과에 없는 수치·날짜 추정 금지\n"
+                f"- 해당 항목을 확인 못 하면 그 ▷에 '확인 불가'라고만 작성\n"
+                f"HEADLINE과 ▷ 두 줄만 출력."
             )
         else:
             prompt = (
-                f"Today({today_s}), {name}({ticker}) surged +{rate:.1f}%.\n"
-                f"Search the web for '{ticker} stock surge {today_s}', '{ticker} news today', "
-                f"'{ticker} earnings announcement' to find the actual catalyst.\n\n"
-                f"Respond in Korean with this exact format:\n"
-                f"HEADLINE: [specific catalyst, no ticker name, within 20 chars]\n"
-                f"▷ [actual news/announcement — include company names, figures, dates]\n"
-                f"▷ [additional context or market reaction]\n\n"
-                f"No generic phrases like '섹터 호조' or '산업 성장'. "
-                f"Only real facts from search results. Output HEADLINE and ▷ lines only."
+                f"Today({today_s}), {name}({ticker}) surged +{rate:.1f}%.\n\n"
+                f"[Search strategy — prioritize hard catalysts]\n"
+                f"1) Earnings/guidance: '{ticker} earnings beat', '{ticker} guidance raise', "
+                f"'{ticker} EPS revenue {today_s}'\n"
+                f"2) Events: '{ticker} FDA approval', '{ticker} acquisition merger', "
+                f"'{ticker} contract deal', '{ticker} analyst upgrade'\n"
+                f"3) Confirm the actual catalyst from '{ticker} stock surge {today_s}'.\n\n"
+                f"[Output format — respond in Korean, exactly this]\n"
+                f"HEADLINE: [core event within 20 Korean chars, no ticker name, include figures]\n"
+                f"▷ [실적/공시] EPS·매출 실제 수치 vs 예상치 또는 가이던스 변경폭 "
+                f"(예: 1Q EPS $2.1 vs 예상 $1.7, 가이던스 15% 상향)\n"
+                f"▷ [catalyst] 구체적 이벤트명·날짜·기관 "
+                f"(예: 2026-06-18 FDA 신약 승인, 증권사 목표주가 상향)\n\n"
+                f"[Forbidden]\n"
+                f"- Generic phrases like '섹터 호조', '산업 성장', '시장 기대' — banned\n"
+                f"- Figures/dates not found in search results — do not guess\n"
+                f"- If an item cannot be confirmed, write only '확인 불가' on that ▷ line\n"
+                f"Output HEADLINE and ▷ lines only."
             )
 
         try:
@@ -524,10 +591,16 @@ def _explain_stocks_batch_fallback(stocks: list, client, news_map: dict) -> dict
         lines.append(f"{i}. {s['종목명']} ({s['시장']}) +{s['등락률']:.1f}%{hint}")
 
     prompt = (
-        "다음 급등 종목들의 오늘 상승 이유를 각각 아래 형식으로 작성하세요.\n"
-        "형식:\n번호. HEADLINE: [20자 이내 제목] | ▷ [상세 설명 1] | ▷ [상세 설명 2]\n\n"
+        "다음 급등 종목들의 오늘 상승 이유를 각각 아래 형식으로 한 줄씩 작성하세요.\n"
+        "형식(한 줄, | 로 구분):\n"
+        "번호. HEADLINE: [핵심 재료 20자 이내·수치 포함] | "
+        "▷ [공시/재료] 공시명·규모·날짜 | ▷ [수급/시장] 외국인·기관 순매수 또는 거래량 이상\n\n"
+        "[규칙]\n"
+        "- 제공된 '뉴스' 힌트가 있으면 그 사실을 우선 반영.\n"
+        "- '업종 강세', '섹터 상승', '산업 호조', '증권가 전망' 등 추상 표현 금지.\n"
+        "- 근거 없는 수치·날짜 추정 금지. 확인 안 되는 항목은 해당 ▷에 '확인 불가'.\n\n"
         + "\n".join(lines)
-        + "\n\n위 형식대로만 출력하세요."
+        + "\n\n위 한 줄 형식 그대로만 출력하세요."
     )
 
     try:
@@ -773,6 +846,21 @@ def run_briefing():
         for_news[r["티커"]] = fetch_foreign_news(r["티커"])
         time.sleep(0.2)
 
+    # 2.7단계: DART 공시 수집 (국내 TOP 10)
+    dart_map = {}
+    if not dom_df.empty:
+        dart_api_key = os.environ.get("DART_API_KEY", "")
+        if dart_api_key:
+            log.info("DART 공시 수집 중...")
+            today_compact = now_kst.strftime("%Y%m%d")
+            for _, r in dom_df.head(10).iterrows():
+                disclosures = fetch_dart_disclosures(r["종목명"], today_compact, dart_api_key)
+                if disclosures:
+                    dart_map[r["티커"] + "_dart"] = disclosures
+                time.sleep(0.2)
+        else:
+            log.info("DART_API_KEY 없음 — 공시 수집 건너뜀")
+
     # 2.5단계: Groq AI — 시황 요약 + 전체 종목 상승 이유 생성
     api_key = os.environ.get("GROQ_API_KEY", "")
     groq_summary = summarize_with_groq(dom_df, for_df, dom_news, for_news)
@@ -784,7 +872,7 @@ def run_briefing():
         {"종목명": r["티커"], "티커": r["티커"], "등락률": r["등락률"], "시장": r["시장"]}
         for _, r in for_df.head(5).iterrows()
     ]
-    combined_news = {**dom_news, **for_news}
+    combined_news = {**dom_news, **for_news, **dart_map}
     ai_explanations = groq_explain_stocks(all_stocks, api_key, news_map=combined_news)
 
     # 3단계

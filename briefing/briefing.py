@@ -488,20 +488,21 @@ def _parse_explain_response(text: str) -> dict:
     return {"headline": headline, "bullets": bullets[:3]}
 
 
-def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict:
-    """compound-beta(실시간 웹 검색)로 종목별 이슈 헤드라인 + 상세 불렛 생성.
-    compound-beta 실패 시 llama-3.3-70b-versatile + news_map 배치 fallback.
+def explain_stocks(stocks: list, perplexity_key: str = "", groq_key: str = "",
+                   news_map: dict = {}) -> dict:
+    """Perplexity sonar-pro(실시간 웹 검색)로 종목별 이슈 헤드라인 + 상세 불렛 생성.
+    Perplexity 키 없으면 Groq compound-beta → llama-3.3 배치 순으로 fallback.
     returns: {티커: {"headline": str, "bullets": [str]}}"""
-    if not stocks or not api_key:
+    if not stocks:
+        return {}
+    if not perplexity_key and not groq_key:
         return {}
 
-    from groq import Groq
     import concurrent.futures
 
-    client  = Groq(api_key=api_key)
     today_s = datetime.now(KST).strftime("%Y년 %m월 %d일")
 
-    def _explain_one(s: dict) -> tuple[str, dict]:
+    def _build_prompt(s: dict) -> str:
         ticker = s["티커"]
         name   = s["종목명"]
         rate   = s["등락률"]
@@ -515,70 +516,88 @@ def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict
                     "\n\n[오늘 DART 공시 — 아래 사실을 우선 반영]\n"
                     + "\n".join(f"- {d['title']}" for d in dart_hints[:3])
                 )
-            prompt = (
+            return (
                 f"오늘({today_s}) {name}({ticker}) 주가가 +{rate:.1f}% 급등했습니다."
                 f"{dart_context}\n\n"
-                f"[검색 전략]\n"
-                f"1) 공시 우선: '{name} 공시 {today_s}', '{name} DART'로 공시명·규모·날짜를 먼저 확보. "
-                f"위 DART 공시가 있으면 그 사실을 최우선 반영.\n"
-                f"2) 뉴스 보완: '{name} 급등 이유', '{name} {today_s}'로 재료 확인.\n"
-                f"3) 수급 확인: '{name} 외국인 기관 순매수', '{name} 거래량'으로 수급 방향 파악.\n\n"
-                f"[출력 형식 — 아래 그대로]\n"
-                f"HEADLINE: [핵심 재료 20자 이내, 종목명 제외, 가능하면 수치 포함]\n"
-                f"▷ [공시/재료] 구체적 공시명·규모·날짜 (예: 2026-06-19 CB 발행 200억원 결정)\n"
-                f"▷ [수급/시장] 외국인·기관 순매수 방향 또는 거래량 이상 여부 "
-                f"(예: 외국인 3거래일 순매수, 거래량 평소 5배)\n\n"
-                f"[절대 금지]\n"
-                f"- '업종 강세', '섹터 상승', '산업 호조', '증권가 전망' 등 추상 표현 금지\n"
-                f"- 검색결과에 없는 수치·날짜 추정 금지\n"
-                f"- 해당 항목을 확인 못 하면 그 ▷에 '확인 불가'라고만 작성\n"
-                f"HEADLINE과 ▷ 두 줄만 출력."
+                f"웹 검색으로 급등 재료를 찾으세요: '{name} 급등 {today_s}', '{name} 공시', '{name} 뉴스'\n\n"
+                f"[출력 형식]\n"
+                f"HEADLINE: [핵심 재료 20자 이내, 종목명 제외, 수치 포함]\n"
+                f"▷ [공시/재료] 구체적 공시명·규모·날짜\n"
+                f"▷ [수급/시장] 외국인·기관 순매수 방향 또는 거래량 이상 여부\n\n"
+                f"[금지] '업종 강세' '섹터 상승' '증권가 전망' 등 추상 표현 금지. "
+                f"확인 못 하면 해당 ▷에 '확인 불가'만 작성. HEADLINE과 ▷만 출력."
             )
         else:
-            prompt = (
+            return (
                 f"Today({today_s}), {name}({ticker}) surged +{rate:.1f}%.\n\n"
-                f"[Search strategy — prioritize hard catalysts]\n"
-                f"1) Earnings/guidance: '{ticker} earnings beat', '{ticker} guidance raise', "
-                f"'{ticker} EPS revenue {today_s}'\n"
-                f"2) Events: '{ticker} FDA approval', '{ticker} acquisition merger', "
-                f"'{ticker} contract deal', '{ticker} analyst upgrade'\n"
-                f"3) Confirm the actual catalyst from '{ticker} stock surge {today_s}'.\n\n"
-                f"[Output format — respond in Korean, exactly this]\n"
-                f"HEADLINE: [core event within 20 Korean chars, no ticker name, include figures]\n"
-                f"▷ [실적/공시] EPS·매출 실제 수치 vs 예상치 또는 가이던스 변경폭 "
-                f"(예: 1Q EPS $2.1 vs 예상 $1.7, 가이던스 15% 상향)\n"
-                f"▷ [catalyst] 구체적 이벤트명·날짜·기관 "
-                f"(예: 2026-06-18 FDA 신약 승인, 증권사 목표주가 상향)\n\n"
-                f"[Forbidden]\n"
-                f"- Generic phrases like '섹터 호조', '산업 성장', '시장 기대' — banned\n"
-                f"- Figures/dates not found in search results — do not guess\n"
-                f"- If an item cannot be confirmed, write only '확인 불가' on that ▷ line\n"
-                f"Output HEADLINE and ▷ lines only."
+                f"Search: '{ticker} earnings {today_s}', '{ticker} stock news today', "
+                f"'{ticker} FDA merger analyst upgrade'\n\n"
+                f"[Output — respond in Korean]\n"
+                f"HEADLINE: [core event 20 Korean chars, no ticker, include figures]\n"
+                f"▷ [실적/공시] EPS·매출 실제 수치 vs 예상치\n"
+                f"▷ [catalyst] 구체적 이벤트명·날짜\n\n"
+                f"[Forbidden] generic phrases, unconfirmed figures. "
+                f"Write '확인 불가' if not found. Output HEADLINE and ▷ only."
             )
 
-        try:
-            resp = client.chat.completions.create(
-                model="compound-beta",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=300,
-                temperature=0.3,
-            )
-            text   = resp.choices[0].message.content.strip()
-            parsed = _parse_explain_response(text)
-            if not _is_quality_response(parsed):
-                log.warning("compound-beta 품질 미달 [%s] — 할루시네이션 감지, 폐기", ticker)
-                return ticker, {}
-            log.info("compound-beta [%s] headline: %s", ticker, parsed["headline"])
-            return ticker, parsed
-        except Exception as e:
-            log.warning("compound-beta 실패 [%s]: %s", ticker, e)
+    def _call_perplexity(prompt: str, ticker: str) -> tuple[str, dict]:
+        payload = {
+            "model": "sonar-pro",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 300,
+            "temperature": 0.3,
+        }
+        resp = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers={"Authorization": f"Bearer {perplexity_key}",
+                     "Content-Type": "application/json"},
+            json=payload,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        text   = resp.json()["choices"][0]["message"]["content"].strip()
+        parsed = _parse_explain_response(text)
+        if not _is_quality_response(parsed):
+            log.warning("Perplexity 품질 미달 [%s] — 폐기", ticker)
             return ticker, {}
+        log.info("Perplexity [%s] headline: %s", ticker, parsed["headline"])
+        return ticker, parsed
 
-    # compound-beta 병렬 호출 (최대 5개 동시)
+    def _call_compound_beta(prompt: str, ticker: str, client) -> tuple[str, dict]:
+        resp = client.chat.completions.create(
+            model="compound-beta",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=300,
+            temperature=0.3,
+        )
+        text   = resp.choices[0].message.content.strip()
+        parsed = _parse_explain_response(text)
+        if not _is_quality_response(parsed):
+            log.warning("compound-beta 품질 미달 [%s] — 폐기", ticker)
+            return ticker, {}
+        log.info("compound-beta [%s] headline: %s", ticker, parsed["headline"])
+        return ticker, parsed
+
+    def _explain_one(s: dict) -> tuple[str, dict]:
+        ticker = s["티커"]
+        prompt = _build_prompt(s)
+        if perplexity_key:
+            try:
+                return _call_perplexity(prompt, ticker)
+            except Exception as e:
+                log.warning("Perplexity 실패 [%s]: %s — compound-beta fallback", ticker, e)
+        if groq_key:
+            try:
+                from groq import Groq
+                client = Groq(api_key=groq_key)
+                return _call_compound_beta(prompt, ticker, client)
+            except Exception as e:
+                log.warning("compound-beta 실패 [%s]: %s", ticker, e)
+        return ticker, {}
+
     result: dict[str, dict] = {}
-    targets = stocks
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
-        futs = {ex.submit(_explain_one, s): s for s in targets}
+        futs = {ex.submit(_explain_one, s): s for s in stocks}
         for fut in concurrent.futures.as_completed(futs):
             try:
                 ticker, parsed = fut.result()
@@ -587,12 +606,13 @@ def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict
             except Exception as e:
                 log.warning("explain future 실패: %s", e)
 
-    log.info("compound-beta 완료: %d/%d개", len(result), len(targets))
+    log.info("explain_stocks 완료: %d/%d개", len(result), len(stocks))
 
-    # compound-beta가 절반 이상 실패 → 배치 fallback
-    if len(result) < len(targets) // 2:
-        log.info("compound-beta 결과 부족 → llama-3.3 배치 fallback")
-        result = _explain_stocks_batch_fallback(stocks, client, news_map)
+    # 절반 이상 실패 → llama-3.3 배치 fallback
+    if groq_key and len(result) < len(stocks) // 2:
+        log.info("결과 부족 → llama-3.3 배치 fallback")
+        from groq import Groq
+        result = _explain_stocks_batch_fallback(stocks, Groq(api_key=groq_key), news_map)
 
     return result
 
@@ -890,7 +910,13 @@ def run_briefing():
         for _, r in for_df.iterrows()
     ]
     combined_news = {**dom_news, **for_news, **dart_map}
-    ai_explanations = groq_explain_stocks(all_stocks, api_key, news_map=combined_news)
+    perplexity_key = os.environ.get("PERPLEXITY_API_KEY", "")
+    ai_explanations = explain_stocks(
+        all_stocks,
+        perplexity_key=perplexity_key,
+        groq_key=api_key,
+        news_map=combined_news,
+    )
 
     # 3단계
     md = build_markdown(dom_df, for_df, dom_news, for_news, today)

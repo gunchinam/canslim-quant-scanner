@@ -4,4 +4,4 @@ requests
 lxml
 groq
 APScheduler
-FinanceDataReader
+finance-datareader

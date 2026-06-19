@@ -17,11 +17,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: briefing/requirements.txt
+
+      - name: Show requirements
+        run: cat briefing/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r briefing/requirements.txt
+        run: pip install --no-cache-dir -r briefing/requirements.txt
 
       - name: Run briefing
         run: python briefing/briefing.py now

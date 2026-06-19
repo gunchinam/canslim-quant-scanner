@@ -447,8 +447,22 @@ def summarize_with_groq(dom_df: pd.DataFrame, for_df: pd.DataFrame,
         return ""
 
 
+_HALLUCINATION_PHRASES = [
+    "으로 보인다", "것으로 보임", "으로 추정", "것으로 추정",
+    "데 따른 것으로", "주가 상승의 원인",
+    "증권가의 분석", "업종 호조", "섹터 상승", "산업 호조",
+]
+
+
+def _is_quality_response(parsed: dict) -> bool:
+    """추측/할루시네이션 문구 포함 시 False 반환"""
+    combined = parsed.get("headline", "") + " " + " ".join(parsed.get("bullets", []))
+    return not any(p in combined for p in _HALLUCINATION_PHRASES)
+
+
 def _parse_explain_response(text: str) -> dict:
     """compound-beta 응답 파싱 → {"headline": str, "bullets": [str]}"""
+    import re
     headline = ""
     bullets  = []
     for line in text.splitlines():
@@ -466,11 +480,11 @@ def _parse_explain_response(text: str) -> dict:
         first = text.splitlines()[0].strip().strip('"\'')
         if len(first) <= 40:
             headline = first
-    # "종목명: ..." 형태로 종목명이 앞에 붙은 경우 제거
-    if headline and ":" in headline:
-        parts = headline.split(":", 1)
-        if len(parts[0].strip()) <= 12:
-            headline = parts[1].strip()
+    # "종목명: ..." 또는 "종목명： ..." (전각콜론 포함) 형태 제거
+    if headline:
+        m = re.match(r'^(.{1,12})[：:]\s*(.+)', headline)
+        if m:
+            headline = m.group(2).strip()
     return {"headline": headline, "bullets": bullets[:3]}
 
 
@@ -551,6 +565,9 @@ def groq_explain_stocks(stocks: list, api_key: str, news_map: dict = {}) -> dict
             )
             text   = resp.choices[0].message.content.strip()
             parsed = _parse_explain_response(text)
+            if not _is_quality_response(parsed):
+                log.warning("compound-beta 품질 미달 [%s] — 할루시네이션 감지, 폐기", ticker)
+                return ticker, {}
             log.info("compound-beta [%s] headline: %s", ticker, parsed["headline"])
             return ticker, parsed
         except Exception as e:

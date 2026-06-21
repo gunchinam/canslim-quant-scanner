@@ -3626,15 +3626,21 @@ function _renderEntryVerdict(d) {
     ...cons.map(t => `<span class="ev-pill ev-con">${esc(t)}</span>`)
   ].join('');
 
-  // ── verdict-word 렌더 (살까? 탭 첫 줄) ──
+  // ── verdict-word + timing-word 렌더 (conv 단일 소스로 일관성 유지) ──
+  let _wordCls, _vwText, _vwSub, _twText, _twCls, _twSub;
+  if (conv >= 72)      { _wordCls = 'buy';  _vwText = '사세요';    _vwSub = `확신도 ${conv}% — 진입 유리`;   _twText = '지금이에요';    _twCls = 'dtw-now';  _twSub = '진입 타이밍 충족'; }
+  else if (conv >= 42) { _wordCls = 'wait'; _vwText = '기다리세요'; _vwSub = `확신도 ${conv}% — 조건 부족`;  _twText = '조금 기다려요'; _twCls = 'dtw-soon'; _twSub = '추가 확인 필요'; }
+  else                 { _wordCls = 'hold'; _vwText = '보류예요';   _vwSub = `확신도 ${conv}% — 진입 부적합`; _twText = '아직이에요';   _twCls = 'dtw-wait'; _twSub = '타이밍 미충족'; }
+
   const _vwEl = document.getElementById('dp-verdict-word');
   if (_vwEl) {
-    let _vwText, _vwCls, _vwSub;
-    if (conv >= 72)      { _vwText = '사세요';    _vwCls = 'dvw-buy';  _vwSub = `확신도 ${conv}% — 진입 유리`; }
-    else if (conv >= 42) { _vwText = '기다리세요'; _vwCls = 'dvw-wait'; _vwSub = `확신도 ${conv}% — 조건 부족`; }
-    else                 { _vwText = '보류예요';   _vwCls = 'dvw-hold'; _vwSub = `확신도 ${conv}% — 진입 부적합`; }
     _vwEl.style.display = '';
-    _vwEl.innerHTML = `<div class="dvw-text ${_vwCls}">${_vwText}</div><div class="dvw-sub">${_vwSub}</div>`;
+    _vwEl.innerHTML = `<div class="dvw-text dvw-${_wordCls}">${_vwText}</div><div class="dvw-sub">${_vwSub}</div>`;
+  }
+  const _twEl = document.getElementById('dp-timing-word');
+  if (_twEl) {
+    _twEl.style.display = '';
+    _twEl.innerHTML = `<div class="dtw-text ${_twCls}">${_twText}</div><div class="dtw-sub">${_twSub}</div>`;
   }
 
   // ── 렌더 ──
@@ -4295,17 +4301,6 @@ async function loadDpFourAxis(ticker) {
     else if (_es >= 30) _stars = 2;
     else _stars = 1;
     set('dp-fa-stars', '★'.repeat(_stars) + '☆'.repeat(5 - _stars));
-
-    // ── timing-word 렌더 (언제? 탭 첫 줄) ──
-    const _twEl = document.getElementById('dp-timing-word');
-    if (_twEl) {
-      let _twText, _twCls, _twSub;
-      if (_stars >= 4)       { _twText = '지금이에요';    _twCls = 'dtw-now';  _twSub = '진입 타이밍 충족'; }
-      else if (_stars === 3) { _twText = '조금 기다려요'; _twCls = 'dtw-soon'; _twSub = '추가 확인 필요'; }
-      else                   { _twText = '아직이에요';   _twCls = 'dtw-wait'; _twSub = '타이밍 미충족'; }
-      _twEl.style.display = '';
-      _twEl.innerHTML = `<div class="dtw-text ${_twCls}">${_twText}</div><div class="dtw-sub">${_twSub}</div>`;
-    }
 
     const _starMeaningTbl = {
       5: '진입조건 모두 충족',

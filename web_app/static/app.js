@@ -2935,12 +2935,6 @@ function _clearPanelDetail() {
   });
   const rg = document.getElementById('dp-risk-gauge');
   if (rg) rg.style.display = 'none';
-  // spark-panel 리셋: 스켈레톤 상태로 되돌림
-  const _sp = document.getElementById('dp-spark-panel');
-  if (_sp) {
-    _sp.classList.remove('dp-spark-panel--visible');
-    _sp.classList.add('dp-spark-panel--hidden');
-  }
 }
 
 function _populatePanelDetail(d, skipFourAxis) {

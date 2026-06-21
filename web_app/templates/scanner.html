@@ -271,10 +271,10 @@
 
       <!-- Section Nav -->
       <nav class="dp-section-nav" id="dp-section-nav">
-        <button class="dp-section-btn active" onclick="dpScrollTo('dp-section-conclusion',this)">🎯 결론</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-timing',this)">📈 타이밍</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-company',this)">🏢 회사</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-detail',this)">📊 상세</button>
+        <button class="dp-section-btn active" onclick="dpScrollTo('dp-section-conclusion',this)">🎯 살까?</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-timing',this)">📈 언제?</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-company',this)">🏢 뭔데?</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-detail',this)">📊 얼마나?</button>
         <button class="dp-section-btn" onclick="dpScrollTo('dp-group-ref',this)">📎 참고</button>
       </nav>
 
@@ -282,6 +282,7 @@
     <div class="dp-hero-card">
 <!-- ② 🎯 결론 (한줄평 + 뉴스) -->
     <section id="dp-section-conclusion" class="dp-section-conclusion">
+      <div id="dp-verdict-word" class="dp-verdict-word" style="display:none;"></div>
       <div id="dp-fa-haiku" class="dp-oneliner-poster" style="display:none;"></div>
       <div id="dp-news-bar" class="dp-news-bar" style="display:none;">
         <span class="dp-news-tag">NEWS</span>
@@ -291,6 +292,7 @@
 
 <!-- ③ 📈 타이밍 -->
     <section id="dp-section-timing" class="dp-section-timing">
+      <div id="dp-timing-word" class="dp-timing-word" style="display:none;"></div>
       <div class="dp-hero-flex">
         <div class="dp-hero-left">
           <div class="dp-verdict-zone">
@@ -370,18 +372,24 @@
       <div id="dp-fouraxis-loading">분석 불러오는 중...</div>
       <div id="dp-fouraxis-error"></div>
       <div id="dp-fouraxis-header">
-        <div class="dp-fouraxis-title">📈 현재 타이밍 분석 <span class="dp-fouraxis-title-hint">— 별점 = 아래 ‘타이밍 점수’를 별로 표시한 것 (같은 값)</span></div>
+        <div class="dp-fouraxis-title">📈 현재 타이밍 분석</div>
         <div class="dp-fouraxis-row">
           <span id="dp-fa-phase"></span>
           <span id="dp-fa-stars"></span>
           <span id="dp-fa-stars-meaning"></span>
         </div>
-        <div class="dp-fouraxis-grid">
-          <div class="dp-axis-item"><div class="dp-axis-label">추세<div class="dp-axis-sub">(이평선 방향·정렬)</div></div><div class="dp-axis-val"><span id="dp-fa-trend-score">-</span><span class="dp-axis-denom">/5</span></div><div class="dp-axis-meta" id="dp-fa-trend-verdict"></div></div>
-          <div class="dp-axis-item"><div class="dp-axis-label">모멘텀<div class="dp-axis-sub">(가격 탄력)</div></div><div class="dp-axis-val"><span id="dp-fa-mom-score">-</span><span class="dp-axis-denom">/5</span></div><div class="dp-axis-meta" id="dp-fa-mom-verdict"></div></div>
-          <div class="dp-axis-item"><div class="dp-axis-label">변동성<div class="dp-axis-sub">(BB폭·ATR)</div></div><div class="dp-axis-val"><span id="dp-fa-vol-score">-</span><span class="dp-axis-denom">/5</span></div><div class="dp-axis-meta" id="dp-fa-vol-verdict"></div></div>
-          <div class="dp-axis-item"><div class="dp-axis-label">수급<div class="dp-axis-sub">(거래량·이격도)</div></div><div class="dp-axis-val"><span id="dp-fa-volm-score">-</span><span class="dp-axis-denom">/5</span></div><div class="dp-axis-meta" id="dp-fa-volm-verdict"></div></div>
-        </div>
+        <!-- 친절한 이유 목록 (JS로 채움) -->
+        <div id="dp-fa-reasons"></div>
+        <!-- 4축 상세 접기/펴기 -->
+        <details class="dp-timing-detail">
+          <summary>상세 지표 보기</summary>
+          <div class="dp-fouraxis-grid">
+            <div class="dp-axis-item"><div class="dp-axis-label">추세<div class="dp-axis-sub">(이평선 방향·정렬)</div></div><div class="dp-axis-val"><span id="dp-fa-trend-score">-</span><span class="dp-axis-denom">/5</span></div><div class="dp-axis-meta" id="dp-fa-trend-verdict"></div></div>
+            <div class="dp-axis-item"><div class="dp-axis-label">모멘텀<div class="dp-axis-sub">(가격 탄력)</div></div><div class="dp-axis-val"><span id="dp-fa-mom-score">-</span><span class="dp-axis-denom">/5</span></div><div class="dp-axis-meta" id="dp-fa-mom-verdict"></div></div>
+            <div class="dp-axis-item"><div class="dp-axis-label">변동성<div class="dp-axis-sub">(BB폭·ATR)</div></div><div class="dp-axis-val"><span id="dp-fa-vol-score">-</span><span class="dp-axis-denom">/5</span></div><div class="dp-axis-meta" id="dp-fa-vol-verdict"></div></div>
+            <div class="dp-axis-item"><div class="dp-axis-label">수급<div class="dp-axis-sub">(거래량·이격도)</div></div><div class="dp-axis-val"><span id="dp-fa-volm-score">-</span><span class="dp-axis-denom">/5</span></div><div class="dp-axis-meta" id="dp-fa-volm-verdict"></div></div>
+          </div>
+        </details>
       </div>
       <div id="dp-fouraxis-obs">
         <div class="dp-fouraxis-obs-title">핵심 관찰</div>
@@ -509,6 +517,7 @@
 
 <!-- ④ 📊 상세 (접힘) -->
     <div class="dp-card-group" id="dp-section-detail">
+      <div id="dp-split-plan" style="padding:4px 20px 0;"></div>
       <button class="dp-card-group-toggle" onclick="toggleCardGroup(this)">
         <span>📊 상세 분석</span>
         <svg class="dp-cg-chevron open" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>

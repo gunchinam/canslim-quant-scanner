@@ -2309,7 +2309,9 @@ function populateDetail(d) {
   const ol = document.getElementById('detail-oneliner');
   if (ol) {
     if (d.OneLiner) {
-      ol.innerHTML = olHtml(d.OneLiner) + (d.OneLinerData ? `<span class="oneliner-data">${esc(d.OneLinerData)}</span>` : '');
+      ol.innerHTML = olHtml(d.OneLiner)
+        + (d.OneLinerSub ? `<span class="oneliner-sub">→ ${esc(d.OneLinerSub)}</span>` : '')
+        + (d.OneLinerData ? `<span class="oneliner-data">${esc(d.OneLinerData)}</span>` : '');
       ol.setAttribute('data-tag', d.OneLinerTag || '');
       ol.style.display = '';
     } else {
@@ -2836,6 +2838,7 @@ async function openDetail(ticker) {
       data.OneLiner = cached.OneLiner;
       if (cached.OneLinerData != null) data.OneLinerData = cached.OneLinerData;
       if (cached.OneLinerTag != null) data.OneLinerTag = cached.OneLinerTag;
+      if (cached.OneLinerSub  != null) data.OneLinerSub  = cached.OneLinerSub;
     }
     _populatePanelDetail(data, /* skipFourAxis */ true);
   } catch (e) {
@@ -3105,7 +3108,9 @@ function _populatePanelDetail(d, skipFourAxis) {
   const haikuEl = document.getElementById('dp-fa-haiku');
   if (haikuEl) {
     if (d.OneLiner) {
-      haikuEl.innerHTML = olHtml(d.OneLiner) + (d.OneLinerData ? `<span class="oneliner-data">${esc(d.OneLinerData)}</span>` : '');
+      haikuEl.innerHTML = olHtml(d.OneLiner)
+        + (d.OneLinerSub ? `<span class="oneliner-sub">→ ${esc(d.OneLinerSub)}</span>` : '')
+        + (d.OneLinerData ? `<span class="oneliner-data">${esc(d.OneLinerData)}</span>` : '');
       haikuEl.setAttribute('data-tag', d.OneLinerTag || '');
       haikuEl.style.display = '';
     } else {
@@ -3621,6 +3626,17 @@ function _renderEntryVerdict(d) {
     ...cons.map(t => `<span class="ev-pill ev-con">${esc(t)}</span>`)
   ].join('');
 
+  // ── verdict-word 렌더 (살까? 탭 첫 줄) ──
+  const _vwEl = document.getElementById('dp-verdict-word');
+  if (_vwEl) {
+    let _vwText, _vwCls, _vwSub;
+    if (conv >= 72)      { _vwText = '사세요';    _vwCls = 'dvw-buy';  _vwSub = `확신도 ${conv}% — 진입 유리`; }
+    else if (conv >= 42) { _vwText = '기다리세요'; _vwCls = 'dvw-wait'; _vwSub = `확신도 ${conv}% — 조건 부족`; }
+    else                 { _vwText = '보류예요';   _vwCls = 'dvw-hold'; _vwSub = `확신도 ${conv}% — 진입 부적합`; }
+    _vwEl.style.display = '';
+    _vwEl.innerHTML = `<div class="dvw-text ${_vwCls}">${_vwText}</div><div class="dvw-sub">${_vwSub}</div>`;
+  }
+
   // ── 렌더 ──
   card.style.display = '';
   card.style.borderLeft = `3px solid ${color}`;
@@ -3631,8 +3647,11 @@ function _renderEntryVerdict(d) {
       <span class="ev-conf" style="background:${color}18;color:${color}">확신도 ${conv}%</span>
     </div>
     ${pills ? `<div class="ev-pills">${pills}</div>` : ''}
-    ${splitHtml}
   `;
+
+  // 분할매수 플랜은 얼마나? 섹션으로 분리
+  const _spEl = document.getElementById('dp-split-plan');
+  if (_spEl) _spEl.innerHTML = splitHtml;
 }
 
 // Bottom-Fishing Score card
@@ -3745,12 +3764,13 @@ function _renderRiskGauge(d) {
   const ep = (d && d.EntryPlan) || {};
   const cr = ep.composite_risk;
   if (cr == null) { el.style.display = 'none'; return; }
-  const col = cr >= 60 ? '#DC2626' : cr >= 35 ? '#F59E0B' : '#16A34A';
-  const lbl = cr >= 60 ? '고위험' : cr >= 35 ? '주의' : '양호';
+  if (cr < 35) { el.style.display = 'none'; return; }  // 양호는 표시 안 함 — 경고만 노출
+  const col = cr >= 60 ? '#DC2626' : '#F59E0B';
+  const lbl = cr >= 60 ? '손실 위험 높음' : '변동성 주의';
   el.style.display = 'inline-flex';
   el.style.background = col + '18';
   el.style.color = col;
-  el.innerHTML = `🛡 Risk <span style="font-size:14px;">${Math.round(cr)}</span>/99 <span style="font-weight:500;">${lbl}</span>`;
+  el.innerHTML = `⚠️ <span style="font-weight:600;">${lbl}</span>`;
 }
 
 // (정리됨) _renderRiskSummary·_renderFactorWaterfall·_renderACCard·_renderLiquidityCard 4개 함수 제거.
@@ -4275,6 +4295,18 @@ async function loadDpFourAxis(ticker) {
     else if (_es >= 30) _stars = 2;
     else _stars = 1;
     set('dp-fa-stars', '★'.repeat(_stars) + '☆'.repeat(5 - _stars));
+
+    // ── timing-word 렌더 (언제? 탭 첫 줄) ──
+    const _twEl = document.getElementById('dp-timing-word');
+    if (_twEl) {
+      let _twText, _twCls, _twSub;
+      if (_stars >= 4)       { _twText = '지금이에요';    _twCls = 'dtw-now';  _twSub = '진입 타이밍 충족'; }
+      else if (_stars === 3) { _twText = '조금 기다려요'; _twCls = 'dtw-soon'; _twSub = '추가 확인 필요'; }
+      else                   { _twText = '아직이에요';   _twCls = 'dtw-wait'; _twSub = '타이밍 미충족'; }
+      _twEl.style.display = '';
+      _twEl.innerHTML = `<div class="dtw-text ${_twCls}">${_twText}</div><div class="dtw-sub">${_twSub}</div>`;
+    }
+
     const _starMeaningTbl = {
       5: '진입조건 모두 충족',
       4: '진입조건 대부분 충족',
@@ -4283,9 +4315,8 @@ async function loadDpFourAxis(ticker) {
       1: '진입조건 미충족',
       0: '데이터 부족',
     };
-    // 백엔드 headline_action(구체적 맥락 포함)을 우선 사용, 없으면 별점 테이블 폴백
-    const _haText = _rec?.EntryPlan?.headline_action;
-    const _meaningText = _haText || _starMeaningTbl[_stars] || '';
+    // 별점 테이블 기준 — EntryScore와 항상 일관되게 유지
+    const _meaningText = _starMeaningTbl[_stars] || '';
     set('dp-fa-stars-meaning', _meaningText ? `· ${_meaningText}` : '');
     // 주도주 배지: RS Rating 80+ + EPS 가속 동시 충족
     const _leaderBadge = document.getElementById('dp-leader-badge');
@@ -4306,6 +4337,39 @@ async function loadDpFourAxis(ticker) {
     set('dp-fa-vol-verdict',   d.volatility?.verdict ?? '');
     set('dp-fa-volm-score',    d.volume?.score   ?? '-');
     set('dp-fa-volm-verdict',  d.volume?.verdict ?? '');
+
+    // ── 친절한 이유 목록 ──────────────────────────────────────────
+    const _reasonsEl = document.getElementById('dp-fa-reasons');
+    if (_reasonsEl) {
+      const _axDef = [
+        { ax: d.trend,
+          pros: { 5: '이평선이 완벽하게 우상향 정렬돼 있어요', 4: '추세가 살아있어요' },
+          cons: { 1: '하락 추세예요', 2: '추세가 약해요' } },
+        { ax: d.momentum,
+          pros: { 5: 'RSI·MACD 모두 강한 상승 동력이에요', 4: '모멘텀이 살아있어요' },
+          cons: { 1: '모멘텀이 바닥이에요', 2: '모멘텀이 약해요' } },
+        { ax: d.volatility,
+          pros: { 5: '강한 돌파 신호가 나왔어요', 4: '상단 돌파를 시도 중이에요' },
+          cons: { 1: '하락 변동성이 커요', 2: '방향성이 없어요' } },
+        { ax: d.volume,
+          pros: { 5: '기관·외국인이 강하게 매집 중이에요', 4: '수급이 뒷받침되고 있어요' },
+          cons: { 1: '매도 압력이 우세해요', 2: '수급이 약해요' } },
+      ];
+      const _pros = [], _warns = [];
+      for (const { ax, pros, cons } of _axDef) {
+        const sc = ax?.score;
+        if (sc == null) continue;
+        if (sc >= 4) _pros.push(pros[sc] || pros[4]);
+        else if (sc <= 2) _warns.push(cons[sc] || cons[2]);
+      }
+      if (d.momentum?.details?.bull_div) _pros.push('상승 다이버전스 포착 — 바닥 반등 신호예요');
+      if (d.momentum?.details?.bear_div) _warns.push('하락 다이버전스 — 한 번에 다 사기보단 나눠 사세요');
+      let _rHtml = '';
+      _pros.forEach(p  => { _rHtml += `<div class="dp-timing-pro">✅ ${p}</div>`; });
+      _warns.forEach(w => { _rHtml += `<div class="dp-timing-warn">⚠️ ${w}</div>`; });
+      _reasonsEl.innerHTML = _rHtml;
+    }
+
     header.style.display = 'block';
 
     const obs = d.key_observation || d.structured_analysis || '';
@@ -5966,7 +6030,7 @@ async function loadComparePage(tickers) {
             ${_compareMetricRow('ROE', roe)}
             ${_compareMetricRow('EntryStatus', entry)}
           </div>
-          <div class="compare-oneliner">${olHtml(detail.OneLiner || '요약 코멘트 없음')}${detail.OneLinerData ? `<span class="oneliner-data">${esc(detail.OneLinerData)}</span>` : ''}</div>
+          <div class="compare-oneliner">${olHtml(detail.OneLiner || '요약 코멘트 없음')}${detail.OneLinerSub ? `<span class="oneliner-sub">→ ${esc(detail.OneLinerSub)}</span>` : ''}${detail.OneLinerData ? `<span class="oneliner-data">${esc(detail.OneLinerData)}</span>` : ''}</div>
         </div>
       `;
     } catch (err) {

@@ -3626,25 +3626,37 @@ function _renderEntryVerdict(d) {
     ...cons.map(t => `<span class="ev-pill ev-con">${esc(t)}</span>`)
   ].join('');
 
-  // ── verdict-word + timing-word 렌더 (conv 단일 소스로 일관성 유지) ──
-  let _wordCls, _vwText, _vwSub, _twText, _twCls, _twSub;
-  if (conv >= 72)      { _wordCls = 'buy';  _vwText = '사세요';    _vwSub = `확신도 ${conv}% — 진입 유리`;   _twText = '지금이에요';    _twCls = 'dtw-now';  _twSub = '진입 타이밍 충족'; }
-  else if (conv >= 42) { _wordCls = 'wait'; _vwText = '기다리세요'; _vwSub = `확신도 ${conv}% — 조건 부족`;  _twText = '조금 기다려요'; _twCls = 'dtw-soon'; _twSub = '추가 확인 필요'; }
-  else                 { _wordCls = 'hold'; _vwText = '보류예요';   _vwSub = `확신도 ${conv}% — 진입 부적합`; _twText = '아직이에요';   _twCls = 'dtw-wait'; _twSub = '타이밍 미충족'; }
-
-  const _vwEl = document.getElementById('dp-verdict-word');
-  if (_vwEl) {
-    _vwEl.style.display = '';
-    _vwEl.innerHTML = `<div class="dvw-text dvw-${_wordCls}">${_vwText}</div><div class="dvw-sub">${_vwSub}</div>`;
+  // ── 판단 포스터 + 미니 카드 렌더 (conv 단일 소스) ──
+  let _pgCls, _pvWord, _pvReason, _pvBg, _tmWord, _tmSub, _tmBg;
+  if (conv >= 72) {
+    _pgCls = 'dvp-green'; _pvWord = '사세요';
+    _pvReason = '지금이 딱 좋은 타이밍이에요.<br>추세도 강하고 거래량도 받쳐줘요.<br>분할로 들어가 보세요.';
+    _pvBg = '사요'; _tmWord = '🟢 지금이에요'; _tmSub = '진입 타이밍 충족'; _tmBg = '지금';
+  } else if (conv >= 42) {
+    _pgCls = 'dvp-yellow'; _pvWord = '기다리세요';
+    _pvReason = '좋은 종목이지만 지금 당장 사기엔<br>타이밍이 살짝 애매해요.<br>가격이 조금 내려올 때까지 지켜봐요.';
+    _pvBg = '기다려'; _tmWord = '🟡 조금 기다려요'; _tmSub = '추가 확인 필요'; _tmBg = '기다려';
+  } else {
+    _pgCls = 'dvp-red'; _pvWord = '보류예요';
+    _pvReason = '지금은 사기 어려운 상황이에요.<br>여러 지표가 안 좋은 신호를 보내고 있어요.<br>관심 목록에만 담아두세요.';
+    _pvBg = '보류'; _tmWord = '🔴 아직이에요'; _tmSub = '타이밍 미충족'; _tmBg = '아직';
   }
-  const _twEl = document.getElementById('dp-timing-word');
-  if (_twEl) {
-    _twEl.style.display = '';
-    _twEl.innerHTML = `<div class="dtw-text ${_twCls}">${_twText}</div><div class="dtw-sub">${_twSub}</div>`;
+
+  const _vpEl = document.getElementById('dp-verdict-poster');
+  if (_vpEl) {
+    _vpEl.style.display = '';
+    _vpEl.className = `dp-verdict-poster ${_pgCls}`;
+    _vpEl.innerHTML = `<div class="dvp-eyebrow">이 종목, 지금 살까?</div><div class="dvp-word">${_pvWord}</div><div class="dvp-reason">${_pvReason}</div><div class="dvp-bg">${_pvBg}</div>`;
+  }
+  const _tmEl = document.getElementById('dp-timing-mini');
+  if (_tmEl) {
+    _tmEl.style.display = '';
+    _tmEl.className = `dp-timing-mini ${_pgCls}`;
+    _tmEl.innerHTML = `<div class="dtm-eyebrow">지금 타이밍은?</div><div class="dtm-word">${_tmWord}</div><div class="dtm-sub">${_tmSub} · 확신도 ${conv}%</div><div class="dtm-bg">${_tmBg}</div>`;
   }
 
-  // ── 렌더 ──
-  card.style.display = '';
+  // ── 렌더 (entry-verdict 카드는 내부 데이터 보존용, UI 미노출) ──
+  card.style.display = 'none';
   card.style.borderLeft = `3px solid ${color}`;
   card.innerHTML = `
     <div class="ev-head">
@@ -4338,27 +4350,27 @@ async function loadDpFourAxis(ticker) {
     if (_reasonsEl) {
       const _axDef = [
         { ax: d.trend,
-          pros: { 5: '이평선이 완벽하게 우상향 정렬돼 있어요', 4: '추세가 살아있어요' },
-          cons: { 1: '하락 추세예요', 2: '추세가 약해요' } },
+          pros: { 4: '추세가 강해요 — 이평선이 나란히 올라가고 있어요' },
+          cons: { 2: '추세가 꺾이고 있어요 — 방향이 불안정해요', 1: '추세가 꺾이고 있어요 — 방향이 불안정해요' } },
         { ax: d.momentum,
-          pros: { 5: 'RSI·MACD 모두 강한 상승 동력이에요', 4: '모멘텀이 살아있어요' },
-          cons: { 1: '모멘텀이 바닥이에요', 2: '모멘텀이 약해요' } },
+          pros: { 4: '가격 탄력이 좋아요 — 오르는 힘이 있어요' },
+          cons: { 2: '모멘텀이 약해요 — 오르는 힘이 부족해요', 1: '모멘텀이 약해요 — 오르는 힘이 부족해요' } },
         { ax: d.volatility,
-          pros: { 5: '강한 돌파 신호가 나왔어요', 4: '상단 돌파를 시도 중이에요' },
-          cons: { 1: '하락 변동성이 커요', 2: '방향성이 없어요' } },
+          pros: { 4: '변동성이 낮아요 — 안정적으로 움직이고 있어요' },
+          cons: { 2: '요즘 등락이 좀 심해요 — 갑자기 흔들릴 수 있어요', 1: '요즘 등락이 좀 심해요 — 갑자기 흔들릴 수 있어요' } },
         { ax: d.volume,
-          pros: { 5: '기관·외국인이 강하게 매집 중이에요', 4: '수급이 뒷받침되고 있어요' },
-          cons: { 1: '매도 압력이 우세해요', 2: '수급이 약해요' } },
+          pros: { 4: '거래량이 받쳐줘요 — 사람들이 많이 사고 있어요' },
+          cons: { 2: '거래량이 많이 빠졌어요 — 관심이 줄어들고 있어요', 1: '거래량이 많이 빠졌어요 — 관심이 줄어들고 있어요' } },
       ];
       const _pros = [], _warns = [];
       for (const { ax, pros, cons } of _axDef) {
         const sc = ax?.score;
         if (sc == null) continue;
-        if (sc >= 4) _pros.push(pros[sc] || pros[4]);
+        if (sc >= 4) _pros.push(pros[4]);
         else if (sc <= 2) _warns.push(cons[sc] || cons[2]);
       }
       if (d.momentum?.details?.bull_div) _pros.push('상승 다이버전스 포착 — 바닥 반등 신호예요');
-      if (d.momentum?.details?.bear_div) _warns.push('하락 다이버전스 — 한 번에 다 사기보단 나눠 사세요');
+      if (d.momentum?.details?.bear_div) _warns.push('단기 과열 신호가 있어요 — 눌림목 올 수 있어요');
       let _rHtml = '';
       _pros.forEach(p  => { _rHtml += `<div class="dp-timing-pro">✅ ${p}</div>`; });
       _warns.forEach(w => { _rHtml += `<div class="dp-timing-warn">⚠️ ${w}</div>`; });

@@ -99,11 +99,9 @@
     <span class="macro-meta" id="macro-meta"></span>
   </div>
 
-  <!-- View Tabs (종목 스캐너 ↔ ETF 현황) -->
+  <!-- View Tabs -->
   <div class="view-tabs" role="tablist" aria-label="화면 전환">
     <button class="view-tab active" data-view="stock" data-action="showStockView">📈 종목 스캐너</button>
-    <button class="view-tab" data-view="etf" data-action="openEtfView" title="미국·한국 인기 ETF를 한눈에 — 구성종목·섹터·수수료·수익률">📊 ETF 현황</button>
-    <button class="view-tab" data-view="news" data-action="openNewsView" title="예정 IPO 캘린더 + 미국 시장 뉴스 (Finnhub)">📰 뉴스</button>
   </div>
 
   <!-- Stats Bar -->
@@ -197,41 +195,6 @@
         <div class="mobile-stock-list-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</div>
       </div>
 
-      <!-- ── ETF 현황 (인라인 탭 — 종목 표 자리에 표시) ─────────────── -->
-      <div id="etf-view" class="etf-view" hidden>
-        <div class="etf-view-header">
-          <div class="etf-view-title">📊 인기 ETF 현황 <span id="etf-meta" class="etf-view-meta"></span></div>
-          <button class="etf-view-close" data-action="closeEtfView" aria-label="종목 목록으로">← 종목 목록</button>
-        </div>
-        <!-- F. 섹터 로테이션 히트맵 (접이식) -->
-        <div id="etf-rotation" class="etf-rotation" hidden>
-          <button class="etf-rotation-toggle" data-action="toggleEtfRotation" aria-expanded="false">
-            🔥 섹터 로테이션 (M1·M3 수익률) <span class="etf-rotation-chevron">▾</span>
-          </button>
-          <div id="etf-rotation-body" class="etf-rotation-body" hidden></div>
-        </div>
-        <div class="etf-view-body">
-          <section class="etf-col">
-            <h3 class="etf-col-title">🇺🇸 미국</h3>
-            <div id="etf-list-us" class="etf-list"></div>
-          </section>
-          <section class="etf-col">
-            <h3 class="etf-col-title">🇰🇷 한국</h3>
-            <div id="etf-list-kr" class="etf-list"></div>
-          </section>
-        </div>
-      </div>
-
-      <!-- ── 뉴스 (인라인 탭 — 종목 표 자리에 표시) ──────────────────── -->
-      <div id="news-view" class="etf-view" hidden>
-        <div class="etf-view-header">
-          <div class="etf-view-title">📰 시장 뉴스 · IPO <span id="news-meta" class="etf-view-meta"></span></div>
-          <button class="etf-view-close" data-action="closeNewsView" aria-label="종목 목록으로">← 종목 목록</button>
-        </div>
-        <div id="market-context" class="news-view-body">
-          <div id="market-context-body"></div>
-        </div>
-      </div>
     </main>
   </div>
 
@@ -282,12 +245,12 @@
     <div class="dp-hero-card">
 <!-- ② 🎯 살까? -->
     <section id="dp-section-conclusion" class="dp-section-conclusion">
-      <div id="dp-verdict-word" class="dp-verdict-word" style="display:none;"></div>
-      <!-- 진입 판단 종합 카드 -->
+      <div id="dp-verdict-poster" class="dp-verdict-poster" style="display:none;"></div>
+      <!-- 진입 판단 종합 카드 (내부 전용 — UI에 미노출) -->
       <div id="dp-entry-verdict" class="card" style="display:none;margin:12px 20px;overflow:hidden;"></div>
       <!-- 친절한 이유 목록 -->
       <div id="dp-fa-reasons"></div>
-      <div id="dp-fa-haiku" class="dp-oneliner-poster" style="display:none;"></div>
+      <div id="dp-fa-haiku" class="dp-haiku-secondary" style="display:none;"></div>
       <div id="dp-news-bar" class="dp-news-bar" style="display:none;">
         <span class="dp-news-tag">NEWS</span>
         <a id="dp-news-bar-link" href="#" target="_blank" rel="noopener" class="dp-news-link">—</a>
@@ -326,7 +289,7 @@
 
 <!-- ③ 📈 타이밍 -->
     <section id="dp-section-timing" class="dp-section-timing">
-      <div id="dp-timing-word" class="dp-timing-word" style="display:none;"></div>
+      <div id="dp-timing-mini" class="dp-timing-mini" style="display:none;"></div>
       <div class="dp-hero-flex">
         <div class="dp-hero-left">
           <div class="dp-verdict-zone">

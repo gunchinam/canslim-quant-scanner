@@ -2465,45 +2465,110 @@ td.score-col {
 .dp-timing-detail[open] summary::before { content: '▼ '; }
 .dp-timing-detail .dp-fouraxis-grid { margin-top: 8px; }
 
-/* ── 살까? 탭 verdict-word ── */
-.dp-verdict-word {
-  text-align: center;
-  padding: 20px 20px 8px;
+/* ── 살까? 탭 — 판단 포스터 ── */
+.dp-verdict-poster {
+  margin: 14px 20px 0;
+  border-radius: 12px;
+  padding: 22px 24px;
+  color: white;
+  position: relative;
+  overflow: hidden;
 }
-.dp-verdict-word .dvw-text {
-  font-size: 36px;
+.dp-verdict-poster.dvp-green  { background: linear-gradient(135deg, #34D399 0%, #10B981 50%, #059669 100%); }
+.dp-verdict-poster.dvp-yellow { background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 50%, #D97706 100%); }
+.dp-verdict-poster.dvp-red    { background: linear-gradient(135deg, #F87171 0%, #EF4444 50%, #DC2626 100%); }
+.dvp-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: .75;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.dvp-word {
+  font-size: 38px;
   font-weight: 900;
-  letter-spacing: -0.5px;
+  letter-spacing: -1.5px;
   line-height: 1;
+  margin: 4px 0 8px;
 }
-.dp-verdict-word .dvw-sub {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-top: 4px;
+.dvp-reason {
+  font-size: 13px;
+  opacity: .85;
+  line-height: 1.5;
 }
-.dvw-buy  { color: #16A34A; }
-.dvw-wait { color: #D97706; }
-.dvw-hold { color: #DC2626; }
+.dvp-bg {
+  position: absolute;
+  right: -6px;
+  bottom: -10px;
+  font-size: 78px;
+  font-weight: 900;
+  opacity: .1;
+  letter-spacing: -3px;
+  line-height: 1;
+  pointer-events: none;
+  color: white;
+}
 
-/* ── 언제? 탭 timing-word ── */
-.dp-timing-word {
-  text-align: center;
-  padding: 16px 20px 4px;
+/* ── 언제? 탭 — 미니 판단 카드 ── */
+.dp-timing-mini {
+  margin: 14px 20px 0;
+  border-radius: 10px;
+  padding: 14px 18px;
+  position: relative;
+  overflow: hidden;
 }
-.dp-timing-word .dtw-text {
-  font-size: 32px;
+.dp-timing-mini.dvp-green  { background: linear-gradient(135deg, #34D399, #059669); }
+.dp-timing-mini.dvp-yellow { background: linear-gradient(135deg, #FBBF24, #F59E0B); }
+.dp-timing-mini.dvp-red    { background: linear-gradient(135deg, #F87171, #DC2626); }
+.dtm-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255,255,255,.75);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.dtm-word {
+  font-size: 22px;
   font-weight: 900;
-  letter-spacing: -0.5px;
-  line-height: 1;
+  color: white;
+  letter-spacing: -.5px;
+  margin: 2px 0 4px;
 }
-.dp-timing-word .dtw-sub {
+.dtm-sub {
   font-size: 12px;
-  color: var(--text-tertiary);
-  margin-top: 4px;
+  color: rgba(255,255,255,.8);
 }
-.dtw-now  { color: #16A34A; }
-.dtw-soon { color: #D97706; }
-.dtw-wait { color: #DC2626; }
+.dtm-bg {
+  position: absolute;
+  right: -4px;
+  bottom: -8px;
+  font-size: 54px;
+  font-weight: 900;
+  opacity: .12;
+  color: white;
+  letter-spacing: -2px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* ── 살까? 탭 — 한줄평 보조 카드 ── */
+.dp-haiku-secondary {
+  margin: 10px 20px 0;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary, #374151);
+  line-height: 1.35;
+}
+.dp-haiku-secondary .oneliner-sub {
+  display: block;
+  font-size: 11px;
+  color: var(--text-tertiary, #9ca3af);
+  margin-top: 5px;
+  font-weight: 400;
+}
 
 /* ── RSI Thermometer Track ────────────────────────────────── */
 .dp-thermo-track {

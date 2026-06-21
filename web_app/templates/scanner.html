@@ -99,10 +99,6 @@
     <span class="macro-meta" id="macro-meta"></span>
   </div>
 
-  <!-- View Tabs -->
-  <div class="view-tabs" role="tablist" aria-label="화면 전환">
-    <button class="view-tab active" data-view="stock" data-action="showStockView">📈 종목 스캐너</button>
-  </div>
 
   <!-- Stats Bar -->
   <div class="stats-bar">
@@ -259,30 +255,6 @@
         <div class="card" style="padding:0;overflow:hidden;">
           <div style="padding:12px 16px 8px;font-size:12px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.03em;">투자자 동향</div>
           <div id="dp-investor-grid" style="display:grid;column-gap:16px;padding:2px 16px 12px;"></div>
-        </div>
-      </div>
-      <div id="dp-bf-card" class="card" style="display:none;margin:8px 20px 16px;">
-        <div style="padding:12px 16px 8px;display:flex;align-items:center;gap:8px;">
-          <span style="font-size:14px;">🎣</span>
-          <span style="font-size:12px;font-weight:700;color:var(--text-primary);">저점매수 점수</span>
-          <span id="dp-bf-signal" style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;margin-left:auto;"></span>
-        </div>
-        <div style="padding:0 16px 6px;">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div id="dp-bf-score" style="font-size:28px;font-weight:800;min-width:48px;text-align:center;"></div>
-            <div style="flex:1;">
-              <div id="dp-bf-bar" style="height:6px;border-radius:3px;background:var(--surface-muted,#e5e7eb);overflow:hidden;">
-                <div id="dp-bf-fill" style="height:100%;border-radius:3px;transition:width .3s;"></div>
-              </div>
-              <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--text-tertiary);">
-                <span>가치/퀄리티 <b id="dp-bf-a1">0</b>/40</span>
-                <span>기술/통계 <b id="dp-bf-a2">0</b>/35</span>
-                <span>매크로/수급 <b id="dp-bf-a3">0</b>/25</span>
-              </div>
-            </div>
-          </div>
-          <div id="dp-bf-tags" style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;"></div>
-          <div id="dp-bf-detail" style="margin-top:6px;font-size:11px;color:var(--text-secondary);line-height:1.5;"></div>
         </div>
       </div>
     </section>

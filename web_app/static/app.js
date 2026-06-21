@@ -5229,6 +5229,30 @@ function exportCSV() {
   URL.revokeObjectURL(url);
 }
 
+// ── 레짐 배지 ─────────────────────────────────────────────────────────────
+
+async function fetchRegimeBadge() {
+  const el = document.getElementById('regime-badge');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/regime');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.error) return;
+
+    const cls = d.state === 'BULL' ? 'bull' : d.state === 'BEAR' ? 'bear' : 'chop';
+    const conf = Math.round(d.confidence * 100);
+    let tip = `${d.desc} · 확신도 ${conf}%\n내일 Bull ${Math.round(d.p_next.bull*100)}% / Bear ${Math.round(d.p_next.bear*100)}% / Chop ${Math.round(d.p_next.chop*100)}%\n권고: ${d.position}`;
+    if (d.early_exit) tip += '\n⚡ Bear 압력 감지 — 포지션 축소 검토';
+    if (d.early_long) tip += '\n⚡ Bull 전환 가능 — 진입 준비';
+
+    el.className = `regime-badge ${cls}${d.early_exit ? ' early-exit' : d.early_long ? ' early-long' : ''}`;
+    el.title     = tip;
+    el.textContent = `${d.emoji} KOSPI ${d.label} ${conf}%`;
+    el.removeAttribute('hidden');
+  } catch(e) {}
+}
+
 // ── 초기화 ───────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -5244,6 +5268,9 @@ document.addEventListener('DOMContentLoaded', () => {
       year: 'numeric', month: '2-digit', day: '2-digit'
     });
   }
+
+  // 레짐 배지
+  fetchRegimeBadge();
 
   // 시장 셀렉터 동기화
   const mSel = document.getElementById('market-select');

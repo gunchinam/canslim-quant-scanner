@@ -1,7 +1,10 @@
 yfinance
 pandas
+numpy
 requests
 lxml
 groq
 APScheduler
 finance-datareader
+hmmlearn
+scikit-learn

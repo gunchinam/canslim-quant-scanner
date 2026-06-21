@@ -3462,6 +3462,122 @@ def _cold_start_fill():
     _warmup_moat_cache()
 
 
+@app.route("/api/judge/<ticker>")
+def api_judge(ticker: str):
+    """GET /api/judge/005930.KS  → 진입 여건 시나리오 분류 (stock_judge)"""
+    safe = _validate_ticker(ticker)
+    if not safe:
+        return jsonify({"error": "invalid ticker"}), 400
+
+    _cache_key = f"judge:{safe}"
+    _now = int(time.time())
+    with _ticker_detail_cache_lock:
+        _hit = _ticker_detail_cache.get(_cache_key)
+        if _hit and (_now - _hit.get("_ts", 0)) < 300:   # 5분 TTL
+            return jsonify(_hit["data"])
+
+    try:
+        import sys as _sys
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if _root not in _sys.path:
+            _sys.path.insert(0, _root)
+        from stock_judge import compute_technicals, classify, apply_regime, SCENARIOS
+
+        tc = compute_technicals(safe)
+        scenario, reasons = classify(tc)
+
+        regime_state = None
+        try:
+            from regime_classifier import get_market_regime
+            regime_state = get_market_regime("KR").state
+        except Exception:
+            pass
+
+        scenario, _ = apply_regime(scenario, regime_state, tc)
+        info = SCENARIOS[scenario]
+
+        result = {
+            "ticker":   safe,
+            "scenario": scenario,
+            "label":    info["label"],
+            "color":    info["color"],
+            "timing":   info["timing"],
+            "premark":  info["premark"],
+            "risk":     info["risk"],
+            "reasons":  reasons,
+            "technicals": {
+                "ma20_dev":  round(tc["ma20_dev"], 4),
+                "ma60_dev":  round(tc["ma60_dev"], 4) if tc["ma60_dev"] and not (tc["ma60_dev"] != tc["ma60_dev"]) else None,
+                "rsi":       round(tc["rsi"], 1),
+                "rvol":      round(tc["rvol"], 3),
+                "vol_trend": round(tc["vol_trend"], 3),
+                "chg5d":     round(tc["chg5d"], 4) if tc["chg5d"] and not (tc["chg5d"] != tc["chg5d"]) else None,
+                "dd60":      round(tc["dd60"], 4),
+                "streak_up": tc["streak_up"],
+            },
+        }
+        with _ticker_detail_cache_lock:
+            _ticker_detail_cache[_cache_key] = {"data": result, "_ts": _now}
+        return jsonify(result)
+
+    except Exception as e:
+        logging.warning("api_judge [%s]: %s", safe, e)
+        return jsonify({"error": str(e)}), 500
+
+
+_regime_cache: dict = {}
+_regime_cache_lock = threading.Lock()
+
+@app.route("/api/regime")
+def api_regime():
+    """GET /api/regime  → 현재 KOSPI 시장 레짐 (Bull/Bear/Chop)"""
+    _now = int(time.time())
+    with _regime_cache_lock:
+        if _regime_cache.get("_ts") and (_now - _regime_cache["_ts"]) < 900:  # 15분 TTL
+            return jsonify(_regime_cache["data"])
+
+    try:
+        import sys as _sys
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if _root not in _sys.path:
+            _sys.path.insert(0, _root)
+        from regime_classifier import get_market_regime, R_BULL, R_BEAR, R_CHOP
+
+        result = get_market_regime("KR")
+        _EMOJI = {R_BULL: "🟢", R_BEAR: "🔴", R_CHOP: "🟡"}
+        _LABEL = {R_BULL: "Bull", R_BEAR: "Bear", R_CHOP: "Chop"}
+        _DESC  = {R_BULL: "상승 추세", R_BEAR: "하락 추세", R_CHOP: "횡보"}
+        _POS   = {R_BULL: "풀시드", R_BEAR: "현금", R_CHOP: "절반"}
+
+        sig = result.transition_signal or {}
+        data = {
+            "state":       result.state,
+            "emoji":       _EMOJI.get(result.state, "⚪"),
+            "label":       _LABEL.get(result.state, result.state),
+            "desc":        _DESC.get(result.state, ""),
+            "position":    _POS.get(result.state, ""),
+            "confidence":  round(result.probs.get(result.state, 0.0), 3),
+            "model":       result.model_status,
+            "p_next": {
+                "bull": round(result.p_next.get(R_BULL, 0.0), 3),
+                "bear": round(result.p_next.get(R_BEAR, 0.0), 3),
+                "chop": round(result.p_next.get(R_CHOP, 0.0), 3),
+            },
+            "early_exit":  bool(sig.get("early_exit", False)),
+            "early_long":  bool(sig.get("early_long", False)),
+            "strength":    round(float(sig.get("strength", 0.0)), 3),
+        }
+
+        with _regime_cache_lock:
+            _regime_cache["data"] = data
+            _regime_cache["_ts"]  = _now
+        return jsonify(data)
+
+    except Exception as e:
+        logging.warning("api_regime: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
 threading.Thread(target=_cold_start_fill, daemon=True, name="cold-start-fill").start()
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ LLM  : Groq API (llama-3.3-70b-versatile) — 시황 한줄 요약
 """
 
 import os
+import sys
 import time
 import logging
 import requests
@@ -36,6 +37,16 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 KST = timezone(timedelta(hours=9))
+
+# ── stock_judge 통합 ──────────────────────────────────────────
+_PROJ_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJ_ROOT not in sys.path:
+    sys.path.insert(0, _PROJ_ROOT)
+try:
+    from stock_judge import compute_technicals, classify, apply_regime, SCENARIOS
+    _HAS_JUDGE = True
+except Exception as _e:
+    _HAS_JUDGE = False
 
 
 # ═══════════════════════════════════════════════════════════
@@ -245,6 +256,7 @@ def get_foreign_top(n: int = 30, min_vol_usd: float = 50_000_000) -> pd.DataFram
     df = df[df["등락률"] > 0]
     df = df.sort_values("등락률", ascending=False).head(n).reset_index(drop=True)
     df["순위"] = df.index + 1
+    df["종목명"] = df["티커"].apply(_get_company_name_ko)
     log.info("해외 상위 %d개 추출 완료", len(df))
     return df
 
@@ -294,6 +306,86 @@ def fetch_domestic_news(ticker: str, name: str, count: int = 3) -> list:
     except Exception as e:
         log.warning("국내 뉴스 실패 [%s]: %s", name, e)
         return []
+
+
+# ── 미국 주요 종목 한글명 딕셔너리 ────────────────────────────
+_US_NAME_KO: dict[str, str] = {
+    # 빅테크
+    "AAPL": "애플", "MSFT": "마이크로소프트", "NVDA": "엔비디아", "AMZN": "아마존",
+    "META": "메타", "GOOGL": "알파벳(구글)", "GOOG": "알파벳(구글)", "TSLA": "테슬라",
+    "AVGO": "브로드컴", "ORCL": "오라클", "CRM": "세일즈포스", "ADBE": "어도비",
+    "IBM": "IBM", "CSCO": "시스코", "INTC": "인텔", "QCOM": "퀄컴", "AMD": "AMD",
+    "TXN": "텍사스인스트루먼트", "AMAT": "어플라이드머티리얼즈", "MU": "마이크론",
+    "LRCX": "램리서치", "ADI": "아날로그디바이시스", "MRVL": "마벨테크놀로지",
+    "KLAC": "KLA코퍼레이션", "CDNS": "케이던스디자인", "SNPS": "시놉시스",
+    "MPWR": "몬올리식파워시스템", "ON": "온세미컨덕터", "SWKS": "스카이웍스",
+    "NFLX": "넷플릭스", "TSM": "TSMC", "ASML": "ASML", "ARM": "ARM홀딩스",
+    "SMCI": "슈퍼마이크로컴퓨터", "PLTR": "팔란티어", "APP": "앱로빈",
+    # 금융
+    "JPM": "JP모건", "V": "비자", "MA": "마스터카드", "BAC": "뱅크오브아메리카",
+    "GS": "골드만삭스", "MS": "모건스탠리", "C": "씨티그룹", "WFC": "웰스파고",
+    "AXP": "아메리칸익스프레스", "BRK-B": "버크셔해서웨이", "SPGI": "S&P글로벌",
+    "BX": "블랙스톤", "KKR": "KKR", "APO": "아폴로글로벌",
+    # 헬스케어
+    "LLY": "일라이릴리", "UNH": "유나이티드헬스", "JNJ": "존슨앤존슨",
+    "MRK": "머크", "ABBV": "애브비", "ABT": "애보트", "TMO": "써모피셔",
+    "DHR": "다나허", "AMGN": "암젠", "BMY": "브리스톨마이어스",
+    "PFE": "화이자", "MRNA": "모더나", "REGN": "리제네론", "VRTX": "버텍스",
+    "ISRG": "인튜이티브서지컬", "BSX": "보스턴사이언티픽",
+    # 소비재·리테일
+    "PG": "P&G", "KO": "코카콜라", "PEP": "펩시코", "WMT": "월마트",
+    "HD": "홈디포", "COST": "코스트코", "MCD": "맥도날드", "NKE": "나이키",
+    "SBUX": "스타벅스", "LOW": "로우스", "TGT": "타겟", "AMZN": "아마존",
+    "BKNG": "부킹홀딩스", "MAR": "메리어트", "HLT": "힐튼",
+    # 에너지
+    "XOM": "엑슨모빌", "CVX": "셰브론", "COP": "코노코필립스",
+    "SLB": "슐럼버거", "EOG": "EOG리소시스", "PSX": "필립스66",
+    # 산업·방산
+    "CAT": "캐터필러", "BA": "보잉", "GE": "GE에어로스페이스",
+    "LMT": "록히드마틴", "NOC": "노스롭그러먼", "RTX": "레이시온",
+    "GD": "제너럴다이내믹스", "HON": "하니웰", "UPS": "UPS",
+    "FDX": "페덱스", "DE": "존디어", "ETN": "이튼",
+    # 클라우드·SaaS
+    "SNOW": "스노우플레이크", "DDOG": "데이터독", "NET": "클라우드플레어",
+    "ZS": "지스케일러", "PANW": "팔로알토네트웍스", "CRWD": "크라우드스트라이크",
+    "OKTA": "옥타", "MDB": "몽고DB", "HUBS": "허브스팟", "TTD": "더트레이드데스크",
+    "ZM": "줌", "DOCU": "도큐사인", "BILL": "빌닷컴", "GTLB": "깃랩",
+    "CFLT": "컨플루언트", "MNDY": "먼데이닷컴",
+    # 소비·플랫폼
+    "UBER": "우버", "LYFT": "리프트", "ABNB": "에어비앤비", "DASH": "도어대시",
+    "SHOP": "쇼피파이", "SQ": "블록(스퀘어)", "COIN": "코인베이스",
+    "PYPL": "페이팔", "RBLX": "로블록스", "SNAP": "스냅",
+    # 전기차·미래차
+    "RIVN": "리비안", "LCID": "루시드모터스", "NIO": "니오",
+    "XPEV": "샤오펑", "LI": "리오토", "F": "포드", "GM": "GM",
+    # 유틸·통신
+    "NEE": "넥스트에라에너지", "DUK": "듀크에너지", "SO": "서던컴퍼니",
+    "T": "AT&T", "VZ": "버라이즌", "TMUS": "T모바일", "PM": "필립모리스",
+    # 중국·기타 해외
+    "BABA": "알리바바", "JD": "징둥닷컴", "PDD": "핀둬둬(테무)", "BIDU": "바이두",
+    # ETF (자주 등장하는 것들)
+    "SPY": "S&P500 ETF", "QQQ": "나스닥100 ETF", "IWM": "러셀2000 ETF",
+    "SOXL": "반도체 레버리지 ETF", "TQQQ": "나스닥100 3배 ETF",
+    "GLD": "금 ETF", "SLV": "은 ETF", "MSTR": "마이크로스트래티지",
+    "CVNA": "카바나", "CELH": "셀시어스홀딩스", "ORLY": "오라일리오토",
+    "ANET": "아리스타네트웍스", "NOW": "서비스나우", "WDAY": "워크데이",
+}
+
+
+def _get_company_name_ko(ticker: str) -> str:
+    """티커 → 한글 회사명. 딕셔너리 우선, 없으면 yfinance longName → 번역."""
+    if ticker in _US_NAME_KO:
+        return _US_NAME_KO[ticker]
+    try:
+        import yfinance as yf
+        info = yf.Ticker(ticker).fast_info
+        long_name = getattr(info, "shortName", None) or ticker
+        if long_name == ticker:
+            return ticker
+        ko = _translate_ko(long_name)
+        return ko if ko and ko != long_name else long_name
+    except Exception:
+        return ticker
 
 
 def _translate_ko(text: str) -> str:
@@ -528,16 +620,18 @@ def explain_stocks(stocks: list, perplexity_key: str = "", groq_key: str = "",
                 f"확인 못 하면 해당 ▷에 '확인 불가'만 작성. HEADLINE과 ▷만 출력."
             )
         else:
+            ko_name = _US_NAME_KO.get(ticker, name)
+            name_label = f"{ko_name}({ticker})" if ko_name != ticker else ticker
             return (
-                f"Today({today_s}), {name}({ticker}) surged +{rate:.1f}%.\n\n"
-                f"Search: '{ticker} earnings {today_s}', '{ticker} stock news today', "
-                f"'{ticker} FDA merger analyst upgrade'\n\n"
-                f"[Output — respond in Korean]\n"
-                f"HEADLINE: [core event 20 Korean chars, no ticker, include figures]\n"
-                f"▷ [실적/공시] EPS·매출 실제 수치 vs 예상치\n"
-                f"▷ [catalyst] 구체적 이벤트명·날짜\n\n"
-                f"[Forbidden] generic phrases, unconfirmed figures. "
-                f"Write '확인 불가' if not found. Output HEADLINE and ▷ only."
+                f"오늘({today_s}) 미국 주식 {name_label} 주가가 +{rate:.1f}% 급등했습니다.\n\n"
+                f"웹 검색: '{ticker} {today_s}', '{ticker} stock news today', "
+                f"'{ticker} earnings upgrade catalyst'\n\n"
+                f"[출력 형식 — 반드시 한국어로만 작성]\n"
+                f"HEADLINE: [핵심 이슈 20자 이내, 종목명·티커 제외, 수치 포함]\n"
+                f"▷ [실적/공시] EPS·매출 실제 수치 vs 예상치 또는 공시 내용\n"
+                f"▷ [catalyst] 구체적 이벤트명·날짜 (업그레이드·FDA·M&A 등)\n\n"
+                f"[금지] 영어로 작성 금지. '업종 강세' '섹터 상승' 등 추상 표현 금지. "
+                f"확인 안 되면 해당 ▷에 '확인 불가'만 작성. HEADLINE과 ▷만 출력."
             )
 
     def _call_perplexity(prompt: str, ticker: str) -> tuple[str, dict]:
@@ -722,7 +816,9 @@ def build_markdown(dom_df, for_df, dom_news, for_news, today: str) -> str:
         lines.append("")
     for _, r in for_df.head(10).iterrows():
         nl = for_news.get(r["티커"], [])
-        lines.append(f"### {r['티커']} ({r['시장']}) +{r['등락률']:.2f}%")
+        name_ko = r.get("종목명", r["티커"])
+        name_disp = f"{name_ko} ({r['티커']})" if name_ko != r["티커"] else r["티커"]
+        lines.append(f"### {name_disp} [{r['시장']}] +{r['등락률']:.2f}%")
         if nl:
             for n in nl:
                 lines.append(f"- {n['title']}\n  _{n.get('title_en','')}_\n  {n['url']}")
@@ -824,7 +920,9 @@ def build_telegram_message(dom_df, for_df, dom_news, for_news,
     for _, r in for_df.iterrows():
         ai = ai_explanations.get(r["티커"], {})
         nl = for_news.get(r["티커"], [])
-        lines.append(f"▶ <b>{r['티커']} ({r['시장']})</b> +{r['등락률']:.2f}%")
+        name_ko = r.get("종목명", r["티커"])
+        name_disp = f"{name_ko} ({r['티커']})" if name_ko != r["티커"] else r["티커"]
+        lines.append(f"▶ <b>{name_disp} [{r['시장']}]</b> +{r['등락률']:.2f}%")
         if ai.get("headline"):
             lines.append(f"<b>{ai['headline']}</b>")
             for b in ai.get("bullets", [])[:2]:
@@ -837,7 +935,14 @@ def build_telegram_message(dom_df, for_df, dom_news, for_news,
 
     lines.append("─" * 28)
     top_dom = " · ".join(dom_df.head(5)["종목명"].tolist()) if not dom_df.empty else "-"
-    top_for = " · ".join(for_df.head(5)["티커"].tolist())  if not for_df.empty else "-"
+    if not for_df.empty:
+        top_for = " · ".join(
+            f"{r.get('종목명', r['티커'])}({r['티커']})" if r.get("종목명") != r["티커"]
+            else r["티커"]
+            for _, r in for_df.head(5).iterrows()
+        )
+    else:
+        top_for = "-"
     lines.append(f"💡 <b>오늘의 테마:</b> {top_dom} / {top_for}")
 
     if not dom_df.empty:
@@ -849,6 +954,106 @@ def build_telegram_message(dom_df, for_df, dom_news, for_news,
         lines.append(f"📌 <b>주목 액션:</b> {r0['종목명']} — {action}")
 
     lines.append("─" * 28)
+    return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════
+# 5단계: 진입 여건 분석 (stock_judge 통합)
+# ═══════════════════════════════════════════════════════════
+
+def judge_stocks(tickers_names: list, regime_state=None) -> dict:
+    """
+    강세 종목 전체에 stock_judge 시나리오 분류 적용.
+    tickers_names: [(티커, 종목명), ...]
+    returns: {티커: {scenario, label, color, timing, risk, premark, name}}
+    """
+    if not _HAS_JUDGE:
+        return {}
+
+    import concurrent.futures
+
+    def _one(ticker, name):
+        try:
+            tc = compute_technicals(ticker)
+            scenario, _ = classify(tc)
+            scenario, _ = apply_regime(scenario, regime_state, tc)
+            info = SCENARIOS[scenario]
+            return ticker, {
+                "name":     name,
+                "scenario": scenario,
+                "label":    info["label"],
+                "color":    info["color"],
+                "timing":   info["timing"],
+                "risk":     info["risk"],
+                "premark":  info["premark"],
+            }
+        except Exception as e:
+            log.warning("judge 실패 [%s]: %s", ticker, e)
+            return ticker, None
+
+    results = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        futs = {ex.submit(_one, t, n): (t, n) for t, n in tickers_names}
+        for fut in concurrent.futures.as_completed(futs):
+            try:
+                ticker, result = fut.result()
+                if result:
+                    results[ticker] = result
+            except Exception as e:
+                log.warning("judge future 실패: %s", e)
+
+    log.info("judge_stocks 완료: %d/%d개", len(results), len(tickers_names))
+    return results
+
+
+def build_entry_telegram(judge_results: dict) -> str:
+    """진입 여건 요약 텔레그램 메시지 (브리핑 뒤 별도 발송)."""
+    ENTRY_OK = {"BREAKOUT", "TREND_STRONG", "PULLBACK_HEALTHY"}
+    DANGER   = {"CLIMAX", "EXHAUSTION"}
+    WATCH    = {"OVERBOUGHT"}
+
+    entry  = [(t, v) for t, v in judge_results.items() if v["scenario"] in ENTRY_OK]
+    danger = [(t, v) for t, v in judge_results.items() if v["scenario"] in DANGER]
+    watch  = [(t, v) for t, v in judge_results.items() if v["scenario"] in WATCH]
+
+    lines = [
+        "⚡ <b>진입 여건 분석</b>",
+        "<i>오늘 강세 종목 중 시나리오 분류</i>",
+        "─" * 26,
+    ]
+
+    if entry:
+        lines.append(f"✅ <b>진입 가능 ({len(entry)}종목)</b>")
+        for t, v in entry:
+            label = f"{v['name']}  " if v["name"] != t else ""
+            lines.append(f"{v['color']} <b>{label}({t})</b>  {v['label']}")
+            lines.append(f"   └ {v['timing']}")
+        lines.append("")
+
+    if watch:
+        lines.append(f"⚠️ <b>과매수 주의 ({len(watch)}종목)</b>")
+        for t, v in watch:
+            label = f"{v['name']}  " if v["name"] != t else ""
+            lines.append(f"{v['color']} <b>{label}({t})</b>")
+            lines.append(f"   └ {v['timing']}")
+        lines.append("")
+
+    if danger:
+        lines.append(f"🚫 <b>추격 금지 ({len(danger)}종목)</b>")
+        for t, v in danger:
+            label = f"{v['name']}  " if v["name"] != t else ""
+            lines.append(f"{v['color']} <b>{label}({t})</b>  {v['label']}")
+        lines.append("")
+
+    if not entry and not watch and not danger:
+        lines.append("특이 시나리오 없음 — 전 종목 중립/하락 구간")
+        lines.append("")
+
+    lines.append("─" * 26)
+    lines.append(
+        f"분석 {len(judge_results)}종목 · "
+        f"진입가능 {len(entry)} · 주의 {len(watch)} · 추격금지 {len(danger)}"
+    )
     return "\n".join(lines)
 
 
@@ -869,6 +1074,24 @@ def run_briefing():
     if dom_df.empty and for_df.empty:
         log.error("스크리닝 결과 없음 — 종료")
         return
+
+    # 1.5단계: 진입 여건 분석 (stock_judge)
+    judge_results = {}
+    if _HAS_JUDGE:
+        log.info("진입 여건 분석 중 (stock_judge)...")
+        tickers_names = (
+            [(r["티커"], r["종목명"]) for _, r in dom_df.iterrows()] +
+            [(r["티커"], r.get("종목명", r["티커"])) for _, r in for_df.iterrows()]
+        )
+        regime_st = None
+        try:
+            from regime_classifier import get_market_regime
+            regime_st = get_market_regime("KR").state
+        except Exception:
+            pass
+        judge_results = judge_stocks(tickers_names, regime_st)
+    else:
+        log.info("stock_judge 없음 — 진입 분석 건너뜀")
 
     # 2단계
     log.info("국내 뉴스 수집 중...")
@@ -906,7 +1129,7 @@ def run_briefing():
         {"종목명": r["종목명"], "티커": r["티커"], "등락률": r["등락률"], "시장": r["시장"]}
         for _, r in dom_df.iterrows()
     ] + [
-        {"종목명": r["티커"], "티커": r["티커"], "등락률": r["등락률"], "시장": r["시장"]}
+        {"종목명": r.get("종목명", r["티커"]), "티커": r["티커"], "등락률": r["등락률"], "시장": r["시장"]}
         for _, r in for_df.iterrows()
     ]
     combined_news = {**dom_news, **for_news, **dart_map}
@@ -932,6 +1155,14 @@ def run_briefing():
                                   ai_explanations=ai_explanations)
     ok  = send_telegram(msg)
     log.info("텔레그램 발송 %s", "완료 ✅" if ok else "실패 ❌")
+
+    # 4.5단계: 진입 여건 메시지 별도 발송
+    if judge_results:
+        time.sleep(1)
+        entry_msg = build_entry_telegram(judge_results)
+        ok_entry  = send_telegram(entry_msg)
+        log.info("진입 여건 발송 %s", "완료 ✅" if ok_entry else "실패 ❌")
+
     log.info("=" * 50)
 
 

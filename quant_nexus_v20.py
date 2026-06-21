@@ -3800,11 +3800,15 @@ class QuantNexusApp:
 
     def _save_naver_cache(self):
         """(DEPRECATED: DCF로 대체됨) 네이버 컨센서스 목표가 캐시 저장."""
-        self._naver_target_cache['_ts'] = datetime.now()
-        self._naver_target_cache['_meta'] = self._naver_target_meta
+        # 성공(>0)한 항목만 저장 — 실패(0)는 세션 내 메모리에만 유지하여
+        # 재시작 시 재시도할 수 있게 함
+        to_save = {k: v for k, v in self._naver_target_cache.items()
+                   if k not in ('_ts', '_meta') and v and v > 0}
+        to_save['_ts'] = datetime.now()
+        to_save['_meta'] = {k: v for k, v in self._naver_target_meta.items() if v}
         try:
             with open(self._naver_cache_path, 'wb') as f:
-                pickle.dump(self._naver_target_cache, f)
+                pickle.dump(to_save, f)
         except Exception:
             pass
 

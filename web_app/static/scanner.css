@@ -1993,11 +1993,74 @@ td.score-col {
 .dp-section-timing .dp-hero-stat-cell:nth-child(n+3) {
   border-top: 1px solid var(--border);
 }
+/* ── dp-spark-panel 트랜지션 (scale + fade) ── */
+#dp-spark-panel {
+  opacity: 0;
+  transform: scale(0.98);
+  transition: opacity 150ms ease-out, transform 150ms ease-out;
+  pointer-events: none;
+}
+#dp-spark-panel.dp-spark-panel--hidden {
+  display: none;
+}
+#dp-spark-panel.dp-spark-panel--visible {
+  display: flex;
+  flex-direction: column;
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+/* 스켈레톤 */
+.dp-spark-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+.dp-spark-skel-line {
+  height: 10px;
+  border-radius: 6px;
+  background: var(--surface-muted, #e8eaed);
+  width: 60%;
+  animation: dp-skel-pulse 1.4s ease-in-out infinite;
+}
+.dp-spark-skel-line--sm { width: 40%; height: 8px; }
+.dp-spark-skel-chart {
+  height: 96px;
+  border-radius: 8px;
+  background: var(--surface-muted, #e8eaed);
+  animation: dp-skel-pulse 1.4s ease-in-out infinite;
+}
+.dp-spark-skel-facts {
+  display: flex;
+  gap: 12px;
+}
+.dp-spark-skel-facts .dp-spark-skel-line {
+  flex: 1;
+  width: auto;
+}
+@keyframes dp-skel-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
+/* 스켈레톤 ↔ 콘텐츠 전환 */
+.dp-spark-content {
+  opacity: 0;
+  transform: scale(0.98);
+  transition: opacity 150ms ease-out, transform 150ms ease-out;
+}
+.dp-spark-panel--visible .dp-spark-skeleton { display: none; }
+.dp-spark-panel--visible .dp-spark-content {
+  opacity: 1;
+  transform: scale(1);
+}
+
 .dp-section-timing #dp-spark-panel {
   margin: 0;
   padding: 0;
   flex: 1;
-  display: flex;
   flex-direction: column;
 }
 .dp-section-timing .dp-thermo-compact {
@@ -4943,4 +5006,36 @@ a.news-card-title:hover { color: var(--brand); }
   background: #EDE9FE;
   color: #6B21A8;
   font-weight: 700;
+}
+
+/* ── 드로어 핸드드로잉 차트 ─────────────────────────────── */
+.dp-hd-chart-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 12 / 5.6;
+  overflow: hidden;
+  background: var(--surface);
+}
+.dp-hd-skeleton {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  animation: dp-hd-pulse 1.2s ease-in-out infinite;
+}
+@keyframes dp-hd-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+#dp-hd-chart {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  border-bottom: 1px solid var(--border);
+  transition: opacity 150ms ease;
+}
+#dp-hd-chart.is-loaded {
+  opacity: 0.92;
 }

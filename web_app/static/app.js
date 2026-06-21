@@ -2935,6 +2935,12 @@ function _clearPanelDetail() {
   });
   const rg = document.getElementById('dp-risk-gauge');
   if (rg) rg.style.display = 'none';
+  // spark-panel 리셋: 스켈레톤 상태로 되돌림
+  const _sp = document.getElementById('dp-spark-panel');
+  if (_sp) {
+    _sp.classList.remove('dp-spark-panel--visible');
+    _sp.classList.add('dp-spark-panel--hidden');
+  }
 }
 
 function _populatePanelDetail(d, skipFourAxis) {
@@ -4275,11 +4281,16 @@ async function loadDpFourAxis(ticker) {
   obsDiv.style.display = 'none';
   errDiv.style.display = 'none';
   loading.style.display = 'block';
+  // 차트 영역 초기화 — 이전 종목 차트 잔상 방지
+  const _prevImg = document.getElementById('dp-hd-chart');
+  const _prevSkel = document.getElementById('dp-hd-skeleton');
+  if (_prevImg) { _prevImg.src = ''; _prevImg.classList.remove('is-loaded'); }
+  if (_prevSkel) _prevSkel.style.display = '';
   _dpFourAxisLoadingFor = ticker;
   const reqSeq = ++_dpFourAxisReqSeq;
 
   try {
-    const p = new URLSearchParams({ market: currentMarket, chart: '0' });
+    const p = new URLSearchParams({ market: currentMarket });
     const res = await _fetchWithTimeout(`/api/four_axis/${encodeURIComponent(ticker)}?${p}`);
     if (!res.ok) throw new Error(await _readApiError(res));
     const d = await res.json();
@@ -4289,35 +4300,23 @@ async function loadDpFourAxis(ticker) {
     _dpFourAxisLoadedFor = ticker;
     _dpFourAxisLoadingFor = null;
 
-    // ── Hero 스파크라인 + 52주 위치 ─────────────────────────────
+    // ── 핸드드로잉 차트 이미지 렌더 ─────────────────────────────
     try {
-      const panel = document.getElementById('dp-spark-panel');
-      const sparkEl = document.getElementById('dp-spark');
-      const closes = Array.isArray(d.closes) ? d.closes : [];
-      if (panel && sparkEl && closes.length >= 2) {
-        const up = closes[closes.length - 1] >= closes[0];
-        const col = up ? '#22A463' : '#DC2626';
-        sparkEl.innerHTML = buildSparklineSVG(closes, col);
-        const lastEl = document.getElementById('dp-spark-last');
-        if (lastEl) { lastEl.textContent = fmtPrice(closes[closes.length - 1]); lastEl.style.color = col; }
-        const chgEl = document.getElementById('dp-spark-change');
-        if (chgEl && d.spark_change_pct != null) {
-          const s = d.spark_change_pct >= 0 ? '▲ ' : '▼ ';
-          chgEl.textContent = s + Math.abs(d.spark_change_pct).toFixed(1) + '%';
-          chgEl.classList.toggle('is-down', d.spark_change_pct < 0);
-        }
-        const bar = document.getElementById('dp-wk52-bar');
-        const wlbl = document.getElementById('dp-wk52-label');
-        if (bar && wlbl && d.wk52_high != null && d.wk52_low != null && d.wk52_high > d.wk52_low) {
-          const cur = closes[closes.length - 1];
-          const posPct = Math.max(0, Math.min(100, ((cur - d.wk52_low) / (d.wk52_high - d.wk52_low)) * 100));
-          bar.style.width = posPct.toFixed(0) + '%';
-          const gapFromHigh = Math.round(posPct - 100);  // 고가=0%, 멀수록 큰 음수
-          wlbl.textContent = gapFromHigh === 0 ? '0%' : '−' + Math.abs(gapFromHigh) + '%';
-        }
-        panel.style.display = '';
+      const skeleton = document.getElementById('dp-hd-skeleton');
+      const chartImg = document.getElementById('dp-hd-chart');
+      if (chartImg && d.chart) {
+        chartImg.onload = () => {
+          if (skeleton) skeleton.style.display = 'none';
+          chartImg.classList.add('is-loaded');
+        };
+        chartImg.onerror = () => {
+          if (skeleton) skeleton.style.display = 'none';
+        };
+        chartImg.src = 'data:image/png;base64,' + d.chart;
+      } else if (skeleton) {
+        skeleton.style.display = 'none';
       }
-    } catch (e) { console.warn('hero spark render failed:', e); }
+    } catch (e) { console.warn('handdrawn chart render failed:', e); }
 
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     set('dp-fa-phase', d.phase || '');

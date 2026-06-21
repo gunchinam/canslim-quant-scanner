@@ -2437,7 +2437,7 @@ td.score-col {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  margin: 10px 0 4px;
+  margin: 10px 20px 4px;
 }
 .dp-timing-pro {
   font-size: 13px;

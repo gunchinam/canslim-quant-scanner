@@ -3013,11 +3013,11 @@ _four_axis_render_lock = threading.Lock()  # BG warm만 직렬화 — 유저 요
 
 
 def _warm_four_axis(ticker: str, market: str, timeframe: str = "default") -> None:
-    """BG 선제 4축 캐시 채우기 — 클릭(드로어) 시 분석 즉시 표시.
+    """BG 선제 4축 캐시 채우기 — 클릭(드로어) 시 차트+분석 즉시 표시.
 
-    드로어는 차트를 쓰지 않으므로 no-chart(c0) 페이로드를 워밍한다.
+    드로어가 핸드드로잉 차트를 표시하므로 c1(차트 포함) 페이로드를 워밍한다.
     """
-    cache_key = f"{ticker}:{market}:{timeframe}:c0"
+    cache_key = f"{ticker}:{market}:{timeframe}:c1"
     with _four_axis_cache_lock:
         if cache_key in _four_axis_cache:
             return  # BG warm hit — move_to_end 호출 안 함 (cold entry가 hot으로 위장하는 것 방지)
@@ -3028,7 +3028,7 @@ def _warm_four_axis(ticker: str, market: str, timeframe: str = "default") -> Non
         with _four_axis_cache_lock:
             if cache_key in _four_axis_cache:
                 return
-        payload, err = _compute_four_axis_payload(ticker, market, want_chart=False)
+        payload, err = _compute_four_axis_payload(ticker, market, want_chart=True)
         if payload:
             with _four_axis_cache_lock:
                 if len(_four_axis_cache) >= _FOUR_AXIS_MAX:

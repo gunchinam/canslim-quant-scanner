@@ -3628,30 +3628,30 @@ function _renderEntryVerdict(d) {
   // ── 판단 포스터 + 미니 카드 렌더 (conv 단일 소스) ──
   let _pgCls, _pvWord, _pvReason, _pvBg, _tmWord, _tmSub, _tmBg;
   if (conv >= 72) {
-    _pgCls = 'dvp-green'; _pvWord = '사세요';
-    _pvReason = '지금이 딱 좋은 타이밍이에요.<br>추세도 강하고 거래량도 받쳐줘요.<br>분할로 들어가 보세요.';
-    _pvBg = '사요'; _tmWord = '🟢 지금이에요'; _tmSub = '진입 타이밍 충족'; _tmBg = '지금';
+    _pgCls = 'dvp-green'; _pvWord = '줍줍각';
+    _pvReason = '지금 안 담으면 진짜 후회함<br>추세 ㄹㅇ 좋고 수급도 받쳐주는 중<br>나눠서 조금씩 담아봐';
+    _pvBg = '줍줍'; _tmWord = '🟢 지금 담아'; _tmSub = '담기 딱 좋음'; _tmBg = '담아';
   } else if (conv >= 42) {
-    _pgCls = 'dvp-yellow'; _pvWord = '기다리세요';
-    _pvReason = '좋은 종목이지만 지금 당장 사기엔<br>타이밍이 살짝 애매해요.<br>가격이 조금 내려올 때까지 지켜봐요.';
-    _pvBg = '기다려'; _tmWord = '🟡 조금 기다려요'; _tmSub = '추가 확인 필요'; _tmBg = '기다려';
+    _pgCls = 'dvp-yellow'; _pvWord = '존버각';
+    _pvReason = '좋긴 한데 지금 들어가면 물릴 수 있음<br>조금만 더 기다렸다가 눌리면 담아봐<br>지금은 그냥 눈팅각';
+    _pvBg = '존버'; _tmWord = '🟡 존버각'; _tmSub = '아직 눈팅 중'; _tmBg = '존버';
   } else {
-    _pgCls = 'dvp-red'; _pvWord = '보류예요';
-    _pvReason = '지금은 사기 어려운 상황이에요.<br>여러 지표가 안 좋은 신호를 보내고 있어요.<br>관심 목록에만 담아두세요.';
-    _pvBg = '보류'; _tmWord = '🔴 아직이에요'; _tmSub = '타이밍 미충족'; _tmBg = '아직';
+    _pgCls = 'dvp-red'; _pvWord = '손절각';
+    _pvReason = '지금 들어가면 거의 물릴 각도임<br>지표들이 다 안 좋은 신호 보내는 중<br>관심만 해두고 손 빼셈';
+    _pvBg = '손절'; _tmWord = '🔴 손절각'; _tmSub = '손 빼셈'; _tmBg = '손절';
   }
 
   const _vpEl = document.getElementById('dp-verdict-poster');
   if (_vpEl) {
     _vpEl.style.display = '';
     _vpEl.className = `dp-verdict-poster ${_pgCls}`;
-    _vpEl.innerHTML = `<div class="dvp-eyebrow">이 종목, 지금 살까?</div><div class="dvp-word">${_pvWord}</div><div class="dvp-reason">${_pvReason}</div><div class="dvp-bg">${_pvBg}</div>`;
+    _vpEl.innerHTML = `<div class="dvp-eyebrow">살까? 말까?</div><div class="dvp-word">${_pvWord}</div><div class="dvp-reason">${_pvReason}</div><div class="dvp-bg">${_pvBg}</div>`;
   }
   const _tmEl = document.getElementById('dp-timing-mini');
   if (_tmEl) {
     _tmEl.style.display = '';
     _tmEl.className = `dp-timing-mini ${_pgCls}`;
-    _tmEl.innerHTML = `<div class="dtm-eyebrow">지금 타이밍은?</div><div class="dtm-word">${_tmWord}</div><div class="dtm-sub">${_tmSub} · 확신도 ${conv}%</div><div class="dtm-bg">${_tmBg}</div>`;
+    _tmEl.innerHTML = `<div class="dtm-eyebrow">타이밍은?</div><div class="dtm-word">${_tmWord}</div><div class="dtm-sub">${_tmSub} · 확신도 ${conv}%</div><div class="dtm-bg">${_tmBg}</div>`;
   }
 
   // ── 렌더 (entry-verdict 카드는 내부 데이터 보존용, UI 미노출) ──

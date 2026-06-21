@@ -4370,10 +4370,11 @@ async function loadDpFourAxis(ticker) {
       }
       if (d.momentum?.details?.bull_div) _pros.push('상승 다이버전스 포착 — 바닥 반등 신호예요');
       if (d.momentum?.details?.bear_div) _warns.push('단기 과열 신호가 있어요 — 눌림목 올 수 있어요');
-      let _rHtml = '';
-      _pros.forEach(p  => { _rHtml += `<div class="dp-timing-pro">✅ ${p}</div>`; });
-      _warns.forEach(w => { _rHtml += `<div class="dp-timing-warn">⚠️ ${w}</div>`; });
-      _reasonsEl.innerHTML = _rHtml;
+      const _allItems = [
+        ..._pros.map(p => `<div class="dp-timing-pro">✅ ${p}</div>`),
+        ..._warns.map(w => `<div class="dp-timing-warn">⚠️ ${w}</div>`)
+      ];
+      _reasonsEl.innerHTML = _allItems.slice(0, 3).join('');
     }
 
     header.style.display = 'block';

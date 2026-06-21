@@ -2436,7 +2436,7 @@ td.score-col {
 #dp-fa-reasons {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 8px;
   margin: 10px 20px 4px;
 }
 .dp-timing-pro {
@@ -2557,10 +2557,10 @@ td.score-col {
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 10px;
   padding: 12px 16px;
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--text-primary, #374151);
-  line-height: 1.35;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+  line-height: 1.5;
 }
 .dp-haiku-secondary .oneliner-sub {
   display: block;

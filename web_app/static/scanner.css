@@ -5014,7 +5014,7 @@ a.news-card-title:hover { color: var(--brand); }
   width: 100%;
   aspect-ratio: 12 / 5.6;
   overflow: hidden;
-  background: var(--surface);
+  background: var(--card);
 }
 .dp-hd-skeleton {
   position: absolute;

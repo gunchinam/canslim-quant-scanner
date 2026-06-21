@@ -3627,18 +3627,43 @@ function _renderEntryVerdict(d) {
 
   // ── 판단 포스터 + 미니 카드 렌더 (conv 단일 소스) ──
   let _pgCls, _pvWord, _pvReason, _pvBg, _tmWord, _tmSub, _tmBg;
+  const _pick = arr => arr[Math.floor(Math.random() * arr.length)];
   if (conv >= 72) {
-    _pgCls = 'dvp-green'; _pvWord = '줍줍각';
-    _pvReason = '지금 안 담으면 진짜 후회함<br>추세 ㄹㅇ 좋고 수급도 받쳐주는 중<br>나눠서 조금씩 담아봐';
-    _pvBg = '줍줍'; _tmWord = '🟢 지금 담아'; _tmSub = '담기 딱 좋음'; _tmBg = '담아';
+    _pgCls = 'dvp-green';
+    _pvWord   = _pick(['줍줍각', '풀매각', '슈팅각', '올인각', '담아가']);
+    _pvReason = _pick([
+      '지금 안 담으면 진짜 후회함<br>추세 ㄹㅇ 좋고 수급도 받쳐주는 중<br>나눠서 조금씩 담아봐',
+      '차트 ㄷㄷ함 진짜<br>수급 터지고 모멘텀 살아있음<br>눌리면 풀매각',
+      '이거 지금 아니면 언제 사냐<br>추세 완벽하게 우상향 중<br>분할로 ㄱㄱ',
+      '개좋은 타이밍임 솔직히<br>지표 다 켜져 있고 수급도 뒷받침됨<br>소액이라도 일단 담아봐',
+    ]);
+    _pvBg  = _pick(['줍줍', '풀매', '슈팅']);
+    _tmWord = _pick(['🟢 지금 담아', '🟢 풀매각', '🟢 줍줍 ㄱㄱ', '🟢 슈팅각']);
+    _tmSub = '담기 딱 좋음'; _tmBg = _pvBg;
   } else if (conv >= 42) {
-    _pgCls = 'dvp-yellow'; _pvWord = '존버각';
-    _pvReason = '좋긴 한데 지금 들어가면 물릴 수 있음<br>조금만 더 기다렸다가 눌리면 담아봐<br>지금은 그냥 눈팅각';
-    _pvBg = '존버'; _tmWord = '🟡 존버각'; _tmSub = '아직 눈팅 중'; _tmBg = '존버';
+    _pgCls = 'dvp-yellow';
+    _pvWord   = _pick(['존버각', '눈팅각', '관망각', '기다려봐', '물타기 대기']);
+    _pvReason = _pick([
+      '좋긴 한데 지금 들어가면 물릴 수 있음<br>조금만 더 눌리면 그때 담아봐<br>지금은 눈팅각',
+      '종목 자체는 괜찮은데 타이밍이 애매함<br>좀 더 내려오면 그때 담아<br>지금은 존버 모드',
+      '살짝 고점 느낌남<br>성급하게 들어갔다가 물릴 수 있음<br>관망하면서 기다려봐',
+      '나쁜 종목은 아닌데<br>지금 들어가기엔 리스크 있음<br>조금 더 내려오면 담자',
+    ]);
+    _pvBg  = _pick(['존버', '관망', '눈팅']);
+    _tmWord = _pick(['🟡 존버각', '🟡 눈팅 중', '🟡 기다려봐', '🟡 관망각']);
+    _tmSub = '아직 눈팅 중'; _tmBg = _pvBg;
   } else {
-    _pgCls = 'dvp-red'; _pvWord = '손절각';
-    _pvReason = '지금 들어가면 거의 물릴 각도임<br>지표들이 다 안 좋은 신호 보내는 중<br>관심만 해두고 손 빼셈';
-    _pvBg = '손절'; _tmWord = '🔴 손절각'; _tmSub = '손 빼셈'; _tmBg = '손절';
+    _pgCls = 'dvp-red';
+    _pvWord   = _pick(['손절각', '탈출각', '도망쳐', '버려', '패스각']);
+    _pvReason = _pick([
+      '지금 들어가면 거의 물릴 각도임<br>지표들이 다 안 좋은 신호 보내는 중<br>관심만 해두고 손 빼셈',
+      '차트 개못생김 솔직히<br>수급 빠지고 모멘텀도 죽었음<br>그냥 지켜만 봐',
+      '이거 손대면 안 됨 진짜<br>여러 지표가 다 경고 보내는 중<br>관심종목만 넣고 기다려봐',
+      '지금 들어가면 뇌동매매임<br>더 좋은 자리 나올 때까지 패스<br>절대 추격매수 금지',
+    ]);
+    _pvBg  = _pick(['손절', '탈출', '패스']);
+    _tmWord = _pick(['🔴 손절각', '🔴 탈출각', '🔴 손 빼셈', '🔴 패스각']);
+    _tmSub = '손 빼셈'; _tmBg = _pvBg;
   }
 
   const _vpEl = document.getElementById('dp-verdict-poster');

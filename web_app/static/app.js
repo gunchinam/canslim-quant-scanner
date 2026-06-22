@@ -1984,7 +1984,7 @@ const _STOCK_TRIVIA = [
   '한국 상장사의 배당성향은 미국·유럽에 비해 낮은 편이다. "코리아 디스카운트"의 한 원인으로 꼽힌다.',
   '한국 국민연금은 세계 3위권의 대형 연기금이다. 국내외 주식에 수백조 원을 투자하고 있다.',
   '한국에서 ETF 거래에는 증권거래세가 면제된다.',
-  '한국 코스피 시가총액 1·2위 모두 반도체 기업이다(삼성전자, SK하이닉스).',
+  '한국 코스피 시가총액 1·2위 모두 반도체 기업이다(SK하이닉스, 삼성전자). 2026년 6월 SK하이닉스가 삼성전자를 처음 제쳤다.',
   '한국에서 상장주식 매매 차익은 대주주가 아닌 한 양도소득세가 비과세다(2024년 기준).',
   '한국 증시에서 "테마주"란 특정 이슈에 엮여 급등하는 종목군이다. 선거철에 특히 기승을 부린다.',
   '한국 투자자의 해외주식 투자가 2020년 이후 급증하며 "서학개미"라는 신조어가 생겼다.',
@@ -2814,7 +2814,7 @@ async function openDetail(ticker) {
 
   // 스캔 데이터가 이미 있으면 즉시 렌더링 (빈 드로어 방지)
   const cached = _stockMap[ticker];
-  if (cached) _populatePanelDetail(cached, /* skipFourAxis */ true);
+  if (cached) _populatePanelDetail(cached, /* skipFourAxis */ true, /* skipVerdict */ true);
 
   // 4축 차트 + 종목 상세 + AQ 시그널 + 증권사 컨센서스 + 센티먼트를 모두 병렬로 요청
   // F6: 4축 차트는 IntersectionObserver로 가시영역 진입 시 1회 호출 (rootMargin 200px 사전로딩)
@@ -2937,7 +2937,7 @@ function _clearPanelDetail() {
   if (rg) rg.style.display = 'none';
 }
 
-function _populatePanelDetail(d, skipFourAxis) {
+function _populatePanelDetail(d, skipFourAxis, skipVerdict) {
   _lastDetailData = d;
   _renderHeroWatermark(d);
   setText('dp-name',    d.Name   || d.Ticker || '—');
@@ -3016,7 +3016,7 @@ function _populatePanelDetail(d, skipFourAxis) {
   if (chgEl) {
     const sign = dayChg > 0 ? '+' : '';
     chgEl.textContent = `${sign}${(dayChg * 100).toFixed(2)}%`;
-    chgEl.className = 'dp-metric-val ' + (dayChg > 0 ? 'chg-up' : dayChg < 0 ? 'chg-down' : 'chg-flat');
+    chgEl.className = 'dp-stat-val ' + (dayChg > 0 ? 'chg-up' : dayChg < 0 ? 'chg-down' : 'chg-flat');
   }
 
   // (상승여력은 DCF/증권사 각 행에 인라인 표시됨)
@@ -3063,7 +3063,7 @@ function _populatePanelDetail(d, skipFourAxis) {
   _renderEarningsSummary(d, 'dp-earnings-card', 'dp-earnings-chips');
 
   // 진입 타이밍 카드
-  _renderEntryVerdict(d);
+  if (!skipVerdict) _renderEntryVerdict(d);
 
   // 종합×진입 2축 사분면 배지
   _renderQuadrant(d);
@@ -3103,21 +3103,6 @@ function _populatePanelDetail(d, skipFourAxis) {
   // CAN SLIM 탭으로 초기화
   switchDpTab('canslim');
 
-  // 1008-풀 한줄평 포스터 (4축 차트 위 상단)
-  const haikuEl = document.getElementById('dp-fa-haiku');
-  if (haikuEl) {
-    if (d.OneLiner) {
-      haikuEl.innerHTML = olHtml(d.OneLiner)
-        + (d.OneLinerSub ? `<span class="oneliner-sub">→ ${esc(d.OneLinerSub)}</span>` : '')
-        + (d.OneLinerData ? `<span class="oneliner-data">${esc(d.OneLinerData)}</span>` : '');
-      haikuEl.setAttribute('data-tag', d.OneLinerTag || '');
-      haikuEl.style.display = '';
-    } else {
-      haikuEl.innerHTML = '';
-      haikuEl.removeAttribute('data-tag');
-      haikuEl.style.display = 'none';
-    }
-  }
 
   // 차트 자동 로드 (openDetail에서 병렬 호출 시 skipFourAxis=true)
   if (!skipFourAxis) {
@@ -3498,17 +3483,8 @@ function _renderDetailFeatures(d) {
       else if (rs >= 40) { rsCol = '#6B7280'; rsTxt = '중립';  }
       else if (rs >= 20) { rsCol = '#F59E0B'; rsTxt = '약세';  }
       else               { rsCol = '#DC2626'; rsTxt = '부진';  }
-      // 0~99 도넛 호 게이지로 시각화 — 큰 숫자 단독보다 스케일 내 위치를 즉시 전달
-      const _r = 23, _cx = 28, _cy = 28, _sw = 5;
-      const _circ = 2 * Math.PI * _r;
-      const _dash = (Math.min(99, Math.max(0, rs)) / 99) * _circ;
-      rsVal.innerHTML =
-        `<svg class="dp-rs-donut" width="56" height="56" viewBox="0 0 56 56" role="img" aria-label="RS Rating ${rs} / 99">`
-        + `<circle cx="${_cx}" cy="${_cy}" r="${_r}" fill="none" stroke="var(--surface-muted,#EDEFF2)" stroke-width="${_sw}"/>`
-        + `<circle cx="${_cx}" cy="${_cy}" r="${_r}" fill="none" stroke="${rsCol}" stroke-width="${_sw}" `
-        +   `stroke-dasharray="${_dash.toFixed(1)} ${_circ.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 ${_cx} ${_cy})"/>`
-        + `<text x="${_cx}" y="${_cy}" text-anchor="middle" dominant-baseline="central" font-size="19" font-weight="800" fill="${rsCol}">${rs}</text>`
-        + `</svg>`;
+      rsVal.textContent = String(rs);
+      rsVal.style.color = rsCol;
       // 권고1: 같은 지수(시총군) 내 상대강도 — size 베타 제거한 진짜 순위
       const _IXLBL = { SP500: 'S&P500', SP400: '미드캡', SP600: '스몰캡', NDX: '나스닥100', OTHER: '기타' };
       const bkt = d.RSBucket, bktNm = d.RSBucketName;
@@ -3625,42 +3601,192 @@ function _renderEntryVerdict(d) {
     ...cons.map(t => `<span class="ev-pill ev-con">${esc(t)}</span>`)
   ].join('');
 
-  // ── 판단 포스터 렌더 (conv 단일 소스) ──
-  let _pgCls, _pvWord, _pvReason, _pvBg;
+  // ── 판단 포스터 렌더 (conv 단일 소스, 15단계) ──
+  let _pgCls, _pvWord, _pvReason, _pvBg, _tmWord, _tmSub;
   // ticker + conv 기반 결정론적 선택 — 동일 종목은 재렌더 시에도 같은 문구 유지
   const _tickerHash = (d.Ticker || '').split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0);
   const _seed = Math.abs(_tickerHash * 1000 + Math.round(conv));
   const _pick = arr => arr[_seed % arr.length];
-  if (conv >= 72) {
+  if (conv >= 93) {
     _pgCls = 'dvp-green';
-    _pvWord   = _pick(['줍줍각', '풀매각', '슈팅각', '올인각', '담아가']);
+    _pvWord   = _pick(['역대급', '인생 타이밍', '지금 당장', '올인각', '이게 자리다']);
     _pvReason = _pick([
-      '지금 안 담으면 진짜 후회함<br>추세 ㄹㅇ 좋고 수급도 받쳐주는 중<br>나눠서 조금씩 담아봐',
-      '차트 ㄷㄷ함 진짜<br>수급 터지고 모멘텀 살아있음<br>눌리면 풀매각',
-      '이거 지금 아니면 언제 사냐<br>추세 완벽하게 우상향 중<br>분할로 ㄱㄱ',
-      '개좋은 타이밍임 솔직히<br>지표 다 켜져 있고 수급도 뒷받침됨<br>소액이라도 일단 담아봐',
+      '지표·수급·모멘텀 삼박자 완벽<br>이런 자리 1년에 몇 번 안 옴<br>망설이면 두고두고 후회함',
+      '차트 보고 눈물 날 뻔함<br>모든 조건 동시에 충족된 자리<br>지금 안 담으면 진짜 바보',
+      '수급 폭발에 추세 완벽 우상향<br>기술적·기본적 지표 전부 켜짐<br>인생 타이밍 맞음 진짜',
+      '이런 신호 놓치면 후회함<br>볼수록 좋은 차트에 수급까지 터짐<br>비중 최대로 ㄱㄱ',
     ]);
-    _pvBg  = _pick(['줍줍', '풀매', '슈팅']);
-  } else if (conv >= 42) {
+    _pvBg = _pick(['인생각', '올인', '역대급']);
+    _tmWord = _pick(['🟢 인생 타이밍', '🟢 역대급', '🟢 지금 당장']);
+    _tmSub  = '인생 타이밍';
+  } else if (conv >= 86) {
+    _pgCls = 'dvp-green';
+    _pvWord   = _pick(['올인각', '풀매각', '슈팅각', '지금이야', '강력 매수']);
+    _pvReason = _pick([
+      '지표 다 켜졌고 수급까지 터짐<br>이런 타이밍 자주 안 옴<br>지금 안 담으면 진짜 후회함',
+      '차트 완벽하게 살아있음<br>추세 ㄹㅇ 강하고 모멘텀 최상<br>분할 말고 그냥 풀매각',
+      '수급 뒷받침에 모멘텀도 완벽<br>기술적·기본적 지표 전부 켜짐<br>올인각 나왔다 진짜',
+      '이거 지금 아니면 언제 사냐<br>모든 조건 충족된 자리임<br>소액이라도 반드시 담아봐',
+    ]);
+    _pvBg = _pick(['올인', '풀매', '슈팅']);
+    _tmWord = _pick(['🟢 올인각', '🟢 풀매각', '🟢 슈팅각']);
+    _tmSub  = '극강 타이밍';
+  } else if (conv >= 79) {
+    _pgCls = 'dvp-green';
+    _pvWord   = _pick(['풀매각', '적극 매수', '강하게 담아', '지금 담아', '줍줍각']);
+    _pvReason = _pick([
+      '지금 안 담으면 후회할 수 있음<br>추세 강하고 수급도 뒷받침됨<br>비중 실어서 담아봐',
+      '차트 ㄷㄷ하고 모멘텀 살아있음<br>수급 들어오는 게 확인됨<br>눌리면 추가 담기 각',
+      '지표 대부분 켜진 강한 자리<br>리스크 낮고 기대수익 높음<br>망설이지 말고 담아',
+      '이거 지금 아니면 비싸게 사야 함<br>추세 우상향 확실하고 수급도 좋음<br>분할이라도 지금 시작해',
+    ]);
+    _pvBg = _pick(['풀매', '적극', '줍줍']);
+    _tmWord = _pick(['🟢 풀매각', '🟢 적극 매수', '🟢 줍줍각']);
+    _tmSub  = '강한 매수';
+  } else if (conv >= 72) {
+    _pgCls = 'dvp-green';
+    _pvWord   = _pick(['줍줍각', '담아가', '매수각', '나눠서 담아', '비중 실어']);
+    _pvReason = _pick([
+      '지금 안 담으면 후회함<br>추세 좋고 수급도 받쳐주는 중<br>나눠서 조금씩 담아봐',
+      '차트 ㄷㄷ함<br>수급 들어오고 모멘텀 살아있음<br>눌리면 분할 담기 각',
+      '추세 우상향 중이고 수급도 좋음<br>리스크 관리하면서 분할로 ㄱㄱ<br>성급한 풀매는 피해',
+      '지표 켜져 있고 자리도 좋음<br>욕심 안 부리고 분할로 접근<br>생각보다 좋은 종목임',
+    ]);
+    _pvBg = _pick(['줍줍', '분할', '담기']);
+    _tmWord = _pick(['🟢 줍줍각', '🟢 담아가', '🟢 분할 ㄱㄱ']);
+    _tmSub  = '매수 추천';
+  } else if (conv >= 65) {
+    _pgCls = 'dvp-green';
+    _pvWord   = _pick(['분할 ㄱㄱ', '소량 진입', '슬금슬금', '조심스럽게', '나눠서']);
+    _pvReason = _pick([
+      '나쁘지 않은 자리긴 한데<br>확신이 100%는 아님<br>분할로 리스크 줄여서 접근',
+      '긍정 지표 있지만 일부 애매함<br>풀매보단 소량 분할이 맞는 상황<br>더 좋아지면 추가 담기',
+      '들어갈 수는 있는 자리인데<br>손실 감당 가능한 비중으로만<br>절대 몰빵은 금지',
+      '긍정적인 신호 있지만 리스크도 있음<br>작은 비중으로 먼저 확인해봐<br>차트 좋아지면 추가',
+    ]);
+    _pvBg = _pick(['소량', '분할', '조심']);
+    _tmWord = _pick(['🟢 소량 진입', '🟢 분할 ㄱㄱ', '🟢 슬금슬금']);
+    _tmSub  = '신중 매수';
+  } else if (conv >= 58) {
     _pgCls = 'dvp-yellow';
-    _pvWord   = _pick(['존버각', '눈팅각', '관망각', '기다려봐', '물타기 대기']);
+    _pvWord   = _pick(['테스트 담기', '발만 살짝', '소액만', '일단 찔러봐', '살짝만']);
     _pvReason = _pick([
-      '좋긴 한데 지금 들어가면 물릴 수 있음<br>조금만 더 눌리면 그때 담아봐<br>지금은 눈팅각',
-      '종목 자체는 괜찮은데 타이밍이 애매함<br>좀 더 내려오면 그때 담아<br>지금은 존버 모드',
-      '살짝 고점 느낌남<br>성급하게 들어갔다가 물릴 수 있음<br>관망하면서 기다려봐',
-      '나쁜 종목은 아닌데<br>지금 들어가기엔 리스크 있음<br>조금 더 내려오면 담자',
+      '지표 일부 긍정적이지만 전부는 아님<br>소액으로 먼저 포지션 잡아봐<br>확인되면 비중 늘리는 방식',
+      '긍정 신호 있는데 확신이 안 섬<br>물려도 감당 가능한 소액으로만<br>지켜보면서 추가 판단해',
+      '진입 가능한 자리긴 한데<br>추가 확인이 필요한 상황<br>소량 테스트 후 결정해봐',
+      '애매하긴 한데 아주 나쁘진 않음<br>발만 살짝 담가서 흐름 봐봐<br>좋아지면 그때 비중 추가',
     ]);
-    _pvBg  = _pick(['존버', '관망', '눈팅']);
-  } else {
-    _pgCls = 'dvp-red';
-    _pvWord   = _pick(['손절각', '탈출각', '도망쳐', '버려', '패스각']);
+    _pvBg = _pick(['테스트', '소액', '찔러봐']);
+    _tmWord = _pick(['🟡 테스트 담기', '🟡 소액만', '🟡 발만 살짝']);
+    _tmSub  = '테스트 진입';
+  } else if (conv >= 51) {
+    _pgCls = 'dvp-yellow';
+    _pvWord   = _pick(['긍정 눈팅', '좀 더 봐봐', '시그널 대기', '거의 다 왔어', '조금만 기다려']);
     _pvReason = _pick([
-      '지금 들어가면 거의 물릴 각도임<br>지표들이 다 안 좋은 신호 보내는 중<br>관심만 해두고 손 빼셈',
+      '긍정적인 신호 보이긴 하는데<br>아직 확실히 켜진 건 아님<br>좀 더 지켜보다가 들어가봐',
+      '방향성은 긍정적인데 타이밍이 아직<br>조금만 더 기다리면 좋은 자리 나옴<br>서두르지 말고 시그널 확인해',
+      '나쁜 종목은 아닌데 자리가 좀 이름<br>추세 확인되면 그때 담는 게 맞음<br>조금만 더 기다려봐',
+      '긍정 지표 늘어나는 중인데<br>아직 매수 확신까지는 아님<br>좀 더 보다가 진입 타이밍 잡아봐',
+    ]);
+    _pvBg = _pick(['대기', '시그널', '곧이야']);
+    _tmWord = _pick(['🟡 긍정 눈팅', '🟡 좀 더 봐봐', '🟡 시그널 대기']);
+    _tmSub  = '긍정 관망';
+  } else if (conv >= 44) {
+    _pgCls = 'dvp-yellow';
+    _pvWord   = _pick(['눈팅각', '반반임', '모르겠음', '저울질 중', '중립']);
+    _pvReason = _pick([
+      '좋은 것도 있고 안 좋은 것도 있음<br>확신이 안 서는 자리<br>더 좋은 시그널 나오면 그때 대응',
+      '종목 자체는 나쁘지 않은데<br>타이밍이 살짝 애매함<br>좀 더 내려오면 그때 담자',
+      '반반임 솔직히<br>지금 들어가기도 애매하고 빠지기도 애매함<br>관망하면서 눈팅해봐',
+      '확신이 안 서는 구간<br>섣불리 들어갔다가 멘탈 털릴 수 있음<br>좀 더 지켜보면서 판단해',
+    ]);
+    _pvBg = _pick(['중립', '눈팅', '저울질']);
+    _tmWord = _pick(['🟡 눈팅각', '🟡 반반임', '🟡 중립']);
+    _tmSub  = '중립 관망';
+  } else if (conv >= 37) {
+    _pgCls = 'dvp-yellow';
+    _pvWord   = _pick(['관망각', '기다려봐', '아직은 아냐', '타이밍 아님', '좀 더 기다려']);
+    _pvReason = _pick([
+      '좋긴 한데 지금 들어가면 물릴 수 있음<br>조금만 더 눌리면 그때 담아봐<br>지금은 관망각',
+      '부정 신호 하나둘씩 켜지는 중<br>지금 들어가기엔 타이밍이 안 좋음<br>좀 더 기다려봐',
+      '살짝 고점 느낌 나기 시작함<br>성급하게 들어갔다가 물릴 수 있음<br>관망하면서 기다려봐',
+      '나쁜 종목은 아닌데<br>지금 들어가기엔 리스크가 있음<br>조금 더 내려오면 담자',
+    ]);
+    _pvBg = _pick(['관망', '대기', '기다려']);
+    _tmWord = _pick(['🟡 관망각', '🟡 기다려봐', '🟡 타이밍 아님']);
+    _tmSub  = '소극적 관망';
+  } else if (conv >= 30) {
+    _pgCls = 'dvp-red';
+    _pvWord   = _pick(['고점 주의', '아직 일러', '더 눌려야', '서두르지 마', '대기각']);
+    _pvReason = _pick([
+      '살짝 고점 느낌 남<br>지금 들어가면 물릴 수 있음<br>더 내려오면 그때 검토해봐',
+      '지금 들어가기엔 부담스러운 자리<br>좀 더 눌려야 매력 있는 가격 됨<br>서두르지 마셈',
+      '지표들 부정 신호 보내는 중<br>리스크 크고 기대수익은 작음<br>더 좋은 자리 기다려봐',
+      '차트가 부담스러운 구간<br>수급 빠지기 시작하는 느낌<br>여기서 손댔다가 물리면 고생함',
+    ]);
+    _pvBg = _pick(['고점', '대기', '주의']);
+    _tmWord = _pick(['🟠 고점 주의', '🟠 아직 일러', '🟠 더 눌려야']);
+    _tmSub  = '고점 주의';
+  } else if (conv >= 23) {
+    _pgCls = 'dvp-red';
+    _pvWord   = _pick(['진입 부담', '손 빼봐', '위험한 자리', '뇌동 주의', '패스 고려']);
+    _pvReason = _pick([
+      '지금 들어가면 물릴 각도임<br>지표들 대부분 안 좋은 신호 보내는 중<br>관심종목만 넣고 손 빼셈',
+      '차트 안 좋고 수급도 빠지는 중<br>지금 들어가는 건 뇌동매매임<br>더 내려오면 그때 다시 검토',
+      '여러 지표가 경고 보내는 중<br>리스크 대비 기대수익 너무 안 나옴<br>더 좋은 종목 찾아봐',
+      '지금 자리는 진입하면 안 됨<br>손절라인도 애매하고 지지도 약함<br>완전히 빠질 때까지 기다려',
+    ]);
+    _pvBg = _pick(['부담', '주의', '패스']);
+    _tmWord = _pick(['🟠 진입 부담', '🟠 손 빼봐', '🟠 뇌동 주의']);
+    _tmSub  = '진입 부담';
+  } else if (conv >= 16) {
+    _pgCls = 'dvp-red';
+    _pvWord   = _pick(['강한 경고', '진입 금물', '손 빼셈', '위험 구간', '절대 비추']);
+    _pvReason = _pick([
+      '지금 들어가면 높은 확률로 물림<br>지표들이 전부 경고 보내는 중<br>관심만 해두고 절대 손 대지 마',
+      '차트 안 좋고 수급도 완전 빠지는 중<br>지금 들어가면 뇌동매매 확정<br>더 내려가는 거 구경만 해',
+      '모멘텀 죽고 수급도 없음<br>여기서 들어가면 물리는 거 거의 확정<br>좋아질 때까지 무시해',
+      '지표 전반적으로 매우 안 좋음<br>손절라인 없는 진입은 자살행위<br>절대 추격매수 금지',
+    ]);
+    _pvBg = _pick(['경고', '금물', '위험']);
+    _tmWord = _pick(['🟠 강한 경고', '🟠 진입 금물', '🟠 손 빼셈']);
+    _tmSub  = '강한 경고';
+  } else if (conv >= 10) {
+    _pgCls = 'dvp-red';
+    _pvWord   = _pick(['패스각', '손절각', '도망쳐', '버려', '손 빼셈']);
+    _pvReason = _pick([
+      '지금 들어가면 거의 물릴 각도임<br>지표들이 다 안 좋은 신호<br>관심만 해두고 절대 손대지 마',
       '차트 개못생김 솔직히<br>수급 빠지고 모멘텀도 죽었음<br>그냥 지켜만 봐',
-      '이거 손대면 안 됨 진짜<br>여러 지표가 다 경고 보내는 중<br>관심종목만 넣고 기다려봐',
+      '이거 손대면 안 됨 진짜<br>모든 지표가 경고 보내는 중<br>관심종목만 넣고 기다려봐',
       '지금 들어가면 뇌동매매임<br>더 좋은 자리 나올 때까지 패스<br>절대 추격매수 금지',
     ]);
-    _pvBg  = _pick(['손절', '탈출', '패스']);
+    _pvBg = _pick(['패스', '손절', '회피']);
+    _tmWord = _pick(['🔴 패스각', '🔴 손절각', '🔴 도망쳐']);
+    _tmSub  = '강력 회피';
+  } else if (conv >= 5) {
+    _pgCls = 'dvp-red';
+    _pvWord   = _pick(['탈출각', '청산각', '손절 검토', '빠져나와', '들고 있으면 위험']);
+    _pvReason = _pick([
+      '이미 갖고 있으면 탈출 검토해야 함<br>지표 전부 최악 신호<br>손절이 장기 버티기보다 나음',
+      '차트 완전히 망가진 상황<br>수급 없고 모멘텀 바닥<br>빠르게 나오는 게 맞음',
+      '지금 갖고 있다면 매도 고려해봐<br>회복까지 엄청 오래 걸릴 수 있음<br>기회비용 생각해야 함',
+      '모든 지표 바닥 신호<br>물타기는 절대 안 됨<br>손실 확정하고 나오는 게 현명함',
+    ]);
+    _pvBg = _pick(['탈출', '청산', '손절']);
+    _tmWord = _pick(['🔴 탈출각', '🔴 청산각', '🔴 손절 검토']);
+    _tmSub  = '탈출 권고';
+  } else {
+    _pgCls = 'dvp-red';
+    _pvWord   = _pick(['깡통 주의', '건드리지 마', '최고 위험', '절대 금지', '폭탄이야']);
+    _pvReason = _pick([
+      '이거 손대면 진짜 깡통 각도임<br>지표 전부 최악 중에 최악<br>존재 자체를 잊어버려',
+      '차트 역대급으로 못생겼음<br>수급 제로에 모멘텀 나락<br>절대 건드리지 마',
+      '이런 자리에서 들어가면 미련한 거임<br>회복 가능성도 낮고 기다릴 가치도 없음<br>관심종목에서도 삭제해',
+      '지금 들어가면 깡통 확정에 가까움<br>어떤 이유로도 진입 금지<br>이거 갖고 있으면 지금 당장 팔아',
+    ]);
+    _pvBg = _pick(['깡통', '절대금지', '최위험']);
+    _tmWord = _pick(['🔴 깡통 주의', '🔴 절대 금지', '🔴 건드리지 마']);
+    _tmSub  = '최고 위험';
   }
 
   const _vpEl = document.getElementById('dp-verdict-poster');

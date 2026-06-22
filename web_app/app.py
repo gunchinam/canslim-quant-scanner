@@ -478,6 +478,10 @@ def _override_kr_day_chg(results: list) -> list:
             _p = q.get("price")
             if _p is not None and _p > 0:
                 r["Price"] = float(_p)
+            # 시총도 네이버 실시간으로 교체 — yfinance는 장중 고착
+            _mc = q.get("market_cap_oku")
+            if _mc is not None and _mc > 0:
+                r["_MarketCap"] = float(_mc) * 1e8
         except Exception as _e:
             logging.debug("silent except (app.py): %s", _e)
         return r
@@ -1824,16 +1828,27 @@ def api_ticker(ticker: str):
             logging.debug("MECE scenario failed: %s", _mece_e2)
             result.setdefault("Scenarios", None)
 
-        # ATR top-level 필드 추출
-        result['ATR'] = result.get('volatility', {}).get('details', {}).get('atr', 0)
-        result['ATR_pct'] = result.get('volatility', {}).get('details', {}).get('atr_pct', 0)
+        # ATR top-level 필드 추출 (EntryPlan.atr_pct → ATRPercent 순으로 폴백)
+        result['ATR'] = (result.get('volatility') or {}).get('details', {}).get('atr', 0) or 0
+        result['ATR_pct'] = (
+            (result.get('EntryPlan') or {}).get('atr_pct', 0)
+            or result.get('ATRPercent', 0)
+            or (result.get('volatility') or {}).get('details', {}).get('atr_pct', 0)
+            or 0
+        )
 
         try:
             from web_app.price_levels import build_price_strategy as _mece_price
             _mece_scenarios = result.get("Scenarios", {}).get("scores") if result.get("Scenarios") else None
-            result["PriceLevels"] = _mece_price(result, _mece_scenarios)
+            try:
+                import macro_gate
+                _vol = macro_gate.get_vol_index(market)  # KR=VKOSPI, US=VIX (캐시)
+            except Exception as _vol_e:
+                logging.debug("vol index fetch failed: %s", _vol_e)
+                _vol = None
+            result["PriceLevels"] = _mece_price(result, _mece_scenarios, vol=_vol)
         except Exception as _mece_e3:
-            logging.debug("MECE price levels failed: %s", _mece_e3)
+            logging.warning("MECE price levels failed: %s", _mece_e3)
             result.setdefault("PriceLevels", None)
 
         # ── 응답 캐시 저장 ──

@@ -237,35 +237,35 @@
         <button class="dp-section-btn active" onclick="dpScrollTo('dp-section-conclusion',this)">🎯 살까?</button>
         <button class="dp-section-btn" onclick="dpScrollTo('dp-section-timing',this)">📈 언제?</button>
         <button class="dp-section-btn" onclick="dpScrollTo('dp-section-company',this)">🏢 뭔데?</button>
-        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-detail',this)">📊 얼마나?</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-detail',this)">📊 실적·지표</button>
+        <button class="dp-section-btn" onclick="dpScrollTo('dp-section-news',this)">📰 뉴스·일정</button>
         <button class="dp-section-btn" onclick="dpScrollTo('dp-group-ref',this)">📎 참고</button>
       </nav>
 
-<!-- ②③ 결론+타이밍 통합 카드 -->
+<!-- 결론+타이밍 통합 카드 -->
     <div class="dp-hero-card">
-<!-- ② 🎯 살까? -->
+<!-- 🎯 살까? -->
     <section id="dp-section-conclusion" class="dp-section-conclusion">
       <div id="dp-verdict-poster" class="dp-verdict-poster" style="display:none;"></div>
-      <div class="dp-hero-stats">
-        <div class="dp-hero-stat-cell">
-          <span class="dp-hero-stat-label">현재가</span>
-          <span id="dp-price" class="dp-hero-stat-value">—</span>
+      <div class="dp-stat-strip">
+        <div class="dp-stat-cell">
+          <span class="dp-stat-lbl">현재가</span>
+          <span id="dp-price" class="dp-stat-val">—</span>
         </div>
-        <div class="dp-hero-stat-cell">
-          <span class="dp-hero-stat-label">등락률</span>
-          <span id="dp-day-chg" class="dp-hero-stat-value">—</span>
+        <div class="dp-stat-cell">
+          <span class="dp-stat-lbl">등락률</span>
+          <span id="dp-day-chg" class="dp-stat-val">—</span>
         </div>
-        <div class="dp-hero-stat-cell">
-          <span class="dp-hero-stat-label">RS 등급</span>
-          <div id="dp-rs-value" class="dp-hero-stat-value dp-rs-wrap">—</div>
-          <span id="dp-rs-label" class="dp-hero-stat-hint">/ 99</span>
+        <div class="dp-stat-cell">
+          <span class="dp-stat-lbl">RS 등급</span>
+          <span id="dp-rs-value" class="dp-stat-val">—</span>
+          <span id="dp-rs-label" class="dp-stat-sub">/ 99</span>
         </div>
       </div>
       <!-- 진입 판단 종합 카드 (내부 전용 — UI에 미노출) -->
       <div id="dp-entry-verdict" class="card" style="display:none;margin:12px 20px;overflow:hidden;"></div>
       <!-- 친절한 이유 목록 -->
       <div id="dp-fa-reasons"></div>
-      <div id="dp-fa-haiku" class="dp-haiku-secondary" style="display:none;"></div>
       <div id="dp-investor-card" style="display:none;">
         <div class="card" style="padding:0;overflow:hidden;">
           <div style="padding:12px 16px 8px;font-size:12px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.03em;">투자자 동향</div>
@@ -274,7 +274,7 @@
       </div>
     </section>
 
-<!-- ③ 📈 타이밍 -->
+<!-- 📈 언제? -->
     <section id="dp-section-timing" class="dp-section-timing">
       <div class="dp-hero-flex">
         <div class="dp-hero-left">
@@ -294,19 +294,16 @@
           </div>
         </div>
       </div><!-- /dp-hero-flex -->
-      <!-- 핸드드로잉 4축 차트 -->
       <div id="dp-hd-chart-wrap" class="dp-hd-chart-wrap">
         <div id="dp-hd-skeleton" class="dp-hd-skeleton"></div>
         <img id="dp-hd-chart" src="" alt="차트 분석" />
       </div>
-
       <div class="dp-thermo-compact">
         <div class="dp-thermo-track">
           <div id="dp-thermo-marker"></div>
         </div>
         <div class="dp-thermo-scale"><span>극도공포</span><span>공포</span><span>중립</span><span>탐욕</span><span>극도탐욕</span></div>
       </div>
-
       <div id="dp-fouraxis-loading">분석 불러오는 중...</div>
       <div id="dp-fouraxis-error"></div>
       <div id="dp-fouraxis-header">
@@ -316,7 +313,6 @@
           <span id="dp-fa-stars"></span>
           <span id="dp-fa-stars-meaning"></span>
         </div>
-        <!-- 4축 상세 접기/펴기 -->
         <details class="dp-timing-detail">
           <summary>상세 지표 보기</summary>
           <div class="dp-fouraxis-grid">
@@ -331,16 +327,14 @@
         <div class="dp-fouraxis-obs-title">핵심 관찰</div>
         <div id="dp-fa-observation"></div>
       </div>
+      <!-- 분할매수 플랜 — 타이밍 섹션 마지막 (언제·어떻게 진입할지) -->
+      <div id="dp-split-plan" style="padding:4px 20px 8px;"></div>
     </section>
     </div><!-- /dp-hero-card -->
 
-<!-- ① 🏢 회사 정체성 -->
+<!-- 🏢 뭔데? -->
     <section id="dp-section-company" class="dp-section-company">
-      <div id="dp-news-bar" class="dp-news-bar" style="display:none;">
-        <span class="dp-news-tag">NEWS</span>
-        <a id="dp-news-bar-link" href="#" target="_blank" rel="noopener" class="dp-news-link">—</a>
-      </div>
-      <!-- 핵심 경제적 해자 (Economic Moat) -->
+      <!-- 핵심 경제적 해자 -->
       <div id="dp-moat-card" class="dp-moat-card" style="display:none;">
         <div class="dp-moat-head">
           <span id="dp-moat-icon" class="dp-moat-icon">🛡</span>
@@ -365,7 +359,29 @@
           </div>
         </div>
       </div>
-
+      <!-- 매출 세그먼트 -->
+      <div id="dp-segments-card" class="dp-segments-card" style="display:none;">
+        <div class="dp-segments-head">
+          <span class="dp-segments-icon">📊</span>
+          <div class="dp-segments-titles">
+            <div class="dp-segments-title"><span id="dp-segments-conf" class="dp-conf-dot estimated" title="추정치"></span>매출 세그먼트</div>
+            <div id="dp-segments-meta" class="dp-segments-meta">—</div>
+          </div>
+          <span id="dp-segments-count" class="dp-segments-count">—</span>
+        </div>
+        <div class="dp-segments-body">
+          <div class="dp-segments-grid">
+            <div class="dp-segments-pie">
+              <svg id="dp-segments-svg" viewBox="0 0 100 100" width="160" height="160" aria-hidden="true"></svg>
+            </div>
+            <div id="dp-segments-legend" class="dp-segments-legend"></div>
+          </div>
+          <div class="dp-segments-footnote">
+            최신 사업보고서/10-K 기준 근사치 · 회계연도·환율·재분류로 차이 가능
+          </div>
+        </div>
+      </div>
+      <!-- 경쟁사 비교 -->
       <div id="dp-peers-card" class="dp-peers-card" style="display:none;">
         <div class="dp-peers-head">
           <span class="dp-peers-icon">⚔️</span>
@@ -398,68 +414,19 @@
           </div>
         </div>
       </div>
-
-      <div id="dp-segments-card" class="dp-segments-card" style="display:none;">
-        <div class="dp-segments-head">
-          <span class="dp-segments-icon">📊</span>
-          <div class="dp-segments-titles">
-            <div class="dp-segments-title"><span id="dp-segments-conf" class="dp-conf-dot estimated" title="추정치"></span>매출 세그먼트</div>
-            <div id="dp-segments-meta" class="dp-segments-meta">—</div>
-          </div>
-          <span id="dp-segments-count" class="dp-segments-count">—</span>
-        </div>
-        <div class="dp-segments-body">
-          <div class="dp-segments-grid">
-            <div class="dp-segments-pie">
-              <svg id="dp-segments-svg" viewBox="0 0 100 100" width="160" height="160" aria-hidden="true"></svg>
-            </div>
-            <div id="dp-segments-legend" class="dp-segments-legend"></div>
-          </div>
-          <div class="dp-segments-footnote">
-            최신 사업보고서/10-K 기준 근사치 · 회계연도·환율·재분류로 차이 가능
-          </div>
-        </div>
-      </div>
     </section>
 
-<!-- ④ 📊 상세 (접힘) -->
+<!-- 📊 실적·지표 -->
     <div class="dp-card-group" id="dp-section-detail">
-      <div id="dp-split-plan" style="padding:4px 20px 0;"></div>
       <button class="dp-card-group-toggle" onclick="toggleCardGroup(this)">
-        <span>📊 상세 분석</span>
+        <span>📊 실적·지표</span>
         <svg class="dp-cg-chevron open" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="dp-card-group-body open">
       <div class="dp-disclaimer">
         ⚠️ 등급·신호·목표가는 <b>알고리즘 스크리닝 결과</b>일 뿐, 투자 조언이 아닙니다. <b>드로다운 리스크</b>를 꼭 함께 확인하세요. 판단과 손익은 본인 책임입니다.
       </div>
-      <div class="dp-tabs-card">
-      <nav class="dp-tab-nav">
-        <button class="dp-tab-btn active" data-tab="canslim" data-action="switchDpTab" data-arg="canslim">🏆 CAN SLIM</button>
-        <button class="dp-tab-btn" data-tab="tech" data-action="switchDpTab" data-arg="tech">📐 기술 지표</button>
-        <button class="dp-tab-btn" data-tab="finance" data-action="switchDpTab" data-arg="finance">📊 재무 지표</button>
-        <button class="dp-tab-btn" data-tab="dartnews" id="dp-btn-dartnews" data-action="switchDpTab" data-arg="dartnews" style="display:none;">📰 공시·뉴스</button>
-        <button class="dp-tab-btn" data-tab="usinsight" id="dp-btn-usinsight" data-action="switchDpTab" data-arg="usinsight" style="display:none;">🇺🇸 US 인사이트</button>
-      </nav>
-      <div class="dp-tab-panel active" id="dp-tab-canslim">
-        <div id="dp-breakdown-list"></div>
-      </div>
-      <div class="dp-tab-panel" id="dp-tab-tech">
-        <div id="dp-tech-content" class="dp-tab-content"></div>
-      </div>
-      <div class="dp-tab-panel" id="dp-tab-finance">
-        <div id="dp-finance-content" class="dp-tab-content"></div>
-      </div>
-      <div class="dp-tab-panel" id="dp-tab-dartnews">
-        <div id="dp-dartnews-content" class="dp-tab-content"></div>
-      </div>
-      <div class="dp-tab-panel" id="dp-tab-usinsight">
-        <div id="dp-usinsight-content" class="dp-tab-content"></div>
-      </div>
-      </div><!-- /dp-tabs-card -->
-
-      <div id="dp-drawdown-risk" class="dp-drawdown-wrap"></div>
-
+      <!-- 실적 한눈에 — 상단 배치 -->
       <div id="dp-earnings-card" class="dp-earnings-card" style="display:none;">
         <div class="dp-earnings-head">
           <span class="dp-section-label">실적 한눈에</span>
@@ -467,7 +434,7 @@
         </div>
         <div id="dp-earnings-chips" class="dp-earnings-chips"></div>
       </div>
-
+      <!-- 증권사 컨센서스 — 실적 바로 아래 -->
       <div id="dp-consensus-card" class="dp-consensus-card" style="display:none;">
         <div class="dp-consensus-head">
           <span class="dp-section-label">증권사 컨센서스</span>
@@ -481,7 +448,28 @@
         </div>
         <div id="dpcons-reports" class="dp-consensus-reports"></div>
       </div>
-
+      <!-- 지표 탭 -->
+      <div class="dp-tabs-card">
+      <nav class="dp-tab-nav">
+        <button class="dp-tab-btn active" data-tab="canslim" data-action="switchDpTab" data-arg="canslim">🏆 CAN SLIM</button>
+        <button class="dp-tab-btn" data-tab="tech" data-action="switchDpTab" data-arg="tech">📐 기술 지표</button>
+        <button class="dp-tab-btn" data-tab="finance" data-action="switchDpTab" data-arg="finance">📊 재무 지표</button>
+        <button class="dp-tab-btn" data-tab="usinsight" id="dp-btn-usinsight" data-action="switchDpTab" data-arg="usinsight" style="display:none;">🇺🇸 US 인사이트</button>
+      </nav>
+      <div class="dp-tab-panel active" id="dp-tab-canslim">
+        <div id="dp-breakdown-list"></div>
+      </div>
+      <div class="dp-tab-panel" id="dp-tab-tech">
+        <div id="dp-tech-content" class="dp-tab-content"></div>
+      </div>
+      <div class="dp-tab-panel" id="dp-tab-finance">
+        <div id="dp-finance-content" class="dp-tab-content"></div>
+      </div>
+      <div class="dp-tab-panel" id="dp-tab-usinsight">
+        <div id="dp-usinsight-content" class="dp-tab-content"></div>
+      </div>
+      </div><!-- /dp-tabs-card -->
+      <div id="dp-drawdown-risk" class="dp-drawdown-wrap"></div>
       <div id="dp-midcap-card" style="display:none;">
         <div class="card midcap-detail-card">
           <div class="midcap-detail-header">
@@ -491,17 +479,50 @@
           <div id="dp-midcap-bars" class="midcap-detail-bars"></div>
         </div>
       </div>
-      </div><!-- /상세 분석 body -->
-    </div><!-- /상세 분석 group -->
+      </div><!-- /실적·지표 body -->
+    </div><!-- /실적·지표 group -->
 
-<!-- ── 참고 정보 그룹 (기본 접힘) ─────────────────────── -->
+<!-- 📰 뉴스·일정 — 뉴스/공시/이벤트 통합 -->
+    <div class="dp-card-group" id="dp-section-news">
+      <button class="dp-card-group-toggle" onclick="toggleCardGroup(this)">
+        <span>📰 뉴스·일정</span>
+        <svg class="dp-cg-chevron open" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="dp-card-group-body open">
+      <!-- 최신 뉴스 헤드라인 -->
+      <div id="dp-news-bar" class="dp-news-bar" style="display:none;">
+        <span class="dp-news-tag">NEWS</span>
+        <a id="dp-news-bar-link" href="#" target="_blank" rel="noopener" class="dp-news-link">—</a>
+      </div>
+      <!-- 공시·뉴스 (DART/SEC) — 탭 없이 직접 노출 -->
+      <div id="dp-dartnews-content" class="dp-tab-content"></div>
+      <!-- dartnews 탭 버튼 (JS 호환용, 미노출) -->
+      <button id="dp-btn-dartnews" data-tab="dartnews" data-action="switchDpTab" data-arg="dartnews" style="display:none;"></button>
+      <!-- 종목 일정 (실적·배당락) -->
+      <div id="dp-events-card" class="dp-events-card" style="display:none;">
+        <div class="dp-events-head">
+          <span class="dp-events-icon">📅</span>
+          <div class="dp-events-titles">
+            <div class="dp-events-title">종목 일정</div>
+            <div class="dp-events-sub">실적·배당락 (120일 이내)</div>
+          </div>
+          <span id="dp-events-count" class="dp-events-count">—</span>
+        </div>
+        <div id="dp-events-body" class="dp-events-body"></div>
+        <div class="dp-events-footnote">
+          yfinance 캘린더 · 매크로(FOMC/CPI 등)는 상단 스트립에서 확인
+        </div>
+      </div>
+      </div><!-- /뉴스·일정 body -->
+    </div><!-- /뉴스·일정 group -->
+
+<!-- 📎 참고 정보 -->
       <div class="dp-card-group" id="dp-group-ref">
         <button class="dp-card-group-toggle" onclick="toggleCardGroup(this)">
-          <span>📋 참고 정보</span>
+          <span>📎 참고 정보</span>
           <svg class="dp-cg-chevron open" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="dp-card-group-body open">
-
       <div id="dp-insider-card" class="dp-insider-card" style="display:none;">
         <div class="dp-insider-head">
           <span class="dp-insider-icon">🕵️</span>
@@ -530,22 +551,6 @@
           SEC Form 4 (yfinance) · 옵션행사·증여는 별도 분류 · 한국 종목은 미지원
         </div>
       </div>
-
-      <div id="dp-events-card" class="dp-events-card" style="display:none;">
-        <div class="dp-events-head">
-          <span class="dp-events-icon">📅</span>
-          <div class="dp-events-titles">
-            <div class="dp-events-title">종목 일정</div>
-            <div class="dp-events-sub">실적·배당락 (120일 이내)</div>
-          </div>
-          <span id="dp-events-count" class="dp-events-count">—</span>
-        </div>
-        <div id="dp-events-body" class="dp-events-body"></div>
-        <div class="dp-events-footnote">
-          yfinance 캘린더 · 매크로(FOMC/CPI 등)는 상단 스트립에서 확인
-        </div>
-      </div>
-
       <div id="dp-ownership-card" class="dp-ownership-card" style="display:none;">
         <div class="dp-ownership-head">
           <span class="dp-ownership-icon">👥</span>
@@ -567,7 +572,6 @@
           </div>
         </div>
       </div>
-
         </div><!-- /참고 정보 body -->
       </div><!-- /참고 정보 group -->
 

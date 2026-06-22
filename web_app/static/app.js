@@ -2917,6 +2917,18 @@ async function _loadSentiment(ticker, market, seq) {
     Object.assign(_lastDetailData, data);
     _renderInvestorCard(_lastDetailData);
     _renderFhLogo(_lastDetailData);
+    // US 뉴스 한 줄 바 — _FH_Headlines 첫 항목으로 채움
+    const _bar  = document.getElementById('dp-news-bar');
+    const _link = document.getElementById('dp-news-bar-link');
+    if (_bar && _link) {
+      const _headlines = (data._FH_Headlines || []);
+      const _h = _headlines.find(h => h.title);
+      if (_h) {
+        _link.textContent = _h.title;
+        _link.href = (_h.url && /^https?:\/\//.test(_h.url)) ? _h.url : '#';
+        _bar.style.display = 'flex';
+      }
+    }
   } catch (e) {
     console.debug('sentiment 로드 실패:', e);
   }
@@ -3066,7 +3078,7 @@ function _populatePanelDetail(d, skipFourAxis, skipVerdict) {
   const scoreEl = document.getElementById('dp-score');
   if (scoreEl) {
     scoreEl.textContent = Math.round(d.TotalScore || 0);
-    scoreEl.className   = 'dp-score-num ' + scoreClass(d.TotalScore || 0);
+    scoreEl.className   = 'dp-stat-val ' + scoreClass(d.TotalScore || 0);
   }
 
   const sigEl = document.getElementById('dp-signal');
@@ -3456,6 +3468,14 @@ function _renderEntryVerdict(d) {
 
   const mdd = ep.mdd_current;
   if (mdd != null && mdd < -25) { conv -= 8; cons.push('고 낙폭'); }
+
+  // Signal tier 보정 — 리스트 시그널과 드로워 판단 일치화
+  const sigTier = _signalTier(d.Signal || '');
+  if (sigTier === 'sell' && conv > 45) {
+    conv = 45; cons.push('시그널 약세');
+  } else if (sigTier === 'neutral' && conv > 57) {
+    conv = 57; cons.push('시그널 혼조');
+  }
 
   conv = Math.max(5, Math.min(95, conv));
 
@@ -5982,27 +6002,45 @@ async function captureStockList() {
     const total = (_currentResults || []).length;
     const sectorLbl = (typeof _currentSector !== 'undefined' && _currentSector) ? _currentSector : '전체';
 
+    const strongCnt = (_currentResults || []).filter(s => _signalTier(s.Signal) === 'strong' || _signalTier(s.Signal) === 'buy').length;
+
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'background:#ffffff;padding:0;font-family:-apple-system,Pretendard,Noto Sans KR,system-ui,sans-serif;';
+    wrap.style.cssText = 'background:#fff;overflow:hidden;font-family:-apple-system,Pretendard,"Noto Sans KR",system-ui,sans-serif;';
     wrap.innerHTML = `
-      <div style="background:linear-gradient(135deg,#7C3AED,#3182F6);padding:16px 20px;color:#fff;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div style="background:linear-gradient(135deg,#5B21B6 0%,#4F46E5 48%,#2563EB 100%);padding:22px 28px 20px;position:relative;overflow:hidden;color:#fff;">
+        <div style="position:absolute;top:-55px;right:-25px;width:190px;height:190px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none;"></div>
+        <div style="position:absolute;bottom:-80px;left:-15px;width:230px;height:230px;border-radius:50%;background:rgba(255,255,255,0.04);pointer-events:none;"></div>
+        <div style="position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
           <div>
-            <div style="font-size:16px;font-weight:800;letter-spacing:-0.4px;">${SafeMode.name()} — 종목 목록</div>
-            <div style="font-size:11px;opacity:0.85;margin-top:3px;">${mkt} · ${esc(sectorLbl)} · ${dateStr}</div>
+            <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.55);letter-spacing:1px;text-transform:uppercase;margin-bottom:7px;">Stock Scanner</div>
+            <div style="font-size:22px;font-weight:900;letter-spacing:-0.5px;line-height:1.1;">${SafeMode.name()}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:11px;flex-wrap:wrap;">
+              <span style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.28);border-radius:20px;padding:3px 11px;font-size:11px;font-weight:700;">${mkt}</span>
+              <span style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.28);border-radius:20px;padding:3px 11px;font-size:11px;font-weight:700;">${esc(sectorLbl)}</span>
+              <span style="font-size:11px;color:rgba(255,255,255,0.55);">${dateStr}</span>
+            </div>
           </div>
-          <div style="background:rgba(255,255,255,0.2);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;">${total}종목</div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:7px;flex-shrink:0;">
+            <div style="background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.28);border-radius:14px;padding:12px 22px;text-align:center;min-width:72px;">
+              <div style="font-size:30px;font-weight:900;line-height:1;">${total}</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.65);margin-top:3px;font-weight:600;letter-spacing:0.5px;">종 목</div>
+            </div>
+            ${strongCnt > 0 ? `<div style="background:rgba(0,192,115,0.22);border:1px solid rgba(0,192,115,0.45);border-radius:20px;padding:3px 11px;font-size:10px;font-weight:700;color:#6EE7B7;">🔥 주목 ${strongCnt}개</div>` : ''}
+          </div>
         </div>
       </div>
     `;
     wrap.appendChild(clone);
 
     const footer = document.createElement('div');
-    footer.style.cssText = 'padding:10px 16px;background:#F5F6F8;border-top:1px solid #EAEBEE;font-size:10px;color:#8B95A1;text-align:center;';
-    footer.textContent = '알고리즘 스크리닝 결과일 뿐임. 판단과 손익은 본인 책임임.';
+    footer.style.cssText = 'padding:11px 28px;background:#F8F9FB;border-top:1px solid #ECEEF2;display:flex;align-items:center;justify-content:space-between;gap:8px;';
+    footer.innerHTML = `<span style="font-size:10px;color:#9CA3AF;">⚠ 알고리즘 스크리닝 참고용. 투자 판단·손익은 본인 책임.</span><span style="font-size:10px;font-weight:700;color:#C4C9D4;">${SafeMode.name()}</span>`;
     wrap.appendChild(footer);
 
     stage.appendChild(wrap);
+
+    // 웹폰트 로드 완료 후 캡쳐 — 미로드 시 폴백 폰트로 글자 간격 깨짐 방지
+    await document.fonts.ready;
 
     // 고해상도 캡쳐 — DPR 반영, 최소 scale 3 보장 (4K/레티나 모니터에서도 선명)
     const dpr = window.devicePixelRatio || 1;
@@ -6012,7 +6050,7 @@ async function captureStockList() {
       backgroundColor: '#ffffff',
       useCORS: true,
       logging: false,
-      windowWidth: wrap.scrollWidth,
+      windowWidth: window.innerWidth,
     });
     stage.innerHTML = '';
 
@@ -6065,8 +6103,13 @@ async function captureDetail() {
   const panel = document.getElementById('detail-panel');
   if (!panel) return;
 
-  const ticker = (document.getElementById('dp-ticker')?.textContent || 'stock').trim();
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const ticker   = (document.getElementById('dp-ticker')?.textContent || 'stock').trim();
+  const stockName  = document.getElementById('dp-name')?.textContent?.trim() || '';
+  const stockPrice = document.getElementById('dp-price')?.textContent?.trim() || '';
+  const stockScore = document.getElementById('dp-score')?.textContent?.trim() || '';
+  const stockSig   = document.getElementById('dp-signal')?.textContent?.trim() || '';
+  const dateStr  = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const capDate  = (() => { const n = new Date(); return `${n.getFullYear()}.${String(n.getMonth()+1).padStart(2,'0')}.${String(n.getDate()).padStart(2,'0')} ${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`; })();
 
   // ── 1) 모든 탭 컨텐츠 사전 로드 (라이브 DOM에 데이터 채워둠) ──
   try {
@@ -6151,8 +6194,34 @@ async function captureDetail() {
     pane.parentNode.insertBefore(hdr, pane);
   }
 
-  // 클론을 오프스크린 스테이지에 마운트 (좌측 -9999px)
-  stage.appendChild(clone);
+  // 클론을 브랜드 헤더·푸터 래퍼로 감싸서 오프스크린에 마운트
+  const outerWrap = document.createElement('div');
+  outerWrap.style.cssText = 'background:#fff;overflow:hidden;font-family:-apple-system,Pretendard,"Noto Sans KR",system-ui,sans-serif;';
+  outerWrap.innerHTML = `
+    <div style="background:linear-gradient(135deg,#5B21B6 0%,#4F46E5 48%,#2563EB 100%);padding:20px 24px 18px;position:relative;overflow:hidden;color:#fff;">
+      <div style="position:absolute;top:-45px;right:-20px;width:165px;height:165px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none;"></div>
+      <div style="position:relative;">
+        <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.55);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">종목 분석 리포트</div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div>
+            <div style="font-size:26px;font-weight:900;letter-spacing:-0.6px;line-height:1.1;">${esc(ticker)}</div>
+            ${stockName ? `<div style="font-size:13px;color:rgba(255,255,255,0.75);margin-top:4px;font-weight:500;">${esc(stockName)}</div>` : ''}
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+            ${stockSig ? `<span style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.28);border-radius:20px;padding:4px 13px;font-size:12px;font-weight:700;">${esc(stockSig)}</span>` : ''}
+            ${stockScore ? `<span style="background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.22);border-radius:10px;padding:4px 12px;font-size:13px;font-weight:800;">★ ${esc(stockScore)}점</span>` : ''}
+          </div>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:rgba(255,255,255,0.5);">${capDate}</div>
+      </div>
+    </div>
+  `;
+  outerWrap.appendChild(clone);
+  const capFooter = document.createElement('div');
+  capFooter.style.cssText = 'padding:11px 24px;background:#F8F9FB;border-top:1px solid #ECEEF2;display:flex;align-items:center;justify-content:space-between;gap:8px;';
+  capFooter.innerHTML = `<span style="font-size:10px;color:#9CA3AF;">⚠ 알고리즘 분석 참고용. 투자 판단·손익은 본인 책임.</span><span style="font-size:10px;font-weight:700;color:#C4C9D4;">${SafeMode.name()}</span>`;
+  outerWrap.appendChild(capFooter);
+  stage.appendChild(outerWrap);
 
   // 클론 내 이미지 디코딩 대기 (4축 차트 등 base64 src)
   try {
@@ -6171,22 +6240,25 @@ async function captureDetail() {
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
   function cleanup() {
-    try { stage.removeChild(clone); } catch (_) {}
+    try { stage.removeChild(outerWrap); } catch (_) {}
   }
 
   try {
+    // 웹폰트 로드 완료 후 캡쳐 — 미로드 시 폴백 폰트로 글자 간격 깨짐 방지
+    await document.fonts.ready;
+
     // 고해상도 — DPR 반영, 최소 scale 3 (붙여넣기 시 원본 사이즈 가독성 확보)
     const _dpr = window.devicePixelRatio || 1;
     const _capScale = Math.max(3, Math.ceil(_dpr * 1.5));
-    const canvas = await html2canvas(clone, {
+    const canvas = await html2canvas(outerWrap, {
       scale: _capScale,
       backgroundColor: '#ffffff',
       useCORS: true,
       logging: false,
-      width: clone.scrollWidth,
-      height: clone.scrollHeight,
-      windowWidth: clone.scrollWidth,
-      windowHeight: clone.scrollHeight,
+      width: outerWrap.scrollWidth,
+      height: outerWrap.scrollHeight,
+      windowWidth: window.innerWidth,
+      windowHeight: window.innerHeight,
     });
     const img = canvas.toDataURL('image/png');
     const preview = document.getElementById('share-card-preview');

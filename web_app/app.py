@@ -1745,14 +1745,20 @@ def api_ticker(ticker: str):
     with _ticker_detail_cache_lock:
         _td_cached = _ticker_detail_cache.get(_td_key)
         if _td_cached and (_td_now - _td_cached.get("_ts", 0)) < _TICKER_DETAIL_TTL_SEC:
-            # 한줄평은 최신 로직으로 재생성하되, moat(disk I/O)는 재계산하지 않음
-            try:
-                from one_liner import annotate as _ol_annotate
-                fresh = dict(_td_cached["data"])
-                _ol_annotate([fresh])
-            except Exception:
-                fresh = _td_cached["data"]
-            return jsonify(fresh)
+            # KR 종목이고 BrokerTarget이 없으면 캐시 우회 — 실시간 재조회
+            _skip_cache = (
+                market_arg == "KR"
+                and not (_td_cached.get("data") or {}).get("BrokerTarget")
+            )
+            if not _skip_cache:
+                # 한줄평은 최신 로직으로 재생성하되, moat(disk I/O)는 재계산하지 않음
+                try:
+                    from one_liner import annotate as _ol_annotate
+                    fresh = dict(_td_cached["data"])
+                    _ol_annotate([fresh])
+                except Exception:
+                    fresh = _td_cached["data"]
+                return jsonify(fresh)
     try:
         adapter = _make_adapter()
         result  = adapter.analyze_ticker(ticker, prefer_cache=True)
@@ -1776,6 +1782,19 @@ def api_ticker(ticker: str):
                     logging.debug("silent except (app.py): %s", _e)
             # 네이버 투자자 동향은 /api/investor_flow/<ticker>로 분리 (lazy-load)
             result["_Investor_Available"] = False
+            # 캐시가 BrokerTarget=0으로 저장된 경우 실시간 재조회
+            if not result.get("BrokerTarget"):
+                try:
+                    bt = adapter._fetch_naver_target(ticker)
+                    if bt and bt > 0:
+                        result["BrokerTarget"] = float(bt)
+                        code6_ = _strip_kr_suffix(ticker).zfill(6)
+                        result["BrokerTargetSource"] = (
+                            getattr(adapter, "_naver_target_meta", {}).get(code6_, "")
+                            or "네이버 증권 컨센서스 (국내 증권사 평균)"
+                        )
+                except Exception as _bte:
+                    logging.debug("BrokerTarget live fetch failed: %s", _bte)
         else:
             # US 종목: US_NAMES 한글명 우선 적용
             try:

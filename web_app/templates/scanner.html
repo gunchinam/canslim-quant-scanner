@@ -8,6 +8,9 @@
 <link rel="stylesheet" href="/static/theme.css?v={{ v_theme_css }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<!-- 본문 기본서체: CSS 전반이 'Pretendard'를 폴백으로 기대하므로 실제 로드해 한글/영문/숫자 서체를 통일 -->
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <link rel="preload" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&family=Do+Hyeon&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&family=Do+Hyeon&display=swap"></noscript>
 <link rel="stylesheet" href="/static/scanner.css?v={{ v_scanner_css }}">
 </head>
@@ -243,6 +246,21 @@
 <!-- ② 🎯 살까? -->
     <section id="dp-section-conclusion" class="dp-section-conclusion">
       <div id="dp-verdict-poster" class="dp-verdict-poster" style="display:none;"></div>
+      <div class="dp-hero-stats">
+        <div class="dp-hero-stat-cell">
+          <span class="dp-hero-stat-label">현재가</span>
+          <span id="dp-price" class="dp-hero-stat-value">—</span>
+        </div>
+        <div class="dp-hero-stat-cell">
+          <span class="dp-hero-stat-label">등락률</span>
+          <span id="dp-day-chg" class="dp-hero-stat-value">—</span>
+        </div>
+        <div class="dp-hero-stat-cell">
+          <span class="dp-hero-stat-label">RS 등급</span>
+          <div id="dp-rs-value" class="dp-hero-stat-value dp-rs-wrap">—</div>
+          <span id="dp-rs-label" class="dp-hero-stat-hint">/ 99</span>
+        </div>
+      </div>
       <!-- 진입 판단 종합 카드 (내부 전용 — UI에 미노출) -->
       <div id="dp-entry-verdict" class="card" style="display:none;margin:12px 20px;overflow:hidden;"></div>
       <!-- 친절한 이유 목록 -->
@@ -258,12 +276,6 @@
 
 <!-- ③ 📈 타이밍 -->
     <section id="dp-section-timing" class="dp-section-timing">
-      <div id="dp-timing-mini" class="dp-timing-mini" style="display:none;"></div>
-      <!-- 핸드드로잉 4축 차트 -->
-      <div id="dp-hd-chart-wrap" class="dp-hd-chart-wrap">
-        <div id="dp-hd-skeleton" class="dp-hd-skeleton"></div>
-        <img id="dp-hd-chart" src="" alt="차트 분석" />
-      </div>
       <div class="dp-hero-flex">
         <div class="dp-hero-left">
           <div class="dp-verdict-zone">
@@ -280,23 +292,13 @@
               </div>
             </div>
           </div>
-          <div class="dp-hero-stats">
-            <div class="dp-hero-stat-cell">
-              <span class="dp-hero-stat-label">현재가</span>
-              <span id="dp-price" class="dp-hero-stat-value">—</span>
-            </div>
-            <div class="dp-hero-stat-cell">
-              <span class="dp-hero-stat-label">등락률</span>
-              <span id="dp-day-chg" class="dp-hero-stat-value">—</span>
-            </div>
-            <div class="dp-hero-stat-cell">
-              <span class="dp-hero-stat-label">RS 등급</span>
-              <div id="dp-rs-value" class="dp-hero-stat-value dp-rs-wrap">—</div>
-              <span id="dp-rs-label" class="dp-hero-stat-hint">/ 99</span>
-            </div>
-          </div>
         </div>
       </div><!-- /dp-hero-flex -->
+      <!-- 핸드드로잉 4축 차트 -->
+      <div id="dp-hd-chart-wrap" class="dp-hd-chart-wrap">
+        <div id="dp-hd-skeleton" class="dp-hd-skeleton"></div>
+        <img id="dp-hd-chart" src="" alt="차트 분석" />
+      </div>
 
       <div class="dp-thermo-compact">
         <div class="dp-thermo-track">

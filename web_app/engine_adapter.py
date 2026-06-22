@@ -393,6 +393,11 @@ class ScanAdapter:
         self._naver_cache_path = os.path.join(_BASE, "naver_target_cache.pkl")
         self._naver_fund_cache_path = os.path.join(_BASE, "naver_fund_cache.pkl")
 
+        # ── QuantNexusApp 인스턴스 메서드 바인딩 (_analyze_ticker에서 self.* 접근) ──
+        import types as _types
+        self._fetch_naver_target = _types.MethodType(_qn.QuantNexusApp._fetch_naver_target, self)
+        self._save_naver_cache   = _types.MethodType(_qn.QuantNexusApp._save_naver_cache,   self)
+
         # ── 병렬 초기화: pickle 로드 2건 + 섹터 데이터는 독립적이므로 동시 실행 ──
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as _init_ex:
             _f1 = _init_ex.submit(_qn.QuantNexusApp._load_naver_cache, self)

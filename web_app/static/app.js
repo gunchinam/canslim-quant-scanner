@@ -2400,7 +2400,7 @@ function populateDetail(d) {
       auxBox.style.border     = isUS ? '1px solid var(--border)'
                                      : '1px dashed var(--border)';
       auxBox.style.background = isUS
-        ? 'rgba(0, 113, 227, 0.06)'
+        ? 'var(--brand-tint)'
         : 'var(--bg-tertiary)';
     }
   })();

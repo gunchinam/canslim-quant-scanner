@@ -1988,9 +1988,7 @@ td.score-col {
   border-top: none;
 }
 .dp-section-timing .dp-hero-stat-cell {
-  flex: 1;
   padding: 18px 12px;
-  align-items: center;
   text-align: center;
   border-right: none;
 }
@@ -2525,8 +2523,9 @@ td.score-col {
   line-height: 1;
 }
 .dvp-conf-pct {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
+  vertical-align: super;
 }
 .dvp-conf-lbl {
   font-size: 10px;

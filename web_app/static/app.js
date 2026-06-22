@@ -2400,7 +2400,7 @@ function populateDetail(d) {
       auxBox.style.border     = isUS ? '1px solid var(--border)'
                                      : '1px dashed var(--border)';
       auxBox.style.background = isUS
-        ? 'color-mix(in srgb, var(--brand) 6%, var(--card))'
+        ? 'rgba(0, 113, 227, 0.06)'
         : 'var(--bg-tertiary)';
     }
   })();
@@ -3328,8 +3328,8 @@ function _renderInvestorCard(d) {
   if (items.length === 0) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
   grid.innerHTML = items.map(it => `
-    <div style="display:grid; grid-template-columns:1fr auto; align-items:baseline; gap:12px; padding:12px 1px; border-bottom:1px solid var(--border);">
-      <span style="font-size:12px; color:var(--text-secondary); letter-spacing:0.01em;">${esc(it.label)}</span>
+    <div style="display:grid; grid-template-columns:1fr auto; align-items:baseline; gap:12px; padding:10px 2px; border-bottom:1px solid var(--border);">
+      <span style="font-size:12px; font-weight:600; color:var(--text-tertiary); letter-spacing:0.01em; white-space:nowrap;">${esc(it.label)}</span>
       <span style="font-size:16px; font-weight:700; letter-spacing:-0.015em; font-variant-numeric:tabular-nums; text-align:right; color:${it.color};">${esc(it.value)}${it.sub ? `<small style="display:block; font-size:10.5px; color:var(--text-tertiary); font-weight:600; margin-top:2px; text-align:right;">${it.subIsHtml ? it.sub : esc(it.sub)}</small>` : ''}</span>
     </div>
   `).join('');
@@ -3625,9 +3625,12 @@ function _renderEntryVerdict(d) {
     ...cons.map(t => `<span class="ev-pill ev-con">${esc(t)}</span>`)
   ].join('');
 
-  // ── 판단 포스터 + 미니 카드 렌더 (conv 단일 소스) ──
-  let _pgCls, _pvWord, _pvReason, _pvBg, _tmWord, _tmSub, _tmBg;
-  const _pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  // ── 판단 포스터 렌더 (conv 단일 소스) ──
+  let _pgCls, _pvWord, _pvReason, _pvBg;
+  // ticker + conv 기반 결정론적 선택 — 동일 종목은 재렌더 시에도 같은 문구 유지
+  const _tickerHash = (d.Ticker || '').split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0);
+  const _seed = Math.abs(_tickerHash * 1000 + Math.round(conv));
+  const _pick = arr => arr[_seed % arr.length];
   if (conv >= 72) {
     _pgCls = 'dvp-green';
     _pvWord   = _pick(['줍줍각', '풀매각', '슈팅각', '올인각', '담아가']);
@@ -3638,8 +3641,6 @@ function _renderEntryVerdict(d) {
       '개좋은 타이밍임 솔직히<br>지표 다 켜져 있고 수급도 뒷받침됨<br>소액이라도 일단 담아봐',
     ]);
     _pvBg  = _pick(['줍줍', '풀매', '슈팅']);
-    _tmWord = _pick(['🟢 지금 담아', '🟢 풀매각', '🟢 줍줍 ㄱㄱ', '🟢 슈팅각']);
-    _tmSub = '담기 딱 좋음'; _tmBg = _pvBg;
   } else if (conv >= 42) {
     _pgCls = 'dvp-yellow';
     _pvWord   = _pick(['존버각', '눈팅각', '관망각', '기다려봐', '물타기 대기']);
@@ -3650,8 +3651,6 @@ function _renderEntryVerdict(d) {
       '나쁜 종목은 아닌데<br>지금 들어가기엔 리스크 있음<br>조금 더 내려오면 담자',
     ]);
     _pvBg  = _pick(['존버', '관망', '눈팅']);
-    _tmWord = _pick(['🟡 존버각', '🟡 눈팅 중', '🟡 기다려봐', '🟡 관망각']);
-    _tmSub = '아직 눈팅 중'; _tmBg = _pvBg;
   } else {
     _pgCls = 'dvp-red';
     _pvWord   = _pick(['손절각', '탈출각', '도망쳐', '버려', '패스각']);
@@ -3662,23 +3661,14 @@ function _renderEntryVerdict(d) {
       '지금 들어가면 뇌동매매임<br>더 좋은 자리 나올 때까지 패스<br>절대 추격매수 금지',
     ]);
     _pvBg  = _pick(['손절', '탈출', '패스']);
-    _tmWord = _pick(['🔴 손절각', '🔴 탈출각', '🔴 손 빼셈', '🔴 패스각']);
-    _tmSub = '손 빼셈'; _tmBg = _pvBg;
   }
 
   const _vpEl = document.getElementById('dp-verdict-poster');
   if (_vpEl) {
     _vpEl.style.display = '';
     _vpEl.className = `dp-verdict-poster ${_pgCls}`;
-    _vpEl.innerHTML = `<div class="dvp-eyebrow">살까? 말까?</div><div class="dvp-word">${_pvWord}</div><div class="dvp-reason">${_pvReason}</div><div class="dvp-bg">${_pvBg}</div>`;
+    _vpEl.innerHTML = `<div class="dvp-main"><div class="dvp-eyebrow">살까? 말까?</div><div class="dvp-word">${_pvWord}</div><div class="dvp-reason">${_pvReason}</div></div><div class="dvp-conf"><div class="dvp-conf-num">${conv}<span class="dvp-conf-pct">%</span></div><div class="dvp-conf-lbl">확신도</div></div><div class="dvp-bg">${_pvBg}</div>`;
   }
-  const _tmEl = document.getElementById('dp-timing-mini');
-  if (_tmEl) {
-    _tmEl.style.display = '';
-    _tmEl.className = `dp-timing-mini ${_pgCls}`;
-    _tmEl.innerHTML = `<div class="dtm-eyebrow">타이밍은?</div><div class="dtm-word">${_tmWord}</div><div class="dtm-sub">${_tmSub} · 확신도 ${conv}%</div><div class="dtm-bg">${_tmBg}</div>`;
-  }
-
   // ── 렌더 (entry-verdict 카드는 내부 데이터 보존용, UI 미노출) ──
   card.style.display = 'none';
   card.style.borderLeft = `3px solid ${color}`;
@@ -3929,8 +3919,9 @@ function _renderPriceLevels(d) {
 
   const levels = pl.price_levels;
   const action = pl.action_plan || {};
-  const atr = d.ATR || levels.atr || 0;
-  const atrPct = d.ATR_pct || levels.atr_pct || 0;
+  const vb = pl.vol_band || levels.vol_band || null;
+  const ents = (vb && vb.entries) || [];
+  const kLabel = i => (ents[i] != null ? ents[i].k.toFixed(1) + 'σ' : '');
 
   let html = '<div class="mece-inner">';
   html += '<div class="mece-header"><span class="mece-title">가격대별 대응 전략</span><span class="mece-badge">참고용 시뮬레이션</span></div>';
@@ -3940,10 +3931,10 @@ function _renderPriceLevels(d) {
   if (levels.target_52w_high) pricePoints.push({ price: levels.target_52w_high, label: '52주 고가', cls: 'pm-target' });
   if (levels.target_analyst) pricePoints.push({ price: levels.target_analyst, label: '애널리스트 목표가', cls: 'pm-target' });
   pricePoints.push({ price: levels.price, label: '현재가', cls: 'pm-current' });
-  pricePoints.push({ price: levels.entry_1, label: '1차 (ATR 1x)', cls: 'pm-entry' });
-  pricePoints.push({ price: levels.entry_2, label: '2차 (ATR 2x)', cls: 'pm-entry' });
-  pricePoints.push({ price: levels.entry_3, label: '3차 (ATR 3x)', cls: 'pm-entry' });
-  pricePoints.push({ price: levels.stop_loss, label: '손절 (ATR 4x)', cls: 'pm-stop' });
+  pricePoints.push({ price: levels.entry_1, label: `1차 (${kLabel(0)})`, cls: 'pm-entry' });
+  pricePoints.push({ price: levels.entry_2, label: `2차 (${kLabel(1)})`, cls: 'pm-entry' });
+  pricePoints.push({ price: levels.entry_3, label: `3차 (${kLabel(2)})`, cls: 'pm-entry' });
+  pricePoints.push({ price: levels.stop_loss, label: `손절 (${vb ? vb.stop_k.toFixed(1) + 'σ' : ''})`, cls: 'pm-stop' });
 
   // 피보나치 추가
   if (levels.fib_382) pricePoints.push({ price: levels.fib_382, label: 'Fib 38.2%', cls: 'pm-fib' });
@@ -3963,9 +3954,12 @@ function _renderPriceLevels(d) {
   }
   html += `</div>`;
 
-  // ATR 정보
-  const volLabel = atrPct >= 4 ? '고변동' : atrPct >= 2 ? '보통' : '저변동';
-  html += `<div style="font-size:12px;color:var(--text-secondary);margin-top:8px;">ATR: ${fmtPrice(atr)} (${fmt(atrPct, 1)}%) &middot; 변동성: ${volLabel}</div>`;
+  // 변동성 소스 정보
+  if (vb) {
+    const srcLabel = { VKOSPI: 'VKOSPI', VIX: 'VIX', ATR: '종목 ATR' }[vb.source] || vb.source;
+    const profLabel = vb.profile === 'deep' ? '깊은 급락 밴드 (1~2σ)' : '얕은 눌림 밴드 (0~1σ)';
+    html += `<div style="font-size:12px;color:var(--text-secondary);margin-top:8px;">${esc(srcLabel)} 기준 · 일일 σ <b>${fmt(vb.sigma_daily, 2)}%</b> &middot; ${profLabel}</div>`;
+  }
 
   // 신규 진입자 / 기존 보유자 분기 카드
   const newInv = action.new_investor || {};
@@ -3993,12 +3987,150 @@ function _renderPriceLevels(d) {
   html += `</div>`;
   html += `</div>`; // .action-cards
 
+  // 변동성 분할매수 인터랙티브 섹션 (vol_band 있을 때만)
+  if (vb && ents.length) {
+    html += `<div class="volband" id="volband-sec"></div>`;
+  }
+
   html += '</div>';
   card.innerHTML = html;
+
+  // 인터랙티브 와이어링
+  if (vb && ents.length) _wireVolBand(pl, d);
 
   // 디스클레이머 표시
   const disc = document.getElementById('mece-disclaimer');
   if (disc) disc.style.display = '';
+}
+
+// ── 변동성 분할매수 인터랙티브 상태/렌더 ──────────────────────────────────
+var _vbState = { total: 10000000, mode: 'equal', geoRatio: 1.30, stepMult: 2.5, custom: null };
+
+function _vbWeights(n) {
+  const s = _vbState;
+  let raw;
+  if (s.mode === 'geo') {
+    raw = Array.from({ length: n }, (_, i) => Math.pow(s.geoRatio, i));
+  } else if (s.mode === 'step') {
+    const back = Math.max(1, Math.floor(n / 3));
+    raw = Array.from({ length: n }, (_, i) => (i >= n - back ? s.stepMult : 1.0));
+  } else if (s.mode === 'custom' && s.custom && s.custom.length === n) {
+    raw = s.custom.map(x => Math.max(0, x));
+  } else {
+    raw = Array(n).fill(1);
+  }
+  const sum = raw.reduce((a, b) => a + b, 0) || 1;
+  return raw.map(v => v / sum);
+}
+
+function _wireVolBand(pl, d) {
+  const sec = document.getElementById('volband-sec');
+  if (!sec) return;
+  const vb = pl.vol_band;
+  const ents = vb.entries;
+  const base = pl.price_levels.price;
+  const sigD = vb.sigma_daily;
+  const n = ents.length;
+  const nfmt = v => Math.round(v).toLocaleString('ko-KR');
+
+  function paint() {
+    const w = _vbWeights(n);
+    const total = _vbState.total || 0;
+    const maxW = Math.max(...w);
+    let cum = 0, shares = 0;
+    const rows = w.map((wi, i) => {
+      cum += wi;
+      const amt = total * wi;
+      if (ents[i].price > 0) shares += amt / ents[i].price;
+      return `<tr>
+        <td>${i + 1}회</td>
+        <td>${ents[i].k.toFixed(1)}σ</td>
+        <td>${fmtPrice(ents[i].price)}</td>
+        <td class="vb-acc">${(wi * 100).toFixed(1)}%</td>
+        <td>${nfmt(amt)}</td>
+        <td><span class="vb-bar"><span style="width:${maxW > 0 ? (wi / maxW * 100).toFixed(0) : 0}%"></span></span></td>
+        <td class="vb-dim">${ents[i].prob.toFixed(1)}%</td>
+        <td class="vb-dim">${(cum * 100).toFixed(0)}%</td>
+      </tr>`;
+    }).join('');
+    const avg = shares > 0 ? total / shares : 0;
+    const disc = base > 0 ? (base - avg) / base * 100 : 0;
+
+    // 리스크 시나리오 (배분 반영 재계산)
+    function fill(j) {
+      let a = 0, sh = 0, ws = 0;
+      for (let i = 0; i <= j; i++) { const amt = total * w[i]; a += amt; ws += w[i]; if (ents[i].price > 0) sh += amt / ents[i].price; }
+      return { ac: sh > 0 ? a / sh : 0, ws };
+    }
+    const mid = Math.max(0, Math.round((n - 1) / 2));
+    const s0 = fill(0), sMid = fill(mid), sAll = fill(n - 1);
+    const recMid = sMid.ac > 0 ? (base - sMid.ac) / sMid.ac * 100 : 0;
+    const recAll = sAll.ac > 0 ? (base - sAll.ac) / sAll.ac * 100 : 0;
+    const stressSig = ents[n - 1].k + 1.0;
+    const pStress = base * (1 - stressSig * sigD / 100);
+    const lossStress = sAll.ac > 0 ? (sAll.ac - pStress) / sAll.ac * 100 : 0;
+
+    const scn = [
+      { cls: 'vb-idle', lab: '1회만 체결 후 반등', big: (s0.ws * 100).toFixed(0) + '% 투입', det: `미투입 ${((1 - s0.ws) * 100).toFixed(0)}% — 반등 시 기회손실` },
+      { cls: 'vb-up', lab: `중간(${ents[mid].k.toFixed(1)}σ) 회복`, big: '+' + recMid.toFixed(2) + '%', det: `${(sMid.ws * 100).toFixed(0)}% 투입 · 평단 ${fmtPrice(sMid.ac)}` },
+      { cls: 'vb-up', lab: '전량 체결 후 회복', big: '+' + recAll.toFixed(2) + '%', det: `100% 투입 · 평단 ${fmtPrice(sAll.ac)}` },
+      { cls: 'vb-down', lab: `하방 스트레스 (${stressSig.toFixed(1)}σ)`, big: '−' + lossStress.toFixed(2) + '%', det: `평가손 ${nfmt(total * lossStress / 100)}` },
+    ];
+    const scnHtml = scn.map(s => `<div class="vb-scn ${s.cls}"><div class="vb-scn-lab">${s.lab}</div><div class="vb-scn-big">${s.big}</div><div class="vb-scn-det">${s.det}</div></div>`).join('');
+
+    sec.querySelector('.vb-tbody').innerHTML = rows;
+    sec.querySelector('.vb-summary').innerHTML =
+      `<div class="vb-sum-card"><div class="vb-sum-k">평균 매입단가</div><div class="vb-sum-v">${fmtPrice(avg)}</div><div class="vb-sum-s">기준가 대비 −${disc.toFixed(2)}%</div></div>` +
+      `<div class="vb-sum-card"><div class="vb-sum-k">총 투입금</div><div class="vb-sum-v">${nfmt(total)}</div><div class="vb-sum-s">${n}회 분할</div></div>`;
+    sec.querySelector('.vb-scn-grid').innerHTML = scnHtml;
+  }
+
+  // 모드별 가용 옵션 (deep=6구간이면 step 노출)
+  const modes = [['equal', '균등'], ['geo', '가중']];
+  if (n >= 6) modes.splice(1, 0, ['step', '단계형']);
+  modes.push(['custom', '직접']);
+  const segBtns = modes.map(([m, lbl]) =>
+    `<button class="vb-seg-btn${_vbState.mode === m ? ' on' : ''}" data-m="${m}">${lbl}</button>`).join('');
+
+  sec.innerHTML = `
+    <div class="vb-head">📊 변동성 분할매수</div>
+    <div class="vb-controls">
+      <label class="vb-total-field">총 투입금
+        <input type="number" class="vb-total" value="${_vbState.total}" min="0" step="100000">
+      </label>
+      <div class="vb-seg">${segBtns}</div>
+    </div>
+    <div class="vb-param vb-param-geo" style="display:${_vbState.mode === 'geo' ? 'flex' : 'none'}">
+      <span>공비 r</span><input type="range" class="vb-geo" min="0.5" max="2" step="0.05" value="${_vbState.geoRatio}">
+      <span class="vb-geo-v">${_vbState.geoRatio.toFixed(2)}</span>
+    </div>
+    <div class="vb-param vb-param-step" style="display:${_vbState.mode === 'step' ? 'flex' : 'none'}">
+      <span>후반 가중 배수</span><input type="range" class="vb-step" min="1" max="4" step="0.1" value="${_vbState.stepMult}">
+      <span class="vb-step-v">${_vbState.stepMult.toFixed(1)}×</span>
+    </div>
+    <div class="vb-table-wrap"><table class="vb-table">
+      <thead><tr><th>회차</th><th>σ</th><th>진입가</th><th>비중</th><th>금액</th><th>분포</th><th>도달</th><th>누적</th></tr></thead>
+      <tbody class="vb-tbody"></tbody>
+    </table></div>
+    <div class="vb-summary"></div>
+    <div class="vb-scn-grid"></div>
+    <div class="vb-note">도달확률은 1일 정규분포 기준 · 평균단가 = 총투입금 ÷ 총수량 · 실제 체결·갭·세금 미반영</div>`;
+
+  // 이벤트 바인딩
+  sec.querySelector('.vb-total').addEventListener('input', e => { _vbState.total = parseFloat(e.target.value) || 0; paint(); });
+  sec.querySelectorAll('.vb-seg-btn').forEach(b => b.addEventListener('click', () => {
+    _vbState.mode = b.dataset.m;
+    sec.querySelectorAll('.vb-seg-btn').forEach(x => x.classList.toggle('on', x === b));
+    sec.querySelector('.vb-param-geo').style.display = _vbState.mode === 'geo' ? 'flex' : 'none';
+    sec.querySelector('.vb-param-step').style.display = _vbState.mode === 'step' ? 'flex' : 'none';
+    paint();
+  }));
+  const geoEl = sec.querySelector('.vb-geo');
+  if (geoEl) geoEl.addEventListener('input', e => { _vbState.geoRatio = parseFloat(e.target.value); sec.querySelector('.vb-geo-v').textContent = _vbState.geoRatio.toFixed(2); paint(); });
+  const stepEl = sec.querySelector('.vb-step');
+  if (stepEl) stepEl.addEventListener('input', e => { _vbState.stepMult = parseFloat(e.target.value); sec.querySelector('.vb-step-v').textContent = _vbState.stepMult.toFixed(1) + '×'; paint(); });
+
+  paint();
 }
 
 function _renderFinanceTab(d) {

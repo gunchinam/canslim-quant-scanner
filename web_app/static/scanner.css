@@ -1454,6 +1454,53 @@ td.score-col {
   font-size: 10px; color: var(--text-tertiary); line-height: 1.5;
 }
 
+/* === Serenity 인사이트 카드 === */
+.dp-serenity-card {
+  margin: 12px 20px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--card);
+  overflow: hidden;
+}
+.dp-serenity-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px 8px;
+}
+.dp-serenity-icon { font-size: 20px; flex-shrink: 0; }
+.dp-serenity-titles { flex: 1; min-width: 0; }
+.dp-serenity-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.dp-serenity-sub   { font-size: 10px; color: var(--text-tertiary); margin-top: 1px; }
+.dp-serenity-badge {
+  font-size: 10px; font-weight: 700; padding: 3px 8px;
+  border-radius: 99px; border: 1px solid transparent;
+  white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis;
+}
+.dp-serenity-body { padding: 4px 16px 12px; }
+.dp-serenity-signal-text {
+  font-size: 11px; color: var(--text-secondary); line-height: 1.5;
+  margin-bottom: 8px;
+}
+.dp-serenity-quote {
+  margin: 0 0 8px; padding: 8px 12px;
+  border-left: 3px solid var(--brand);
+  background: rgba(99,102,241,0.05);
+  border-radius: 0 8px 8px 0;
+  font-size: 12px; color: var(--text-primary); line-height: 1.55;
+  font-style: italic;
+}
+.dp-serenity-context {
+  font-size: 11px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px;
+}
+.dp-serenity-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 4px;
+}
+.dp-serenity-link {
+  font-size: 11px; color: var(--brand); text-decoration: none; font-weight: 600;
+}
+.dp-serenity-link:hover { text-decoration: underline; }
+.dp-serenity-date { font-size: 10px; color: var(--text-tertiary); }
+
 /* === 상단 매크로 스트립 (공통 매크로 일정) === */
 .macro-events-strip {
   display: flex; align-items: center; gap: 8px;
@@ -4983,6 +5030,8 @@ a.news-card-title:hover { color: var(--brand); }
   opacity: 0;
   border-bottom: 1px solid var(--border);
   transition: opacity 150ms ease;
+  transform: scale(0.95);
+  transform-origin: center center;
 }
 #dp-hd-chart.is-loaded {
   opacity: 0.92;

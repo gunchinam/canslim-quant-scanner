@@ -3612,6 +3612,23 @@ def api_regime():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/serenity/<ticker>")
+def api_serenity(ticker: str):
+    """Serenity (@aleabitoreddit) 인사이트 조회."""
+    ticker = _validate_ticker(ticker)
+    if not ticker:
+        return jsonify({"error": "invalid ticker"}), 400
+    try:
+        from web_app.serenity import get_serenity_insight
+        result = get_serenity_insight(ticker)
+        if result:
+            return jsonify(result)
+        return jsonify({"error": "not_covered"}), 404
+    except Exception as e:
+        logging.warning("api_serenity: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
 threading.Thread(target=_cold_start_fill, daemon=True, name="cold-start-fill").start()
 
 if __name__ == "__main__":

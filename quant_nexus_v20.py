@@ -6288,6 +6288,27 @@ class QuantNexusApp:
             # vol_impact = 변동성 조정 후 점수 - 슈퍼 그로스 직전 base
             # (괄호 누락 + super_mult 분할 보정의 클리핑 손실 문제 수정)
             vol_impact = va["adj_score"] - base_pre_super
+            _KO_EN = {
+                'ACCUMULATION': '매집', 'DISTRIBUTION': '분산',
+                'HIGH': '높음', 'LOW': '낮음', 'MODERATE': '보통', 'NORMAL': '보통',
+                'EXTREME': '극위험', 'VERY_HIGH': '매우 높음', 'ELEVATED': '주의',
+                'STRONG_BUY': '강력 매수', 'BUY': '매수', 'MODERATE_BUY': '적정 매수',
+                'SLIGHT_UPSIDE': '소폭 상승 여력', 'AT_TARGET': '목표가 수준',
+                'SLIGHT_OVERVALUED': '소폭 고평가', 'OVERVALUED': '고평가',
+                'NOT_APPLICABLE': '해당 없음',
+                'STRONG_TREND': '강한 추세', 'TRENDING': '추세 지속',
+                'MEAN_REVERTING': '평균 회귀', 'RANDOM_WALK': '랜덤 워크',
+                'BULLISH': '강세', 'MILD_BULLISH': '약 강세',
+                'BEARISH': '약세', 'MILD_BEARISH': '약 약세',
+                'STRONG_BULLISH': '강한 상승', 'STRONG_BEARISH': '강한 하락',
+                'BUY_TREND': '매수 추세', 'SELL_TREND': '매도 추세',
+                'POSSIBLE_REVERSAL': '반전 가능',
+                'NEUTRAL': '중립', 'SELL': '약세 신호',
+                'STRONG_BULL': '강한 상승장', 'BULL': '상승장',
+                'SIDEWAYS_BULL': '횡보(상승 우위)', 'SIDEWAYS': '횡보',
+                'STRONG_BEAR': '강한 하락장', 'BEAR': '하락장',
+            }
+            _ko = lambda v: _KO_EN.get(str(v), str(v))
             try:
                 breakdown = [
                 # ── CAN SLIM 7원칙 ───────────────────────────────────
@@ -6321,12 +6342,12 @@ class QuantNexusApp:
 
                 ("[I] 기관 수급 (Institutional)",
                  round(f_smart_money, 1),
-                 f"기관 자금 흐름: '{flow['signal']}'이에요. "
+                 f"기관 자금 흐름: '{_ko(flow['signal'])}'이에요. "
                  f"매수 압력이 {'강해요' if flow['mfi'] > 60 else '약해요' if flow['mfi'] < 40 else '중립이에요'} (MFI {flow['mfi']:.0f})."),
 
                 ("[M] 시장 방향 (Market Direction)",
                  round(f_regime, 1),
-                 f"현재 시장 방향: '{regime['m_label']}'이에요. "
+                 f"현재 시장 방향: '{_ko(regime.get('regime', ''))}'이에요. "
                  f"추세 강도가 {'강해요' if regime['adx'] > 25 else '약해요'} (ADX {regime['adx']:.0f})."),
 
                 # ── 보조 퀀트 전략 ────────────────────────────────────
@@ -6351,41 +6372,40 @@ class QuantNexusApp:
                  round(f_mtf, 1),
                  f"단기·중기·장기 추세 종합: "
                  f"{'강한 상승 추세예요.' if mtf_raw >= 30 else '상승 추세예요.' if mtf_raw > 0 else '하락 추세예요.' if mtf_raw < 0 else '중립이에요.'} "
-                 f"(신호: {mtf['signal']})"),
+                 f"(신호: {_ko(mtf['signal'])})"),
 
                 ("[Quant] Drawdown Risk",
                  round(f_drawdown, 1),
-                 f"최근 최대 낙폭(MDD) {dd['current_dd']:.0%}이에요. "
-                 f"위험도는 '{dd['risk']}'로 평가돼요."),
+                 f"기간 내 최대 낙폭(MDD) {dd['max_dd']:.0%} / 현재 고점 대비 {dd['current_dd']:.0%}이에요. "
+                 f"위험도는 '{_ko(dd['risk'])}'로 평가돼요."),
 
                 ("[Quant] Smart Money Flow",
                  round(f_smart_money, 1),
                  f"스마트머니 흐름 — A/D: "
-                 f"{'매집' if flow['ad'] == 'bullish' else '분산' if flow['ad'] == 'bearish' else '중립'}, "
-                 f"OBV 추세: {'상승' if flow['obv_trend'] == 'up' else '하락' if flow['obv_trend'] == 'down' else '횡보'}이에요. "
-                 f"기관 자금이 {'들어오고 있어요.' if flow['ad'] == 'bullish' else '빠져나가고 있어요.' if flow['ad'] == 'bearish' else '중립이에요.'}"),
+                 f"{'매집' if flow['ad'] == 1 else '분산' if flow['ad'] == -1 else '중립'}, "
+                 f"OBV 추세: {'상승' if flow['obv_trend'] == 'BULLISH' else '하락' if flow['obv_trend'] == 'BEARISH' else '횡보'}이에요. "
+                 f"기관 자금이 {'들어오고 있어요.' if flow['ad'] == 1 else '빠져나가고 있어요.' if flow['ad'] == -1 else '중립이에요.'}"),
 
                 ("[Quant] Target Price Factor",
                  round(f_price_target, 1),
                  f"목표가 팩터 점수 {pt['score']:+.0f}점을 "
                  f"{'노무라식 ' + str(pt.get('target_method', 'Nomura')) if pt.get('nomura_target', 0) > 0 and float(pt.get('target', 0)) == float(pt.get('nomura_target', 0)) else 'DCF'} "
                  f"기준 목표가로 계산했어요. "
-                 f"현재 목표가 {pt['target']:,.0f}, 상승여력 {pt['upside']:+.0%}, 전망은 '{pt['view']}'예요."),
+                 f"현재 목표가 {pt['target']:,.0f}, 상승여력 {pt['upside']:+.0%}, 전망은 '{_ko(pt['view'])}'예요."),
 
                 ("[Quant] Short Interest",
                  round(f_short_int, 1),
-                 f"공매도 비율 {si['pct']:.0%}로 위험도는 '{si['risk']}'이에요. "
+                 f"공매도 비율 {si['pct']:.0%}로 위험도는 '{_ko(si['risk'])}'이에요. "
                  f"{'공매도가 많아 주의가 필요해요.' if si['pct'] > 0.05 else '공매도 부담이 적어요.'}"),
 
                 ("[Math] Hurst Exponent",
                  round(_n(hurst["score"], scale=2.5), 1),
-                 f"허스트 지수 {hurst['h']:.2f}로 '{hurst['nature']}'를 나타내요. "
+                 f"허스트 지수 {hurst['h']:.2f}로 '{_ko(hurst['nature'])}'를 나타내요. "
                  f"{'추세가 지속될 가능성이 높아요.' if hurst['h'] > 0.6 else '평균 회귀 성향이 강해요.' if hurst['h'] < 0.4 else '방향성이 불확실해요.'}"),
 
                 ("[Math] Kalman Filter",
                  round(_n(kf["score"], scale=2.5), 1),
-                 f"칼만 필터 신호: "
-                 f"{'매수' if kf['signal'] == 'buy' else '매도' if kf['signal'] == 'sell' else '중립'}이에요. "
+                 f"칼만 필터 신호: {_ko(kf.get('signal', 'NEUTRAL'))}이에요. "
                  f"추세 신뢰도 {hurst_kalman_trust:.0%}예요."),
 
                 ("[Math] Stat Arb Z-Score",
@@ -6401,7 +6421,7 @@ class QuantNexusApp:
                 ("[Sentiment] 시장 심리 프록시",
                  round(f_sentiment, 1),
                  (f"뉴스 없이 가격·거래량만으로 심리를 추정했어요. "
-                  f"현재 신호는 '{sent['signal']}'이에요. "
+                  f"현재 신호는 '{_ko(sent['signal'])}'이에요. "
                   f"상승 거래량 비중 {sent['up_vol_ratio']:.0%}, "
                   f"갭 방향 {'+위' if sent['gap_bias'] > 0 else '아래'}, "
                   f"종가 강도 {sent['close_strength']:.0%}예요."))]

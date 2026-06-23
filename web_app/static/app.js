@@ -196,6 +196,14 @@ function scoreClass(score) {
   return 'score-low';
 }
 
+function _scoreVerdict(score) {
+  if (score >= 70) return '우수';   // green
+  if (score >= 50) return '양호';   // yellow
+  if (score >= 20) return '미흡';   // red-light
+  if (score >= 0)  return '주의';   // red
+  return '미달';                    // red, below zero
+}
+
 function _signalTier(signal) {
   if (!signal) return 'neutral';
   const s = signal.toUpperCase();
@@ -2701,7 +2709,7 @@ function _breakdownItemHtml(item) {
     </div>
     <svg class="cs-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
   </div>
-  <div class="cs-score-big ${sc}">${(typeof score === 'number' && isFinite(score)) ? fmt(score, 1) : '<span style="font-size:11px;color:var(--text-tertiary);">데이터 부족</span>'}</div>
+  <div class="cs-score-big ${sc}">${(typeof score === 'number' && isFinite(score)) ? _scoreVerdict(score) : '<span style="font-size:11px;color:var(--text-tertiary);">데이터 부족</span>'}</div>
   <div class="cs-bar-wrap"><div class="cs-bar-fill ${sc}" style="width:${barW}%"></div></div>
   ${briefDesc ? `<div class="cs-desc-brief">${esc(_trKo(briefDesc))}</div>` : ''}
 </div>`;
@@ -2822,6 +2830,7 @@ async function openDetail(ticker) {
   _loadSentiment(ticker, currentMarket, seq);
   _loadInvestorFlow(ticker, currentMarket, seq);
   loadConsensus(ticker, 'dp-consensus-card', 'dpcons');
+  _loadSerenity(ticker, seq);
 
   try {
     const p   = new URLSearchParams({ market: currentMarket, strategy: currentStrategy });
@@ -2865,6 +2874,36 @@ async function _loadInvestorFlow(ticker, market, seq) {
   }
 }
 
+async function _loadSerenity(ticker, seq) {
+  const card = document.getElementById('dp-serenity-card');
+  if (card) card.style.display = 'none';
+  try {
+    const res = await fetch(`/api/serenity/${encodeURIComponent(ticker)}`);
+    if (seq !== _detailSeq) return;
+    if (!res.ok) return; // 커버리지 없는 종목 — 조용히 숨김
+    const d = await res.json();
+    if (!d || d.error || seq !== _detailSeq) return;
+    const colorMap = { green: '#22c55e', yellow: '#f59e0b', red: '#ef4444', neutral: '#94a3b8' };
+    const bgMap    = { green: 'rgba(34,197,94,0.08)', yellow: 'rgba(245,158,11,0.08)', red: 'rgba(239,68,68,0.08)', neutral: 'rgba(148,163,184,0.08)' };
+    const c = d.color || 'neutral';
+    const badge = document.getElementById('dp-serenity-signal-badge');
+    const signalEl = document.getElementById('dp-serenity-signal');
+    const quoteEl  = document.getElementById('dp-serenity-quote');
+    const ctxEl    = document.getElementById('dp-serenity-context');
+    const linkEl   = document.getElementById('dp-serenity-link');
+    const dateEl   = document.getElementById('dp-serenity-date');
+    if (badge)   { badge.textContent = d.signal.split('—')[0].trim().split('(')[0].trim(); badge.style.background = bgMap[c]; badge.style.color = colorMap[c]; badge.style.borderColor = colorMap[c] + '44'; }
+    if (signalEl) signalEl.textContent = d.signal;
+    if (quoteEl)  quoteEl.textContent  = d.quote ? `"${d.quote}"` : '';
+    if (ctxEl)    ctxEl.textContent    = d.context || '';
+    if (linkEl)   { linkEl.href = d.tweet_url || '#'; linkEl.style.display = d.tweet_url ? '' : 'none'; }
+    if (dateEl)   dateEl.textContent = d.tweet_date ? d.tweet_date.slice(0, 10) : '';
+    if (card) card.style.display = '';
+  } catch (e) {
+    console.debug('serenity 로드 실패:', e);
+  }
+}
+
 async function _loadSentiment(ticker, market, seq) {
   if (market !== 'US') return;
   try {
@@ -2877,7 +2916,6 @@ async function _loadSentiment(ticker, market, seq) {
     // 키 머지 후 수급/센티먼트 카드만 재렌더
     Object.assign(_lastDetailData, data);
     _renderInvestorCard(_lastDetailData);
-    _renderFhNews(_lastDetailData);
     _renderFhLogo(_lastDetailData);
   } catch (e) {
     console.debug('sentiment 로드 실패:', e);
@@ -2908,6 +2946,10 @@ function _clearPanelDetail() {
   if (_ec2) _ec2.style.display = 'none';
   const _ic = document.getElementById('dp-insider-card');
   if (_ic) _ic.style.display = 'none';
+  const _src = document.getElementById('dp-serenity-card');
+  if (_src) _src.style.display = 'none';
+  const _tm = document.getElementById('dp-thermo-marker');
+  if (_tm) _tm.style.left = '50%';
   const _lb = document.getElementById('dp-leader-badge');
   if (_lb) _lb.style.display = 'none';
   const _el = document.getElementById('dp-link-external');
@@ -3114,39 +3156,6 @@ function _populatePanelDetail(d, skipFourAxis, skipVerdict) {
 }
 
 // ── Finnhub 뉴스 헤드라인 리스트 (US, 최근 7일) ──────────────────────────
-function _renderFhNews(d) {
-  const existing = document.getElementById('dp-fh-news');
-  if (!d || !d._FH_Available || !Array.isArray(d._FH_Headlines) || d._FH_Headlines.length === 0) {
-    if (existing) existing.remove();
-    return;
-  }
-  let wrap = existing;
-  if (!wrap) {
-    const anchor = document.getElementById('dp-investor-card');
-    if (!anchor || !anchor.parentNode) return;
-    wrap = document.createElement('div');
-    wrap.id = 'dp-fh-news';
-    wrap.className = 'dp-fh-news-card';
-    anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
-  }
-  const rows = d._FH_Headlines.slice(0, 5).map(n => {
-    const title = esc(n.title || '');
-    const src = esc(n.source || '');
-    const url = n.url || '';
-    const safeUrl = /^https?:\/\//i.test(url) ? url : '';
-    const titleHtml = safeUrl
-      ? `<a href="${esc(safeUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--text-primary); text-decoration:none;">${title}</a>`
-      : title;
-    return `<div style="padding:9px 0; border-bottom:1px solid var(--border);">
-      <div style="font-size:13px; line-height:1.45; color:var(--text-primary);">${titleHtml}</div>
-      ${src ? `<div style="font-size:10.5px; color:var(--text-tertiary); margin-top:3px;">${src}</div>` : ''}
-    </div>`;
-  }).join('');
-  wrap.innerHTML = `
-    <div style="font-size:12px; font-weight:700; color:var(--text-secondary); padding:6px 0 2px; letter-spacing:0.01em;">최근 뉴스 · 7일</div>
-    ${rows}`;
-}
-
 // ── Finnhub 회사 로고 (US, 헤더 dp-ticker 좌측) ──────────────────────────
 function _renderFhLogo(d) {
   const nameEl = document.getElementById('dp-name');
@@ -3205,109 +3214,6 @@ function _renderInvestorCard(d) {
     const inst = d._Investor_Institution || 0;
     if (frgn !== 0) items.push({ label: '외국인', value: fmtQty(frgn), color: frgn > 0 ? 'var(--success)' : 'var(--destructive)' });
     if (inst !== 0) items.push({ label: '기관', value: fmtQty(inst), color: inst > 0 ? 'var(--success)' : 'var(--destructive)' });
-  }
-
-  // US: Finnhub
-  if (d._FH_Available) {
-    const insNet = d._FH_InsiderNet || 0;
-    if (d._FH_InsiderCount > 0) {
-      items.push({
-        label: '내부자 거래',
-        value: insNet > 0 ? '순취득' : insNet < 0 ? '순처분' : '중립',
-        sub: `${d._FH_InsiderCount}건`,
-        color: insNet > 0 ? 'var(--success)' : insNet < 0 ? 'var(--destructive)' : 'var(--text-tertiary)'
-      });
-    }
-    const change = d._FH_RecChange || '';
-    if (change && change !== 'stable') {
-      items.push({
-        label: '추천 변화',
-        value: change === 'upgrade' ? '상향' : '하향',
-        sub: `긍정 ${d._FH_RecBuy || 0} · 부정 ${d._FH_RecSell || 0}`,
-        color: change === 'upgrade' ? 'var(--success)' : 'var(--destructive)'
-      });
-    }
-    const surp = d._FH_EarnSurprise || 0;
-    if (surp !== 0) {
-      items.push({
-        label: '실적 서프라이즈',
-        value: `${surp >= 0 ? '+' : ''}${surp.toFixed(1)}%`,
-        sub: d._FH_EarnStreak >= 2 ? `${d._FH_EarnStreak}Q 연속 비트` : '',
-        color: surp > 0 ? 'var(--success)' : 'var(--destructive)'
-      });
-    }
-    // 신규: 다음 실적 D-day (60일 이내만 노출)
-    const dte = d._FH_DaysToEarnings;
-    if (dte != null && dte >= 0 && dte <= 60) {
-      items.push({
-        label: '다음 실적(추정)',
-        value: dte === 0 ? '오늘' : `D-${dte}`,
-        sub: d._FH_NextEarnings ? `~${d._FH_NextEarnings} 추정` : '추정',
-        color: dte <= 7 ? 'var(--warning)' : 'var(--text-secondary)'
-      });
-    }
-    // 신규: 내부자 심리 MSPR (-100~100, 양수=순매수 우위)
-    const mspr = d._FH_MSPR;
-    if (mspr != null) {
-      const trend = Array.isArray(d._FH_MSPRTrend) ? d._FH_MSPRTrend : [];
-      const msprColor = mspr >= 0 ? 'var(--success)' : 'var(--destructive)';
-      let spark = '';
-      if (trend.length >= 2 && typeof buildSparklineSVG === 'function') {
-        spark = buildSparklineSVG(trend, msprColor);
-      }
-      items.push({
-        label: '내부자 심리',
-        value: `${mspr >= 0 ? '+' : ''}${mspr.toFixed(0)}`,
-        sub: spark || (mspr >= 20 ? '강한 매수세' : mspr <= -20 ? '강한 매도세' : '중립'),
-        color: msprColor,
-        subIsHtml: !!spark,
-      });
-    }
-    // 신규: 뉴스 buzz (7일 50건 이상)
-    const news7 = d._FH_News7d || 0;
-    if (news7 >= 50) {
-      items.push({
-        label: '뉴스 화제성',
-        value: `${news7}건`,
-        sub: '최근 7일',
-        color: news7 >= 200 ? 'var(--warning)' : 'var(--text-secondary)'
-      });
-    }
-  }
-
-  // US: yfinance
-  if (d._YF_Available) {
-    const shortPct = d._YF_ShortPctFloat;
-    const instPct = d._YF_InstPct;
-    const recKey = d._YF_RecKey || '';
-    const tgtGap = d._YF_TargetGapPct;
-    if (shortPct != null && shortPct >= 1) {
-      items.push({
-        label: '공매도 비율',
-        value: `${shortPct.toFixed(1)}%`,
-        color: shortPct >= 5 ? 'var(--destructive)' : 'var(--text-secondary)'
-      });
-    }
-    if (instPct != null) {
-      items.push({ label: '기관 보유', value: instPct > 100 ? '100%+' : `${instPct.toFixed(0)}%`, color: 'var(--text-secondary)' });
-    }
-    if (recKey) {
-      const recKr = {strong_buy:'강한 관심', buy:'관심', hold:'보유', sell:'경계', strong_sell:'강한 경계'};
-      const recCol = recKey.includes('buy') ? 'var(--success)' : recKey.includes('sell') ? 'var(--destructive)' : 'var(--text-secondary)';
-      items.push({
-        label: '컨센서스',
-        value: recKr[recKey] || recKey,
-        sub: d._YF_NumAnalysts ? `${d._YF_NumAnalysts}명` : '',
-        color: recCol
-      });
-    }
-    if (tgtGap != null && Math.abs(tgtGap) >= 3) {
-      items.push({
-        label: '목표가 괴리',
-        value: `${tgtGap >= 0 ? '+' : ''}${tgtGap.toFixed(0)}%`,
-        color: tgtGap > 0 ? 'var(--success)' : 'var(--destructive)'
-      });
-    }
   }
 
   if (items.length === 0) { wrap.style.display = 'none'; return; }
@@ -3447,7 +3353,7 @@ function _renderDetailFeatures(d) {
   const thermoLbl  = document.getElementById('dp-thermo-label');
   const thermoAct  = document.getElementById('dp-thermo-action');
   const rsi = d.RSI != null ? Number(d.RSI) : null;
-  if (marker && thermoLbl && thermoAct && rsi != null) {
+  if (marker && rsi != null) {
     // RSI → 바 위치 정규화: 각 존이 균등 20% 폭을 차지하도록 매핑
     // 라벨(극도공포~극도탐욕)이 space-between 균등 배치이므로 위치를 맞춤
     let pct;
@@ -3465,10 +3371,8 @@ function _renderDetailFeatures(d) {
     else if (rsi >= 30) { lbl = '공포';     act = '공포 구간';         col = '#06B6D4'; }
     else                { lbl = '극도공포'; act = '과매도 구간';       col = '#2563EB'; }
     marker.style.borderColor = col;
-    thermoLbl.textContent  = lbl;
-    thermoLbl.style.color  = col;
-    thermoAct.textContent  = act;
-    thermoAct.style.color  = col;
+    if (thermoLbl) { thermoLbl.textContent = lbl; thermoLbl.style.color = col; }
+    if (thermoAct) { thermoAct.textContent = act; thermoAct.style.color = col; }
   }
 
   // ── RS Rating ─────────────────────────────────────────────────

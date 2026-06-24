@@ -3612,6 +3612,51 @@ def api_regime():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/social-buzz")
+def api_social_buzz():
+    """GET /api/social-buzz → WSB 인기 종목 상위 N개 (소셜 버즈 × TotalScore).
+
+    social_buzz 캐시에서 소셜 데이터를 읽고, _scan_results_cache에서
+    TotalScore를 병합한 뒤 점수 내림차순 상위 N개를 반환한다.
+    SWAGGY_API_KEY 미설정 시 status="disabled" 반환.
+    """
+    if not os.environ.get("SWAGGY_API_KEY", "").strip():
+        return jsonify({"status": "disabled", "items": [], "updated_at": None})
+    try:
+        import social_buzz as _sb
+        snap = _sb.get_cached()
+        if snap["status"] != "ok":
+            return jsonify({"status": snap["status"], "items": [], "updated_at": snap.get("updated_at")})
+
+        # _scan_results_cache에서 ticker → TotalScore 역인덱스 구성
+        ticker_scores: dict = {}
+        with _scan_results_cache_lock:
+            for cache_val in _scan_results_cache.values():
+                for row in (cache_val.get("data") or []):
+                    t = (row.get("Ticker") or "").upper()
+                    if t and t not in ticker_scores:
+                        ts = row.get("TotalScore")
+                        ticker_scores[t] = float(ts) if isinstance(ts, (int, float)) else None
+
+        top_n = int(os.environ.get("SOCIAL_BUZZ_TOP_N", "5"))
+        enriched = [
+            {**item, "total_score": ticker_scores.get(item["ticker"])}
+            for item in snap["items"]
+        ]
+        enriched.sort(
+            key=lambda x: x["total_score"] if x["total_score"] is not None else -1,
+            reverse=True,
+        )
+        return jsonify({
+            "status": "ok",
+            "updated_at": snap["updated_at"],
+            "items": enriched[:top_n],
+        })
+    except Exception as exc:
+        logging.warning("api_social_buzz failed: %s", exc)
+        return jsonify({"status": "error", "items": [], "updated_at": None})
+
+
 @app.route("/api/serenity/<ticker>")
 def api_serenity(ticker: str):
     """Serenity (@aleabitoreddit) 인사이트 조회."""
@@ -3630,6 +3675,16 @@ def api_serenity(ticker: str):
 
 
 threading.Thread(target=_cold_start_fill, daemon=True, name="cold-start-fill").start()
+
+# ── 소셜 버즈 백그라운드 갱신 ──
+try:
+    import social_buzz as _social_buzz
+    if os.environ.get("SWAGGY_API_KEY", "").strip():
+        _social_buzz.init()
+    else:
+        logging.info("[social_buzz] SWAGGY_API_KEY 미설정 — 소셜 버즈 비활성화")
+except Exception as _e:
+    logging.warning("[social_buzz] init 실패: %s", _e)
 
 if __name__ == "__main__":
     debug = (os.environ.get("FLASK_DEBUG") or "0").strip().lower() in ("1", "true", "yes")

@@ -5185,3 +5185,71 @@ a.news-card-title:hover { color: var(--brand); }
 @media (max-width: 520px) {
   .vb-summary, .vb-scn-grid { grid-template-columns: 1fr; }
 }
+
+/* ── WSB 소셜 버즈 위젯 ───────────────────────────────────────────── */
+.wsb-widget {
+  padding: 8px 16px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface);
+}
+.wsb-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.wsb-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.wsb-updated {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.wsb-cards {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.wsb-cards::-webkit-scrollbar { display: none; }
+.wsb-card {
+  flex: 0 0 auto;
+  min-width: 108px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: background 0.12s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wsb-card:hover { background: var(--surface-hover, #f5f5f7); }
+.wsb-card-ticker {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.wsb-card-mentions {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.wsb-sent-bar-wrap {
+  height: 4px;
+  background: var(--border-subtle);
+  border-radius: 2px;
+}
+.wsb-sent-bar {
+  height: 4px;
+  background: var(--success, #16a34a);
+  border-radius: 2px;
+}
+.wsb-empty {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+}

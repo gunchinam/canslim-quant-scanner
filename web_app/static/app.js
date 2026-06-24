@@ -6428,3 +6428,58 @@ async function captureDetail() {
   document.addEventListener('click', () => { menu.hidden = true; });
 })();
 
+// ── WSB 소셜 버즈 위젯 ──────────────────────────────────────────────
+async function loadWsbWidget() {
+  const wrap     = document.getElementById('wsb-widget');
+  const cardsEl  = document.getElementById('wsb-cards');
+  const updEl    = document.getElementById('wsb-updated');
+  if (!wrap || !cardsEl) return;
+
+  try {
+    const res  = await fetch('/api/social-buzz', { cache: 'no-store' });
+    const data = await res.json();
+
+    if (data.status === 'disabled' || data.status === 'error') {
+      wrap.hidden = true;
+      return;
+    }
+    if (data.status === 'loading') {
+      cardsEl.innerHTML = '<span class="wsb-empty">데이터 로딩 중…</span>';
+      wrap.hidden = false;
+      return;
+    }
+    if (!Array.isArray(data.items) || data.items.length === 0) {
+      wrap.hidden = true;
+      return;
+    }
+
+    if (updEl && data.updated_at) {
+      updEl.textContent = data.updated_at.replace('T', ' ').slice(0, 16) + ' UTC';
+    }
+
+    cardsEl.innerHTML = data.items.map(item => {
+      const grade    = item.total_score != null ? _stockGrade(item.total_score) : null;
+      const gradeHtml = grade
+        ? `<span class="grade-badge grade-${grade}">${grade}</span>`
+        : '';
+      const sentPct  = Math.min(100, Math.round((item.sentiment || 0) * 100));
+      const ticker   = String(item.ticker).replace(/[^A-Z0-9.]/g, '');
+      return `<div class="wsb-card" data-ticker="${ticker}" onclick="openDetail('${ticker}')">
+        <div class="wsb-card-ticker">${ticker}</div>
+        <div class="wsb-card-mentions">${item.mentions} mentions</div>
+        <div class="wsb-sent-bar-wrap" title="긍정 감성 ${sentPct}%">
+          <div class="wsb-sent-bar" style="width:${sentPct}%"></div>
+        </div>
+        ${gradeHtml}
+      </div>`;
+    }).join('');
+
+    wrap.hidden = false;
+  } catch (err) {
+    console.warn('[wsb] fetch failed', err);
+    if (wrap) wrap.hidden = true;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadWsbWidget);
+

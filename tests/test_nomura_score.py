@@ -1,195 +1,196 @@
+"""tests/test_nomura_score.py — nomura_score 단위 테스트 (yfinance 1-fetch 구조 기준)."""
 import pytest
-from unittest.mock import patch, MagicMock
-import pandas as pd
+from unittest.mock import patch
 import nomura_score
 
 
-# --- Piotroski ---
+# ── 공용 헬퍼 ────────────────────────────────────────────────────────────────
 
-def _make_financials(net_income, total_assets, operating_cf,
-                     long_term_debt, current_assets, current_liabilities,
-                     shares, revenue, gross_profit,
-                     prev_net_income=None, prev_total_assets=None,
-                     prev_long_term_debt=None, prev_current_assets=None,
-                     prev_current_liabilities=None, prev_shares=None,
-                     prev_revenue=None, prev_gross_profit=None):
-    """yfinance balance_sheet / income_stmt / cashflow 구조 모킹 헬퍼."""
-    # 현재 연도
-    curr = {
-        "Net Income": net_income,
-        "Total Assets": total_assets,
-        "Operating Cash Flow": operating_cf,
-        "Long Term Debt": long_term_debt,
-        "Current Assets": current_assets,
-        "Current Liabilities": current_liabilities,
-        "Ordinary Shares Number": shares,
-        "Total Revenue": revenue,
-        "Gross Profit": gross_profit,
-    }
-    # 이전 연도 (기본값: 동일)
-    prev = {
-        "Net Income": prev_net_income or net_income,
-        "Total Assets": prev_total_assets or total_assets,
-        "Long Term Debt": prev_long_term_debt or long_term_debt,
-        "Current Assets": prev_current_assets or current_assets,
-        "Current Liabilities": prev_current_liabilities or current_liabilities,
-        "Ordinary Shares Number": prev_shares or shares,
-        "Total Revenue": prev_revenue or revenue,
-        "Gross Profit": prev_gross_profit or gross_profit,
-    }
-    return curr, prev
+def _yf(curr, prev, market_cap=0.0, ebit=0.0, retained=0.0,
+        ppe_curr=0.0, ppe_prev=0.0, depr=0.0,
+        lt_curr=0.0, lt_prev=0.0, sga_curr=0.0, sga_prev=0.0):
+    """_fetch_yf() 반환 형식과 동일한 dict 생성 헬퍼."""
+    return dict(curr=curr, prev=prev, market_cap=market_cap,
+                ebit=ebit, retained=retained,
+                ppe_curr=ppe_curr, ppe_prev=ppe_prev, depr=depr,
+                lt_curr=lt_curr, lt_prev=lt_prev,
+                sga_curr=sga_curr, sga_prev=sga_prev)
 
+
+# ── 9/9 Piotroski (F9: curr_at=2.0 > prev_at=1.78) ─────────────────────────
+_C9 = {
+    "Net Income": 1000, "Total Assets": 5000, "Operating Cash Flow": 1200,
+    "Long Term Debt": 500, "Current Assets": 2000, "Current Liabilities": 800,
+    "Ordinary Shares Number": 100, "Total Revenue": 10000, "Gross Profit": 4000,
+}
+_P9 = {
+    "Net Income": 800, "Total Assets": 4500, "Long Term Debt": 600,
+    "Current Assets": 1500, "Current Liabilities": 700, "Ordinary Shares Number": 105,
+    "Total Revenue": 8000, "Gross Profit": 3000,
+}
+_YF9 = _yf(_C9, _P9, market_cap=25000.0, ebit=2500.0, retained=5000.0,
+           ppe_curr=1000.0, ppe_prev=950.0, depr=200.0,
+           lt_curr=500.0, lt_prev=480.0, sga_curr=500.0, sga_prev=480.0)
+
+# ── 0/9 Piotroski (OCF=-600 → F4 실패: -0.12 > -0.10 = False) ───────────────
+_C0 = {
+    "Net Income": -500, "Total Assets": 5000, "Operating Cash Flow": -600,
+    "Long Term Debt": 1000, "Current Assets": 800, "Current Liabilities": 900,
+    "Ordinary Shares Number": 110, "Total Revenue": 8000, "Gross Profit": 2000,
+}
+_P0 = {
+    "Net Income": 800, "Total Assets": 4000, "Long Term Debt": 800,
+    "Current Assets": 1500, "Current Liabilities": 700, "Ordinary Shares Number": 100,
+    "Total Revenue": 9000, "Gross Profit": 3200,
+}
+_YF0 = _yf(_C0, _P0, market_cap=500.0, ebit=-200.0, retained=-100.0)
+
+# ── Beneish 분식 없음 (M ≈ -2.65 < -1.78) ────────────────────────────────────
+_CB = {
+    "Net Income": 1000, "Total Assets": 5000, "Operating Cash Flow": 1200,
+    "Long Term Debt": 500, "Current Assets": 2000, "Current Liabilities": 800,
+    "Ordinary Shares Number": 100, "Total Revenue": 10000, "Gross Profit": 4500,
+}
+_PB = {
+    "Net Income": 900, "Total Assets": 4800, "Long Term Debt": 500,
+    "Current Assets": 2000, "Current Liabilities": 800, "Ordinary Shares Number": 100,
+    "Total Revenue": 9500, "Gross Profit": 4200,
+}
+_YFB = _yf(_CB, _PB, market_cap=25000.0, ebit=2000.0, retained=4000.0,
+           ppe_curr=1000.0, ppe_prev=950.0, depr=200.0,
+           lt_curr=500.0, lt_prev=480.0, sga_curr=500.0, sga_prev=480.0)
+
+MOCK_TK_RESPONSE = {
+    "score": {
+        "overall": 72, "valuation": 65, "growth": 78,
+        "profitability": 80, "momentum": 70, "risk": 60,
+        "industry_rank": 284, "industry_total": 488,
+        "overall_rank": 169, "overall_total": 4571,
+        "sector_percentile": 41.8,
+    },
+    "institutional": {
+        "confidence_score": 0.72, "holding_pct": 62.3,
+        "holding_qoq": -7.1, "top_holder": "Vanguard",
+        "top_holder_pct": 8.2, "top_holder_chg": -0.3,
+    },
+    "analyst": {
+        "consensus": "Buy", "target_price": 315.0,
+        "upside_pct": 7.5, "analyst_count": 42,
+        "buy_count": 28, "hold_count": 12, "sell_count": 2,
+    },
+    "valuation": {
+        "pe_ttm": 29.5, "pe_dynamic": 27.1, "pe_static": 31.2,
+        "pb": 8.4, "eps_ttm": 6.58, "market_cap": 2800000000000.0,
+    },
+    "fundamentals": {
+        "roe": 0.147, "roa": 0.223, "gross_margin": 0.456,
+        "net_profit": 0.253, "dividend_yield": 0.005, "payout_ratio": 0.15,
+    },
+    "risk_technical": {
+        "beta": 1.21, "risk_rate": 3.2, "reward_risk": 2.1,
+        "support": 278.0, "resistance": 351.0,
+        "volume_ratio": 1.3, "amplitude": 2.8, "turnover_ratio": 0.7,
+    },
+    "performance": {
+        "1d": 0.8, "5d": 2.1, "1m": 5.3,
+        "6m": 12.4, "ytd": 18.7, "1y": 24.1,
+    },
+}
+
+
+# ── Piotroski ────────────────────────────────────────────────────────────────
 
 def test_piotroski_perfect_score():
-    """9/9 조건 충족 케이스."""
-    curr, prev = _make_financials(
-        net_income=1000, total_assets=5000, operating_cf=1200,
-        long_term_debt=500, current_assets=2000, current_liabilities=800,
-        shares=100, revenue=10000, gross_profit=4000,
-        prev_net_income=800, prev_total_assets=4500,
-        prev_long_term_debt=600, prev_current_assets=1500,
-        prev_current_liabilities=700, prev_shares=105,
-        prev_revenue=8900, prev_gross_profit=3400,
-    )
-    with patch("nomura_score._get_financials", return_value=(curr, prev)):
-        score = nomura_score.calculate_piotroski("AAPL")
-    assert score == 9
+    with patch("nomura_score._fetch_yf", return_value=_YF9):
+        assert nomura_score.calculate_piotroski("AAPL") == 9
 
 
 def test_piotroski_zero_score():
-    """0/9 조건: 손실, 음수 CF, 부채증가 등."""
-    curr, prev = _make_financials(
-        net_income=-500, total_assets=5000, operating_cf=-600,
-        long_term_debt=1000, current_assets=800, current_liabilities=900,
-        shares=110, revenue=8000, gross_profit=2000,
-        prev_net_income=800, prev_total_assets=4000,
-        prev_long_term_debt=800, prev_current_assets=1500,
-        prev_current_liabilities=700, prev_shares=100,
-        prev_revenue=9000, prev_gross_profit=3200,
-    )
-    with patch("nomura_score._get_financials", return_value=(curr, prev)):
-        score = nomura_score.calculate_piotroski("AAPL")
-    assert score == 0
+    with patch("nomura_score._fetch_yf", return_value=_YF0):
+        assert nomura_score.calculate_piotroski("AAPL") == 0
 
 
 def test_piotroski_returns_int():
-    curr, prev = _make_financials(
-        net_income=100, total_assets=1000, operating_cf=150,
-        long_term_debt=200, current_assets=500, current_liabilities=300,
-        shares=50, revenue=2000, gross_profit=800,
-    )
-    with patch("nomura_score._get_financials", return_value=(curr, prev)):
+    with patch("nomura_score._fetch_yf", return_value=_YF9):
         result = nomura_score.calculate_piotroski("AAPL")
     assert isinstance(result, int)
     assert 0 <= result <= 9
 
 
 def test_piotroski_kr_returns_none():
-    result = nomura_score.calculate_piotroski("005930.KS")
-    assert result is None
+    assert nomura_score.calculate_piotroski("005930.KS") is None
 
 
-# --- Altman Z-Score ---
+# ── Altman Z ─────────────────────────────────────────────────────────────────
 
 def test_altman_z_safe_zone():
-    """Z > 2.99 = 안전."""
-    curr, prev = _make_financials(
-        net_income=2000, total_assets=10000, operating_cf=2500,
-        long_term_debt=1000, current_assets=4000, current_liabilities=2000,
-        shares=100, revenue=15000, gross_profit=7000,
-    )
-    with patch("nomura_score._get_financials", return_value=(curr, prev)), \
-         patch("nomura_score._get_market_cap", return_value=25000.0), \
-         patch("nomura_score._get_ebit", return_value=2500.0), \
-         patch("nomura_score._get_retained_earnings", return_value=5000.0):
+    with patch("nomura_score._fetch_yf", return_value=_YF9):
         z = nomura_score.calculate_altman_z("AAPL")
     assert z is not None
     assert z > 2.99
 
 
 def test_altman_z_returns_float():
-    curr, prev = _make_financials(
-        net_income=100, total_assets=1000, operating_cf=150,
-        long_term_debt=200, current_assets=500, current_liabilities=300,
-        shares=50, revenue=2000, gross_profit=800,
+    _simple = _yf(
+        {"Net Income": 100, "Total Assets": 1000, "Operating Cash Flow": 150,
+         "Long Term Debt": 200, "Current Assets": 500, "Current Liabilities": 300,
+         "Ordinary Shares Number": 50, "Total Revenue": 2000, "Gross Profit": 800},
+        {"Net Income": 80, "Total Assets": 900, "Long Term Debt": 210,
+         "Current Assets": 450, "Current Liabilities": 280, "Ordinary Shares Number": 52,
+         "Total Revenue": 1800, "Gross Profit": 700},
+        market_cap=2000.0, ebit=200.0, retained=300.0,
     )
-    with patch("nomura_score._get_financials", return_value=(curr, prev)), \
-         patch("nomura_score._get_market_cap", return_value=2000.0), \
-         patch("nomura_score._get_ebit", return_value=200.0), \
-         patch("nomura_score._get_retained_earnings", return_value=300.0):
+    with patch("nomura_score._fetch_yf", return_value=_simple):
         z = nomura_score.calculate_altman_z("AAPL")
     assert isinstance(z, float)
 
 
-# --- Beneish M-Score ---
+# ── Beneish M ────────────────────────────────────────────────────────────────
 
 def test_beneish_no_warning():
-    """M < -1.78: 분식 없음."""
-    curr, prev = _make_financials(
-        net_income=1000, total_assets=5000, operating_cf=1200,
-        long_term_debt=500, current_assets=2000, current_liabilities=800,
-        shares=100, revenue=10000, gross_profit=4500,
-        prev_net_income=900, prev_total_assets=4800,
-        prev_revenue=9500, prev_gross_profit=4200,
-    )
-    with patch("nomura_score._get_financials", return_value=(curr, prev)), \
-         patch("nomura_score._get_ppe", return_value=(1000.0, 950.0)), \
-         patch("nomura_score._get_depreciation", return_value=200.0), \
-         patch("nomura_score._get_long_term_assets", return_value=(500.0, 480.0)), \
-         patch("nomura_score._get_sga", return_value=(500.0, 480.0)):
-        m, warning = nomura_score.calculate_beneish_m("AAPL")
+    with patch("nomura_score._fetch_yf", return_value=_YFB):
+        result = nomura_score.calculate_beneish_m("AAPL")
+    assert result is not None
+    m, warning = result
     assert isinstance(m, float)
     assert warning is False
 
 
 def test_beneish_kr_returns_none():
-    result = nomura_score.calculate_beneish_m("005930.KS")
-    assert result is None
+    assert nomura_score.calculate_beneish_m("005930.KS") is None
 
 
-# --- get_nomura_score ---
+# ── get_nomura_score ──────────────────────────────────────────────────────────
 
-from tests.test_tradingkey_api import MOCK_TK_RESPONSE
-
-
-@patch("nomura_score.calculate_piotroski", return_value=7)
-@patch("nomura_score.calculate_altman_z", return_value=3.5)
-@patch("nomura_score.calculate_beneish_m", return_value=(-2.1, False))
 @patch("nomura_score.get_tradingkey_data", return_value=MOCK_TK_RESPONSE)
-def test_get_nomura_score_structure(mock_tk, mock_ben, mock_alt, mock_pio):
+@patch("nomura_score._fetch_yf", return_value=_YF9)
+def test_get_nomura_score_structure(mock_yf, mock_tk):
     result = nomura_score.get_nomura_score("AAPL")
     assert result is not None
-    assert "quantitative_score" in result
-    assert "grade" in result
-    assert "piotroski" in result
-    assert "altman_z" in result
-    assert "beneish_m" in result
-    assert "beneish_warning" in result
-    assert "nomura_rating" in result
-    assert "nomura_target" in result
-    assert "nomura_upside" in result
+    for key in ("quantitative_score", "grade", "piotroski", "altman_z",
+                "beneish_m", "beneish_warning", "nomura_rating",
+                "nomura_target", "nomura_upside"):
+        assert key in result, f"missing key: {key}"
 
 
-@patch("nomura_score.calculate_piotroski", return_value=9)
-@patch("nomura_score.calculate_altman_z", return_value=4.0)
-@patch("nomura_score.calculate_beneish_m", return_value=(-2.5, False))
-@patch("nomura_score.get_tradingkey_data", return_value={**MOCK_TK_RESPONSE,
-    "score": {**MOCK_TK_RESPONSE["score"], "overall": 95}})
-def test_get_nomura_score_conviction_buy(mock_tk, mock_ben, mock_alt, mock_pio):
+@patch("nomura_score.get_tradingkey_data", return_value={
+    **MOCK_TK_RESPONSE,
+    "score": {**MOCK_TK_RESPONSE["score"], "overall": 95},
+})
+@patch("nomura_score._fetch_yf", return_value=_YF9)
+def test_get_nomura_score_conviction_buy(mock_yf, mock_tk):
+    # overall=95 → 76pt + piotroski=9 → 10pt + 1m=5.3 → 6pt = 92 → A+
     result = nomura_score.get_nomura_score("NVDA")
     assert result["grade"] == "A+"
     assert result["nomura_rating"] == "Conviction Buy"
 
 
-@patch("nomura_score.calculate_piotroski", return_value=7)
-@patch("nomura_score.calculate_altman_z", return_value=3.5)
-@patch("nomura_score.calculate_beneish_m", return_value=(-2.1, False))
 @patch("nomura_score.get_tradingkey_data", return_value=MOCK_TK_RESPONSE)
-def test_get_nomura_score_range(mock_tk, mock_ben, mock_alt, mock_pio):
+@patch("nomura_score._fetch_yf", return_value=_YF9)
+def test_get_nomura_score_range(mock_yf, mock_tk):
     result = nomura_score.get_nomura_score("AAPL")
     assert 0 <= result["quantitative_score"] <= 100
 
 
 def test_get_nomura_score_kr_returns_none():
-    result = nomura_score.get_nomura_score("005930.KS")
-    assert result is None
+    assert nomura_score.get_nomura_score("005930.KS") is None

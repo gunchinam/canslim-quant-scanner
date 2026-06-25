@@ -30,7 +30,7 @@ def is_kr_ticker(ticker: str) -> bool:
 def _fetch_raw(ticker: str) -> dict:
     """TradingKey API 실제 호출. DevTools에서 발굴한 엔드포인트 사용."""
     url = f"{_TK_BASE_URL}/stock/{ticker}/overview"
-    resp = _session.get(url, headers=_DEFAULT_HEADERS, timeout=10)
+    resp = _session.get(url, headers=_DEFAULT_HEADERS, timeout=3)
     resp.raise_for_status()
     raw = resp.json()
     return _parse_response(raw)

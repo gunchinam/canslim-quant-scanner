@@ -1646,9 +1646,6 @@ function renderStockRow(stock, rank) {
   if (stock.BearCap)      risks.push('<span class="risk-badge risk-badge-bear" title="하락장 상한 발동 — 하락장으로 점수 50점 상한 제한">하락장↓</span>');
   if (risks.length) riskHtml = `<div class="risk-badges">${risks.join('')}</div>`;
 
-  // TopReason 태그 HTML
-  const reasonHtml = _renderReasonTags(stock.TopReason);
-
   // 증권사 컨센서스 목표가 HTML (IIFE 제거 — 500+ 종목 렌더 시 함수 생성 오버헤드 제거)
   let brokerHtml;
   if (stock.BrokerTarget) {
@@ -1701,7 +1698,6 @@ function renderStockRow(stock, rank) {
     <span class="stock-name">${logoHtml}${esc(stock.Name || stock.Ticker)}${stock.IsSpeculativeTheme ? ` <span class="theme-warn" title="${esc(stock.ThemeWarning || '투기성 테마주 — 점수 신뢰도 낮음')}">⚠ 테마</span>` : ''}${stock.MicroOutlier ? ` <span class="micro-outlier" title="${esc(stock.MicroOutlierReason || '마이크로구조 이상치')}">🔬 마이크로 이상</span>` : ''}${_greedBadge(stock)}${_bottleneckBadge(stock)}</span>
     <span class="stock-code">${t}</span>
   </td>
-  <td class="desc-cell">${esc(stock.Desc || _industryKo(stock.Industry) || '')}</td>
   <td><span class="sector-tag">${esc(stock.Sector || '—')}</span></td>
   <td class="score-col">
     <div class="score-line"><span class="score-num ${sc}">${score}</span>${_deltaBadge(stock)}</div>
@@ -1719,8 +1715,6 @@ function renderStockRow(stock, rank) {
   <td class="right">${avgVol}</td>
   <td class="right">${marketCap}</td>
   <td class="right" title="${stock.BrokerTargetSource ? esc(stock.BrokerTargetSource) : '증권사 컨센서스 없음'}">${brokerHtml}</td>
-  <td class="reason-cell">${reasonHtml}</td>
-  ${_midcapAlphaCell(stock)}
 </tr>`;
 }
 

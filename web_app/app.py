@@ -2717,19 +2717,34 @@ def api_consensus(ticker: str):
             except Exception:
                 continue
 
-    else:  # US ? yfinance ??? (?? broker ???? ??)
+    else:  # US — yfinance 사용
         try:
             import yfinance as yf
+            t = yf.Ticker(ticker)
             info = _run_with_timeout(
-                lambda: yf.Ticker(ticker).info or {}, 8, f"consensus yf {ticker}"
+                lambda: t.info or {}, 8, f"consensus yf {ticker}"
             ) or {}
             def _flt(v):
                 try: return float(v)
                 except: return 0
+            mean = _flt(info.get("targetMeanPrice", 0))
+            high = _flt(info.get("targetHighPrice", 0))
+            low  = _flt(info.get("targetLowPrice",  0))
+            # yfinance 신버전에서 info에 low/high 없을 때 analyst_price_targets 폴백
+            if mean and (not high or not low):
+                try:
+                    apt = _run_with_timeout(
+                        lambda: t.analyst_price_targets or {}, 5, f"consensus apt {ticker}"
+                    ) or {}
+                    if not high: high = _flt(apt.get("high"))
+                    if not low:  low  = _flt(apt.get("low"))
+                    if not mean: mean = _flt(apt.get("mean"))
+                except Exception:
+                    pass
             result["summary"] = {
-                "mean":    _flt(info.get("targetMeanPrice", 0)),
-                "high":    _flt(info.get("targetHighPrice", 0)),
-                "low":     _flt(info.get("targetLowPrice", 0)),
+                "mean":    mean,
+                "high":    high,
+                "low":     low,
                 "count":   int(info.get("numberOfAnalystOpinions", 0) or 0),
                 "opinion": info.get("recommendationKey", ""),
             }

@@ -5575,7 +5575,7 @@ const _MACRO_DEFS = [
   { key: 'us10y',   label: '美10Y',       fixed: 2, invert: false, suffix: '%' },
   { key: 'gold',    label: '금',          fixed: 1, invert: false },
   { key: 'wti',     label: 'WTI',         fixed: 2, invert: false },
-  { key: 'btc',     label: 'BTC',         fixed: 0, invert: false },
+
   { key: 'us_rate', label: '美기준금리',  fixed: 2, invert: false, suffix: '%' },
   { key: 'kr_rate', label: '韓기준금리',  fixed: 2, invert: false, suffix: '%' },
 ];

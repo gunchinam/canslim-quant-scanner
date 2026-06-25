@@ -53,3 +53,26 @@ def test_renderer_backward_compat():
     r = HandDrawnChartRenderer(hist, _DummyResult(), ticker="AAPL")
     img = r.render()
     assert img is not None
+
+
+def test_renderer_nomura_badge_no_crash():
+    from handdrawn_renderer import HandDrawnChartRenderer
+    hist = _make_hist()
+    nomura_data = {
+        "quantitative_score": 82,
+        "grade": "A",
+        "piotroski": 7,
+        "altman_z": 3.5,
+        "beneish_m": -2.1,
+        "beneish_warning": False,
+        "nomura_rating": "Buy",
+        "nomura_target": 200.0,
+        "nomura_upside": 12.5,
+    }
+    r = HandDrawnChartRenderer(
+        hist, _DummyResult(), ticker="TEST",
+        nomura_score_data=nomura_data,
+    )
+    img = r.render()
+    assert img is not None
+    assert img.width > 0

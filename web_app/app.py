@@ -2893,9 +2893,28 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
         chart_title = chart_title or ticker
 
         if want_chart:
+            _sr_data      = None
+            _nomura_data  = None
+            if market == "US":
+                try:
+                    from tradingkey_api import get_support_resistance
+                    _sr_data = get_support_resistance(ticker)
+                except Exception:
+                    pass
+                try:
+                    from nomura_score import get_nomura_score
+                    _nomura_data = get_nomura_score(ticker)
+                except Exception:
+                    pass
+
             renderer = HandDrawnChartRenderer(
                 hist, result, ticker=chart_title,
                 width_px=1200, height_px=560, dpi=100,
+                support=_sr_data[0] if _sr_data else None,
+                resistance=_sr_data[1] if _sr_data else None,
+                show_fib=True,
+                show_sr=_sr_data is not None,
+                nomura_score_data=_nomura_data,
             )
             img = renderer.render()
 

@@ -2025,7 +2025,7 @@ td.score-col {
 .dp-stat-val.score-high { color: var(--success); }
 .dp-stat-val.score-mid  { color: var(--warning); }
 .dp-stat-val.score-low  { color: var(--destructive); }
-#dp-score.dp-stat-val   { font-size: 30px; letter-spacing: -0.04em; }
+#dp-score.dp-stat-val   { font-size: 36px; letter-spacing: -0.04em; }
 .dp-section-timing .dp-hero-left {
   display: block;
   border-right: none;
@@ -2065,15 +2065,6 @@ td.score-col {
   margin-bottom: 0;
 }
 
-.dp-verdict-score-wrap {
-  display: flex;
-  align-items: baseline;
-  gap: 3px;
-  flex-shrink: 0;
-  /* 점수 숫자 옆 얇은 수직 구분선 */
-  padding-right: 20px;
-  border-right: 1px solid var(--border);
-}
 
 .dp-verdict-right {
   display: flex;
@@ -2642,6 +2633,23 @@ td.score-col {
   opacity: .92;
   line-height: 1.55;
 }
+/* 레짐 경고 배지 — 포스터 하단 고정 */
+.dvp-regime-badge {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.52);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 14px;
+  letter-spacing: 0.03em;
+  color: #fff;
+}
+/* 배지가 있을 때 포스터 하단 여백 확보 — dvp-main 마지막 줄 가림 방지 */
+.dp-verdict-poster:has(.dvp-regime-badge) {
+  padding-bottom: 34px;
+}
 .dvp-bg {
   position: absolute;
   right: -6px;
@@ -2983,6 +2991,14 @@ td.score-col {
 .entry-badge.entry-yellow  { color: #B45309; background: rgba(217,119,6,0.12); }
 .entry-badge.entry-red     { color: #DC2626; background: rgba(220,38,38,0.12); }
 .entry-badge.entry-neutral { color: var(--text-tertiary); background: var(--surface-page); }
+
+/* 연속 일수 뱃지 (STRONG/NEUTRAL 2일 이상 유지 시 노출) */
+.entry-consecutive-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  padding: 1px 5px; border-radius: 4px; margin-left: 3px;
+  color: #15803D; background: rgba(22,163,74,0.15);
+  vertical-align: middle; letter-spacing: 0.02em;
+}
 
 /* Volatility regime badge (진입 라벨과 독립) */
 .vol-regime-badge {
@@ -3574,6 +3590,8 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 
 /* ── Responsive: Mobile (≤768px) ───────────────────────────── */
 @media (max-width: 768px) {
+  .dp-stat-strip { grid-template-columns: repeat(2, 1fr); }
+
   .app-shell {
     grid-template-rows: 52px auto auto auto 1fr;
     height: 100dvh;

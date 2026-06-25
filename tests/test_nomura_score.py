@@ -87,3 +87,61 @@ def test_piotroski_returns_int():
 def test_piotroski_kr_returns_none():
     result = nomura_score.calculate_piotroski("005930.KS")
     assert result is None
+
+
+# --- Altman Z-Score ---
+
+def test_altman_z_safe_zone():
+    """Z > 2.99 = 안전."""
+    curr, prev = _make_financials(
+        net_income=2000, total_assets=10000, operating_cf=2500,
+        long_term_debt=1000, current_assets=4000, current_liabilities=2000,
+        shares=100, revenue=15000, gross_profit=7000,
+    )
+    with patch("nomura_score._get_financials", return_value=(curr, prev)), \
+         patch("nomura_score._get_market_cap", return_value=25000.0), \
+         patch("nomura_score._get_ebit", return_value=2500.0), \
+         patch("nomura_score._get_retained_earnings", return_value=5000.0):
+        z = nomura_score.calculate_altman_z("AAPL")
+    assert z is not None
+    assert z > 2.99
+
+
+def test_altman_z_returns_float():
+    curr, prev = _make_financials(
+        net_income=100, total_assets=1000, operating_cf=150,
+        long_term_debt=200, current_assets=500, current_liabilities=300,
+        shares=50, revenue=2000, gross_profit=800,
+    )
+    with patch("nomura_score._get_financials", return_value=(curr, prev)), \
+         patch("nomura_score._get_market_cap", return_value=2000.0), \
+         patch("nomura_score._get_ebit", return_value=200.0), \
+         patch("nomura_score._get_retained_earnings", return_value=300.0):
+        z = nomura_score.calculate_altman_z("AAPL")
+    assert isinstance(z, float)
+
+
+# --- Beneish M-Score ---
+
+def test_beneish_no_warning():
+    """M < -1.78: 분식 없음."""
+    curr, prev = _make_financials(
+        net_income=1000, total_assets=5000, operating_cf=1200,
+        long_term_debt=500, current_assets=2000, current_liabilities=800,
+        shares=100, revenue=10000, gross_profit=4500,
+        prev_net_income=900, prev_total_assets=4800,
+        prev_revenue=9500, prev_gross_profit=4200,
+    )
+    with patch("nomura_score._get_financials", return_value=(curr, prev)), \
+         patch("nomura_score._get_ppe", return_value=(1000.0, 950.0)), \
+         patch("nomura_score._get_depreciation", return_value=200.0), \
+         patch("nomura_score._get_long_term_assets", return_value=(500.0, 480.0)), \
+         patch("nomura_score._get_sga", return_value=(500.0, 480.0)):
+        m, warning = nomura_score.calculate_beneish_m("AAPL")
+    assert isinstance(m, float)
+    assert warning is False
+
+
+def test_beneish_kr_returns_none():
+    result = nomura_score.calculate_beneish_m("005930.KS")
+    assert result is None

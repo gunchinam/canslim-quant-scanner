@@ -1,6 +1,6 @@
 import logging
 import yfinance as yf
-from tradingkey_api import is_kr_ticker
+from tradingkey_api import is_kr_ticker, get_tradingkey_data
 
 logger = logging.getLogger(__name__)
 
@@ -263,4 +263,98 @@ def calculate_piotroski(ticker: str) -> int | None:
         return score
     except Exception as e:
         logger.warning(f"Piotroski calculation failed for {ticker}: {e}")
+        return None
+
+
+def _calc_quantitative_score(tk_data: dict, piotroski: int) -> int:
+    """100점 정량 스코어 계산.
+
+    배점:
+    - TradingKey overall 스코어 (80점): 종합 밸류에이션/성장/수익성 반영
+    - Piotroski F-Score 정규화 (10점): 재무 건전성
+    - QoQ 모멘텀 (10점): 기관 보유 QoQ + 1개월 주가 성과
+    """
+    tk_score = tk_data.get("score", {})
+    inst = tk_data.get("institutional", {})
+    perf = tk_data.get("performance", {})
+
+    # TradingKey overall 스코어 → 80점 환산
+    overall = tk_score.get("overall", 0)
+    score = int(overall / 100 * 80)
+
+    # Piotroski F-Score → 10점 환산 (9점 만점 정규화)
+    pio_pts = int((piotroski / 9) * 10) if piotroski else 0
+    score += pio_pts
+
+    # QoQ 모멘텀 (10점)
+    holding_qoq = inst.get("holding_qoq", 0)
+    if holding_qoq > 5:
+        score += 4
+    elif holding_qoq > 0:
+        score += 2
+
+    rev_1m = perf.get("1m", 0)
+    if rev_1m > 5:
+        score += 6
+    elif rev_1m > 0:
+        score += 3
+    elif rev_1m > -5:
+        score += 1
+
+    return min(100, max(0, score))
+
+
+def _score_to_grade(score: int) -> str:
+    if score >= 90:
+        return "A+"
+    if score >= 75:
+        return "A"
+    if score >= 55:
+        return "B"
+    if score >= 35:
+        return "C"
+    return "D"
+
+
+def _grade_to_rating(grade: str) -> str:
+    mapping = {"A+": "Conviction Buy", "A": "Buy", "B": "Neutral", "C": "Reduce", "D": "Sell"}
+    return mapping.get(grade, "Neutral")
+
+
+def get_nomura_score(ticker: str) -> dict | None:
+    """노무라式 종합 스코어 반환."""
+    if is_kr_ticker(ticker):
+        return None
+    try:
+        tk_data = get_tradingkey_data(ticker)
+        if tk_data is None:
+            return None
+
+        piotroski = calculate_piotroski(ticker) or 0
+        altman_z = calculate_altman_z(ticker)
+        beneish_result = calculate_beneish_m(ticker)
+        beneish_m = beneish_result[0] if beneish_result else None
+        beneish_warn = beneish_result[1] if beneish_result else False
+
+        q_score = _calc_quantitative_score(tk_data, piotroski)
+        grade = _score_to_grade(q_score)
+        rating = _grade_to_rating(grade)
+
+        analyst = tk_data.get("analyst", {})
+        target = analyst.get("target_price", 0.0)
+        upside = analyst.get("upside_pct", 0.0)
+
+        return {
+            "quantitative_score": q_score,
+            "grade": grade,
+            "piotroski": piotroski,
+            "altman_z": altman_z,
+            "beneish_m": beneish_m,
+            "beneish_warning": beneish_warn,
+            "nomura_rating": rating,
+            "nomura_target": float(target),
+            "nomura_upside": float(upside),
+        }
+    except Exception as e:
+        logger.warning(f"get_nomura_score failed for {ticker}: {e}")
         return None

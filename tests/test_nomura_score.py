@@ -145,3 +145,51 @@ def test_beneish_no_warning():
 def test_beneish_kr_returns_none():
     result = nomura_score.calculate_beneish_m("005930.KS")
     assert result is None
+
+
+# --- get_nomura_score ---
+
+from tests.test_tradingkey_api import MOCK_TK_RESPONSE
+
+
+@patch("nomura_score.calculate_piotroski", return_value=7)
+@patch("nomura_score.calculate_altman_z", return_value=3.5)
+@patch("nomura_score.calculate_beneish_m", return_value=(-2.1, False))
+@patch("nomura_score.get_tradingkey_data", return_value=MOCK_TK_RESPONSE)
+def test_get_nomura_score_structure(mock_tk, mock_ben, mock_alt, mock_pio):
+    result = nomura_score.get_nomura_score("AAPL")
+    assert result is not None
+    assert "quantitative_score" in result
+    assert "grade" in result
+    assert "piotroski" in result
+    assert "altman_z" in result
+    assert "beneish_m" in result
+    assert "beneish_warning" in result
+    assert "nomura_rating" in result
+    assert "nomura_target" in result
+    assert "nomura_upside" in result
+
+
+@patch("nomura_score.calculate_piotroski", return_value=9)
+@patch("nomura_score.calculate_altman_z", return_value=4.0)
+@patch("nomura_score.calculate_beneish_m", return_value=(-2.5, False))
+@patch("nomura_score.get_tradingkey_data", return_value={**MOCK_TK_RESPONSE,
+    "score": {**MOCK_TK_RESPONSE["score"], "overall": 95}})
+def test_get_nomura_score_conviction_buy(mock_tk, mock_ben, mock_alt, mock_pio):
+    result = nomura_score.get_nomura_score("NVDA")
+    assert result["grade"] == "A+"
+    assert result["nomura_rating"] == "Conviction Buy"
+
+
+@patch("nomura_score.calculate_piotroski", return_value=7)
+@patch("nomura_score.calculate_altman_z", return_value=3.5)
+@patch("nomura_score.calculate_beneish_m", return_value=(-2.1, False))
+@patch("nomura_score.get_tradingkey_data", return_value=MOCK_TK_RESPONSE)
+def test_get_nomura_score_range(mock_tk, mock_ben, mock_alt, mock_pio):
+    result = nomura_score.get_nomura_score("AAPL")
+    assert 0 <= result["quantitative_score"] <= 100
+
+
+def test_get_nomura_score_kr_returns_none():
+    result = nomura_score.get_nomura_score("005930.KS")
+    assert result is None

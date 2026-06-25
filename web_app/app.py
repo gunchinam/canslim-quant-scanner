@@ -3674,6 +3674,28 @@ def api_serenity(ticker: str):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/nomura-score/<ticker>")
+def api_nomura_score(ticker: str):
+    """GET /api/nomura-score/<ticker> → 노무라式 종합 스코어 JSON.
+
+    성공: {"status": "ok", "data": {...}} HTTP 200
+    KR 종목 또는 데이터 없음: {"status": "error", "message": "..."} HTTP 404
+    예외: {"status": "error", "message": "internal error"} HTTP 500
+    """
+    safe = _validate_ticker(ticker)
+    if not safe:
+        return jsonify({"status": "error", "message": "ticker not supported or data unavailable"}), 404
+    try:
+        from nomura_score import get_nomura_score
+        result = get_nomura_score(safe.upper())
+        if result is None:
+            return jsonify({"status": "error", "message": "ticker not supported or data unavailable"}), 404
+        return jsonify({"status": "ok", "data": result})
+    except Exception as e:
+        logging.warning("api_nomura_score %s: %s", safe, e)
+        return jsonify({"status": "error", "message": "internal error"}), 500
+
+
 threading.Thread(target=_cold_start_fill, daemon=True, name="cold-start-fill").start()
 
 # ── 소셜 버즈 백그라운드 갱신 ──

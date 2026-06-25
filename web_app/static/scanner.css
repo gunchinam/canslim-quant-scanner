@@ -5253,3 +5253,82 @@ a.news-card-title:hover { color: var(--brand); }
   color: var(--text-secondary);
   padding: 4px 0;
 }
+
+/* ── 노무라式 아코디언 ─────────────────────────────────────────── */
+.nm-accordion {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.nm-acc-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  user-select: none;
+}
+.nm-acc-summary::-webkit-details-marker { display: none; }
+.nm-acc-icon { font-size: 15px; }
+.nm-acc-title { flex: 1; }
+.nm-acc-chevron {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  transition: transform 0.18s ease;
+}
+details[open] .nm-acc-chevron { transform: rotate(180deg); }
+.nm-acc-body {
+  padding: 0 14px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.nm-placeholder { color: var(--text-tertiary); font-size: 12px; }
+
+/* TK Score 그리드 */
+.nm-score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.nm-score-cell {
+  background: var(--surface-subtle);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nm-score-label { font-size: 10px; color: var(--text-tertiary); }
+.nm-score-val { font-size: 16px; font-weight: 800; color: var(--text-primary); }
+
+/* Football Field 히트맵 바 */
+.ff-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ff-label { font-size: 11px; color: var(--text-tertiary); width: 110px; flex-shrink: 0; }
+.ff-bar-wrap {
+  flex: 1;
+  height: 16px;
+  border-radius: 8px;
+  background: linear-gradient(to right, #22c55e, #facc15, #ef4444);
+  position: relative;
+}
+.ff-marker {
+  position: absolute;
+  top: -3px;
+  width: 6px;
+  height: 22px;
+  background: var(--text-primary);
+  border-radius: 2px;
+  transform: translateX(-50%);
+}
+.ff-tag { font-size: 10px; color: var(--text-tertiary); width: 44px; text-align: right; }

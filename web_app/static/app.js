@@ -6509,6 +6509,7 @@ async function loadNomuraScore(ticker) {
     if (loading) loading.style.display = 'none';
     _renderNomuraTKScore(json.data);
     _renderNomuraScore(json.data);
+    _initNomuraInstitutionAccordion(ticker);
   } catch (e) {
     if (loading) loading.style.display = 'none';
     if (errEl) {
@@ -6560,8 +6561,110 @@ function _renderNomuraTKScore(d) {
     </div>`;
 }
 
+function _nmGaugeSVG(score, rating) {
+  const r = 28;
+  const circ = 2 * Math.PI * r;            // ≈ 175.9
+  const filled = (score / 100) * circ;
+  const ratingColors = {
+    'Conviction Buy': '#3b82f6',
+    'Buy': '#22c55e',
+    'Neutral': '#eab308',
+    'Reduce': '#f97316',
+    'Sell': '#ef4444',
+  };
+  const color = ratingColors[rating] || '#94a3b8';
+  const shortRating = {'Conviction Buy':'C.BUY','Buy':'BUY','Neutral':'NTRL','Reduce':'RDCE','Sell':'SELL'}[rating] || rating;
+  return `<svg viewBox="0 0 72 72" width="80" height="80">
+    <circle cx="36" cy="36" r="${r}" fill="none" stroke="#1e293b" stroke-width="6"/>
+    <circle cx="36" cy="36" r="${r}" fill="none" stroke="${color}" stroke-width="6"
+      stroke-dasharray="${filled.toFixed(1)} ${circ.toFixed(1)}" stroke-dashoffset="${(circ * 0.25).toFixed(1)}"
+      stroke-linecap="round" transform="rotate(-90 36 36)"/>
+    <text x="36" y="30" text-anchor="middle" font-size="7" fill="#64748b" font-weight="700">노무라式</text>
+    <text x="36" y="42" text-anchor="middle" font-size="11" fill="${color}" font-weight="900">${esc(shortRating)}</text>
+    <text x="36" y="52" text-anchor="middle" font-size="8" fill="#94a3b8">${score}/100</text>
+  </svg>`;
+}
+
 function _renderNomuraScore(d) {
-  // Placeholder for additional nomura score rendering if needed
-  // (e.g. piotroski, altman_z, beneish_m panels — wired up in a later task)
+  const body = document.getElementById('nm-nomura-body');
+  if (!body) return;
+
+  const score   = d.quantitative_score ?? 0;
+  const rating  = d.nomura_rating ?? '—';
+  const pio     = d.piotroski    ?? '—';
+  const az      = d.altman_z     != null ? d.altman_z.toFixed(2)  : '—';
+  const bm      = d.beneish_m    != null ? d.beneish_m.toFixed(2) : '—';
+  const bWarn   = d.beneish_warning;
+
+  const azColor = d.altman_z != null
+    ? (d.altman_z > 2.99 ? 'var(--success)' : d.altman_z > 1.81 ? '#eab308' : 'var(--destructive)')
+    : 'var(--text-secondary)';
+  const azLabel = d.altman_z != null
+    ? (d.altman_z > 2.99 ? '안전' : d.altman_z > 1.81 ? '회색지대' : '위험')
+    : '';
+
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
+      ${_nmGaugeSVG(score, rating)}
+      <div>
+        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">정량 분석 스코어</div>
+        <div style="font-size:22px;font-weight:900;color:var(--text-primary);">${score}<span style="font-size:13px;font-weight:400;color:var(--text-tertiary);">/100</span></div>
+      </div>
+    </div>
+    <div class="nm-score-grid">
+      <div class="nm-score-cell">
+        <span class="nm-score-label">Piotroski</span>
+        <span class="nm-score-val">${pio}<span style="font-size:10px;font-weight:400;color:var(--text-tertiary);">/9</span></span>
+      </div>
+      <div class="nm-score-cell">
+        <span class="nm-score-label">Altman Z</span>
+        <span class="nm-score-val" style="color:${azColor};font-size:13px">${az} <span style="font-size:9px;">${azLabel}</span></span>
+      </div>
+      <div class="nm-score-cell">
+        <span class="nm-score-label">Beneish M</span>
+        <span class="nm-score-val" style="color:${bWarn ? 'var(--destructive)' : 'var(--success)'};font-size:13px">
+          ${bm} ${bWarn ? '⚠️' : '✓'}
+        </span>
+      </div>
+    </div>`;
+}
+
+function _initNomuraInstitutionAccordion(ticker) {
+  const acc = document.getElementById('nm-acc-institution');
+  if (!acc) return;
+  let loaded = false;
+  acc.addEventListener('toggle', async () => {
+    if (!acc.open || loaded) return;
+    loaded = true;
+    const body = document.getElementById('nm-institution-body');
+    if (!body) return;
+    body.innerHTML = '<div class="nm-placeholder">로딩 중…</div>';
+    try {
+      const res  = await fetch(`/api/ticker/${encodeURIComponent(ticker)}`);
+      const json = await res.json();
+      const inst = json?.tradingkey?.institutional;
+      if (!inst) throw new Error('기관 데이터 없음');
+      const qoqColor = (inst.holding_qoq || 0) >= 0 ? 'var(--success)' : 'var(--destructive)';
+      body.innerHTML = `
+        <div class="nm-score-grid">
+          <div class="nm-score-cell">
+            <span class="nm-score-label">기관 비중</span>
+            <span class="nm-score-val" style="font-size:13px">${inst.holding_pct != null ? inst.holding_pct.toFixed(1) + '%' : '—'}</span>
+          </div>
+          <div class="nm-score-cell">
+            <span class="nm-score-label">QoQ 변화</span>
+            <span class="nm-score-val" style="color:${qoqColor};font-size:13px">
+              ${inst.holding_qoq != null ? (inst.holding_qoq >= 0 ? '+' : '') + inst.holding_qoq.toFixed(1) + '%' : '—'}
+            </span>
+          </div>
+          <div class="nm-score-cell">
+            <span class="nm-score-label">최대 보유사</span>
+            <span class="nm-score-val" style="font-size:11px">${inst.top_holder ? esc(inst.top_holder) : '—'}</span>
+          </div>
+        </div>`;
+    } catch (e) {
+      body.innerHTML = `<div class="nm-placeholder">기관 데이터 없음 (${esc(e.message)})</div>`;
+    }
+  });
 }
 

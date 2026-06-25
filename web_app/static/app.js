@@ -4620,6 +4620,10 @@ function switchTab(tabId) {
   if (tabId === 'usinsight' && typeof TICKER !== 'undefined' && TICKER) {
     loadUSInsight(TICKER);
   }
+  // 노무라式 탭 lazy loading
+  if (tabId === 'nomura' && typeof TICKER !== 'undefined' && TICKER) {
+    loadNomuraScore(TICKER);
+  }
 }
 
 
@@ -5457,6 +5461,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (currentMarket === 'US') {
       const usBtn = document.getElementById('btn-usinsight');
       if (usBtn) usBtn.style.display = '';
+      const nmBtn = document.getElementById('btn-nomura');
+      if (nmBtn) nmBtn.style.display = '';
     }
   } else {
     // ── 스캐너 페이지
@@ -6482,4 +6488,80 @@ async function loadWsbWidget() {
 }
 
 document.addEventListener('DOMContentLoaded', loadWsbWidget);
+
+// ── 노무라式 탭 ──────────────────────────────────────────────────────────────
+
+let _nmLoaded = false;
+
+async function loadNomuraScore(ticker) {
+  if (_nmLoaded) return;
+  _nmLoaded = true;
+
+  const loading = document.getElementById('nm-loading');
+  const errEl   = document.getElementById('nm-error');
+  if (loading) loading.style.display = '';
+  if (errEl)   errEl.style.display   = 'none';
+
+  try {
+    const res  = await fetch(`/api/nomura-score/${encodeURIComponent(ticker)}`);
+    const json = await res.json();
+    if (!res.ok || json.status !== 'ok') throw new Error(json.message || `HTTP ${res.status}`);
+    if (loading) loading.style.display = 'none';
+    _renderNomuraTKScore(json.data);
+    _renderNomuraScore(json.data);
+  } catch (e) {
+    if (loading) loading.style.display = 'none';
+    if (errEl) {
+      errEl.textContent = `노무라式 데이터 로드 실패: ${e.message}`;
+      errEl.style.display = '';
+    }
+  }
+}
+
+function _renderNomuraTKScore(d) {
+  const body = document.getElementById('nm-tkscore-body');
+  if (!body) return;
+  const score = d.quantitative_score ?? '—';
+  const grade = d.grade ?? '—';
+  const rating = d.nomura_rating ?? '—';
+
+  const ratingColor = {
+    'Conviction Buy': 'var(--brand)',
+    'Buy': 'var(--success)',
+    'Neutral': 'var(--text-secondary)',
+    'Reduce': 'var(--destructive)',
+    'Sell': 'var(--destructive)',
+  }[rating] || 'var(--text-primary)';
+
+  body.innerHTML = `
+    <div class="nm-score-grid">
+      <div class="nm-score-cell">
+        <span class="nm-score-label">종합 점수</span>
+        <span class="nm-score-val">${score}</span>
+      </div>
+      <div class="nm-score-cell">
+        <span class="nm-score-label">등급</span>
+        <span class="nm-score-val">${esc(grade)}</span>
+      </div>
+      <div class="nm-score-cell">
+        <span class="nm-score-label">레이팅</span>
+        <span class="nm-score-val" style="color:${ratingColor};font-size:12px">${esc(rating)}</span>
+      </div>
+      <div class="nm-score-cell">
+        <span class="nm-score-label">목표가</span>
+        <span class="nm-score-val" style="font-size:13px">${d.nomura_target ? '$' + d.nomura_target.toFixed(2) : '—'}</span>
+      </div>
+      <div class="nm-score-cell">
+        <span class="nm-score-label">업사이드</span>
+        <span class="nm-score-val" style="font-size:13px;color:${(d.nomura_upside||0)>=0?'var(--success)':'var(--destructive)'}">
+          ${d.nomura_upside != null ? (d.nomura_upside >= 0 ? '+' : '') + d.nomura_upside.toFixed(1) + '%' : '—'}
+        </span>
+      </div>
+    </div>`;
+}
+
+function _renderNomuraScore(d) {
+  // Placeholder for additional nomura score rendering if needed
+  // (e.g. piotroski, altman_z, beneish_m panels — wired up in a later task)
+}
 

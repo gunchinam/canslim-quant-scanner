@@ -129,7 +129,12 @@ class HandDrawnChartRenderer:
 
     def __init__(self, hist: pd.DataFrame, result: FourAxisResult,
                  ticker: str = "", lookback: int = 120,
-                 width_px: int = 720, height_px: int = 600, dpi: int = 100):
+                 width_px: int = 720, height_px: int = 600, dpi: int = 100,
+                 support: float | None = None,
+                 resistance: float | None = None,
+                 show_fib: bool = True,
+                 show_sr: bool = True,
+                 nomura_score_data: dict | None = None):
         from four_axis_analyzer import _ema, _bb
         h = hist.copy()
         # GreedZone 시리즈 계산 (차트 배경 음영용)
@@ -156,14 +161,61 @@ class HandDrawnChartRenderer:
         if "OBV" not in h.columns:
             h["OBV"] = _obv_local(h["Close"], h["Volume"])
 
-        self._full_len = len(h)
-        self._lookback = min(lookback, len(h))
-        self._offset   = self._full_len - self._lookback
-        self.hist      = h.tail(self._lookback).reset_index(drop=False)
-        self.result    = result
-        self.ticker    = ticker
-        self.size      = (width_px / dpi, height_px / dpi)
-        self.dpi       = dpi
+        self._full_len   = len(h)
+        self._lookback   = min(lookback, len(h))
+        self._offset     = self._full_len - self._lookback
+        self.hist        = h.tail(self._lookback).reset_index(drop=False)
+        self.result      = result
+        self.ticker      = ticker
+        self.size        = (width_px / dpi, height_px / dpi)
+        self.dpi         = dpi
+        self._support    = support
+        self._resistance = resistance
+        self._show_fib   = show_fib
+        self._show_sr    = show_sr
+        self._nomura_score_data = nomura_score_data
+
+    # ---------------------------------------------------------------
+    def _draw_nomura_badge(self, ax, score: int, rating: str, lw_scale: float):
+        """우상단에 원형 게이지 배지를 그린다."""
+        from matplotlib.patches import Arc
+
+        rating_colors = {
+            "Conviction Buy": "#3b82f6",
+            "Buy": "#22c55e",
+            "Neutral": "#eab308",
+            "Reduce": "#f97316",
+            "Sell": "#ef4444",
+        }
+        color = rating_colors.get(rating, "#94a3b8")
+        short = {"Conviction Buy": "C.BUY", "Buy": "BUY",
+                 "Neutral": "NTRL", "Reduce": "RDCE", "Sell": "SELL"}.get(rating, rating[:4])
+
+        # inset axes: 우상단 0.18×0.22 비율
+        ax_inset = ax.inset_axes([0.80, 0.76, 0.18, 0.22])
+        ax_inset.set_xlim(0, 1)
+        ax_inset.set_ylim(0, 1)
+        ax_inset.axis("off")
+        ax_inset.set_facecolor("#0f1117")
+
+        # 배경 원
+        bg = plt.Circle((0.5, 0.5), 0.42, color="#1e293b", zorder=1)
+        ax_inset.add_patch(bg)
+
+        # 게이지 호 (score/100 비율)
+        angle = score / 100 * 360
+        gauge = Arc((0.5, 0.5), 0.80, 0.80, angle=90,
+                    theta1=-angle, theta2=0,
+                    color=color, linewidth=3 * lw_scale, zorder=2)
+        ax_inset.add_patch(gauge)
+
+        # 텍스트
+        ax_inset.text(0.5, 0.68, "노무라式", ha="center", va="center",
+                      fontsize=5, color="#64748b", fontweight="bold", zorder=3)
+        ax_inset.text(0.5, 0.50, short, ha="center", va="center",
+                      fontsize=7, color=color, fontweight="black", zorder=3)
+        ax_inset.text(0.5, 0.30, f"{score}", ha="center", va="center",
+                      fontsize=6, color="#94a3b8", zorder=3)
 
     # ---------------------------------------------------------------
     def render(self) -> Image.Image:
@@ -249,6 +301,51 @@ class HandDrawnChartRenderer:
             for t in leg.get_texts():
                 t.set_color("#444")
             plt.setp(ax_price.get_xticklabels(), visible=False)
+
+            # ── ⑤ Fibonacci 수평선 ─────────────────────────────────
+            if self._show_fib and len(self.hist) > 1:
+                try:
+                    h_max = self.hist["High"].max()
+                    h_min = self.hist["Low"].min()
+                    fib_levels = [0.236, 0.382, 0.5, 0.618, 0.786]
+                    fib_colors = ["#a78bfa", "#8b5cf6", "#7c3aed", "#6d28d9", "#5b21b6"]
+                    for lvl, col in zip(fib_levels, fib_colors):
+                        price = h_min + (h_max - h_min) * lvl
+                        ax_price.axhline(price, color=col, linewidth=0.8 * lw_scale,
+                                         linestyle=(0, (5, 4)), alpha=0.55)
+                        ax_price.text(len(x) - 1, price, f" {lvl:.3f}",
+                                      fontsize=max(6, int(fs_tick * 0.75)),
+                                      color=col, va="center", alpha=0.7)
+                except Exception:
+                    pass
+
+            # ── ⑥ S/R 수평점선 ─────────────────────────────────────
+            if self._show_sr:
+                try:
+                    if self._support is not None:
+                        ax_price.axhline(self._support, color="#22c55e",
+                                         linewidth=1.2 * lw_scale, linestyle="--", alpha=0.7)
+                        ax_price.text(0, self._support, "S ",
+                                      fontsize=max(6, int(fs_tick * 0.8)),
+                                      color="#22c55e", va="bottom", ha="left", alpha=0.8)
+                    if self._resistance is not None:
+                        ax_price.axhline(self._resistance, color="#ef4444",
+                                         linewidth=1.2 * lw_scale, linestyle="--", alpha=0.7)
+                        ax_price.text(0, self._resistance, "R ",
+                                      fontsize=max(6, int(fs_tick * 0.8)),
+                                      color="#ef4444", va="top", ha="left", alpha=0.8)
+                except Exception:
+                    pass
+
+            # ── ⑨ 노무라式 배지 ─────────────────────────────────────
+            if self._nomura_score_data:
+                _nm = self._nomura_score_data
+                _score  = _nm.get("quantitative_score", 0) or 0
+                _rating = _nm.get("nomura_rating", "")  or ""
+                try:
+                    self._draw_nomura_badge(ax_price, _score, _rating, lw_scale)
+                except Exception as _badge_err:
+                    logging.debug("nomura badge draw failed: %s", _badge_err)
 
             # ── ② 거래량 + OBV 패널 ──────────────────────────────────
             vol = self.hist["Volume"].values

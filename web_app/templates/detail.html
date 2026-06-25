@@ -1214,6 +1214,9 @@ html, body {
       <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-finance" id="btn-finance" onclick="switchTab('finance')">재무 지표</button>
       <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-dartnews" id="btn-dartnews" onclick="switchTab('dartnews')" style="display:none;">공시·뉴스</button>
       <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-usinsight" id="btn-usinsight" onclick="switchTab('usinsight')" style="display:none;">US 인사이트</button>
+      <button class="tab-btn" role="tab" aria-selected="false"
+              aria-controls="tab-nomura" id="btn-nomura"
+              onclick="switchTab('nomura')" style="display:none;">노무라式</button>
     </nav>
 
     <!-- CAN SLIM Tab -->
@@ -1292,6 +1295,63 @@ html, body {
       <div style="height:24px;"></div>
     </div>
 
+
+    <!-- 노무라式 Tab (US only) -->
+    <div class="tab-panel" id="tab-nomura" role="tabpanel" aria-labelledby="btn-nomura">
+      <div style="padding:12px 16px 4px;">
+        <div id="nm-loading" style="text-align:center;padding:20px;color:var(--text-tertiary);font-size:13px;">로딩 중…</div>
+        <div id="nm-error" style="display:none;text-align:center;padding:20px;color:var(--destructive);font-size:13px;"></div>
+
+        <!-- TK Score 아코디언 (기본: 펼침) -->
+        <details id="nm-acc-tkscore" class="nm-accordion" open>
+          <summary class="nm-acc-summary">
+            <span class="nm-acc-icon">📊</span>
+            <span class="nm-acc-title">TK Score</span>
+            <span class="nm-acc-chevron">▾</span>
+          </summary>
+          <div class="nm-acc-body" id="nm-tkscore-body">
+            <div class="nm-placeholder">—</div>
+          </div>
+        </details>
+
+        <!-- 노무라式 스코어 아코디언 (기본: 접힘) -->
+        <details id="nm-acc-nomura" class="nm-accordion">
+          <summary class="nm-acc-summary">
+            <span class="nm-acc-icon">🏦</span>
+            <span class="nm-acc-title">노무라式 스코어 &amp; 레이팅</span>
+            <span class="nm-acc-chevron">▾</span>
+          </summary>
+          <div class="nm-acc-body" id="nm-nomura-body">
+            <div class="nm-placeholder">—</div>
+          </div>
+        </details>
+
+        <!-- 기관 투자자 아코디언 (기본: 접힘) -->
+        <details id="nm-acc-institution" class="nm-accordion">
+          <summary class="nm-acc-summary">
+            <span class="nm-acc-icon">🏛</span>
+            <span class="nm-acc-title">기관 투자자 현황</span>
+            <span class="nm-acc-chevron">▾</span>
+          </summary>
+          <div class="nm-acc-body" id="nm-institution-body">
+            <div class="nm-placeholder">—</div>
+          </div>
+        </details>
+
+        <!-- Football Field 아코디언 (기본: 접힘) -->
+        <details id="nm-acc-football" class="nm-accordion">
+          <summary class="nm-acc-summary">
+            <span class="nm-acc-icon">⚽</span>
+            <span class="nm-acc-title">Football Field 밸류에이션</span>
+            <span class="nm-acc-chevron">▾</span>
+          </summary>
+          <div class="nm-acc-body" id="nm-football-body">
+            <div class="nm-placeholder">—</div>
+          </div>
+        </details>
+      </div>
+      <div style="height:24px;"></div>
+    </div>
 
   </div><!-- end scroll-content -->
 </div><!-- end shell -->

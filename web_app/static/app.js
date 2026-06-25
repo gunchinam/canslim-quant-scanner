@@ -3,100 +3,6 @@
  * scanner.html (데스크탑 테이블) / detail.html 공용 스크립트
  */
 
-// ── 판단 포스터 — 확신도 구간별 텍스트/색상 테이블 (모듈 레벨 — 렌더마다 재할당 방지) ──
-const _VERDICT_TIERS = [
-  { minConv: 93, pgCls: 'dvp-green',
-    pvWords:   ['역대급', '인생 타이밍', '지금 당장', '올인각', '이게 자리다'],
-    pvReasons: ['지표·수급·모멘텀 삼박자 완벽<br>이런 자리 1년에 몇 번 안 옴<br>망설이면 두고두고 후회함', '차트 보고 눈물 날 뻔함<br>모든 조건 동시에 충족된 자리<br>지금 안 담으면 진짜 바보', '수급 폭발에 추세 완벽 우상향<br>기술적·기본적 지표 전부 켜짐<br>인생 타이밍 맞음 진짜', '이런 신호 놓치면 후회함<br>볼수록 좋은 차트에 수급까지 터짐<br>비중 최대로 ㄱㄱ'],
-    pvBgs:     ['인생각', '올인', '역대급'],
-    tmWords:   ['🟢 인생 타이밍', '🟢 역대급', '🟢 지금 당장'],
-    tmSub:     '인생 타이밍' },
-  { minConv: 86, pgCls: 'dvp-green',
-    pvWords:   ['올인각', '풀매각', '슈팅각', '지금이야', '강력 매수'],
-    pvReasons: ['지표 다 켜졌고 수급까지 터짐<br>이런 타이밍 자주 안 옴<br>지금 안 담으면 진짜 후회함', '차트 완벽하게 살아있음<br>추세 ㄹㅇ 강하고 모멘텀 최상<br>분할 말고 그냥 풀매각', '수급 뒷받침에 모멘텀도 완벽<br>기술적·기본적 지표 전부 켜짐<br>올인각 나왔다 진짜', '이거 지금 아니면 언제 사냐<br>모든 조건 충족된 자리임<br>소액이라도 반드시 담아봐'],
-    pvBgs:     ['올인', '풀매', '슈팅'],
-    tmWords:   ['🟢 올인각', '🟢 풀매각', '🟢 슈팅각'],
-    tmSub:     '극강 타이밍' },
-  { minConv: 79, pgCls: 'dvp-green',
-    pvWords:   ['풀매각', '적극 매수', '강하게 담아', '지금 담아', '줍줍각'],
-    pvReasons: ['지금 안 담으면 후회할 수 있음<br>추세 강하고 수급도 뒷받침됨<br>비중 실어서 담아봐', '차트 ㄷㄷ하고 모멘텀 살아있음<br>수급 들어오는 게 확인됨<br>눌리면 추가 담기 각', '지표 대부분 켜진 강한 자리<br>리스크 낮고 기대수익 높음<br>망설이지 말고 담아', '이거 지금 아니면 비싸게 사야 함<br>추세 우상향 확실하고 수급도 좋음<br>분할이라도 지금 시작해'],
-    pvBgs:     ['풀매', '적극', '줍줍'],
-    tmWords:   ['🟢 풀매각', '🟢 적극 매수', '🟢 줍줍각'],
-    tmSub:     '강한 매수' },
-  { minConv: 72, pgCls: 'dvp-green',
-    pvWords:   ['줍줍각', '담아가', '매수각', '나눠서 담아', '비중 실어'],
-    pvReasons: ['지금 안 담으면 후회함<br>추세 좋고 수급도 받쳐주는 중<br>나눠서 조금씩 담아봐', '차트 ㄷㄷ함<br>수급 들어오고 모멘텀 살아있음<br>눌리면 분할 담기 각', '추세 우상향 중이고 수급도 좋음<br>리스크 관리하면서 분할로 ㄱㄱ<br>성급한 풀매는 피해', '지표 켜져 있고 자리도 좋음<br>욕심 안 부리고 분할로 접근<br>생각보다 좋은 종목임'],
-    pvBgs:     ['줍줍', '분할', '담기'],
-    tmWords:   ['🟢 줍줍각', '🟢 담아가', '🟢 분할 ㄱㄱ'],
-    tmSub:     '매수 추천' },
-  { minConv: 65, pgCls: 'dvp-green',
-    pvWords:   ['분할 ㄱㄱ', '소량 진입', '슬금슬금', '조심스럽게', '나눠서'],
-    pvReasons: ['나쁘지 않은 자리긴 한데<br>확신이 100%는 아님<br>분할로 리스크 줄여서 접근', '긍정 지표 있지만 일부 애매함<br>풀매보단 소량 분할이 맞는 상황<br>더 좋아지면 추가 담기', '들어갈 수는 있는 자리인데<br>손실 감당 가능한 비중으로만<br>절대 몰빵은 금지', '긍정적인 신호 있지만 리스크도 있음<br>작은 비중으로 먼저 확인해봐<br>차트 좋아지면 추가'],
-    pvBgs:     ['소량', '분할', '조심'],
-    tmWords:   ['🟢 소량 진입', '🟢 분할 ㄱㄱ', '🟢 슬금슬금'],
-    tmSub:     '신중 매수' },
-  { minConv: 58, pgCls: 'dvp-yellow',
-    pvWords:   ['테스트 담기', '발만 살짝', '소액만', '일단 찔러봐', '살짝만'],
-    pvReasons: ['지표 일부 긍정적이지만 전부는 아님<br>소액으로 먼저 포지션 잡아봐<br>확인되면 비중 늘리는 방식', '긍정 신호 있는데 확신이 안 섬<br>물려도 감당 가능한 소액으로만<br>지켜보면서 추가 판단해', '진입 가능한 자리긴 한데<br>추가 확인이 필요한 상황<br>소량 테스트 후 결정해봐', '애매하긴 한데 아주 나쁘진 않음<br>발만 살짝 담가서 흐름 봐봐<br>좋아지면 그때 비중 추가'],
-    pvBgs:     ['테스트', '소액', '찔러봐'],
-    tmWords:   ['🟡 테스트 담기', '🟡 소액만', '🟡 발만 살짝'],
-    tmSub:     '테스트 진입' },
-  { minConv: 51, pgCls: 'dvp-yellow',
-    pvWords:   ['긍정 눈팅', '좀 더 봐봐', '시그널 대기', '거의 다 왔어', '조금만 기다려'],
-    pvReasons: ['긍정적인 신호 보이긴 하는데<br>아직 확실히 켜진 건 아님<br>좀 더 지켜보다가 들어가봐', '방향성은 긍정적인데 타이밍이 아직<br>조금만 더 기다리면 좋은 자리 나옴<br>서두르지 말고 시그널 확인해', '나쁜 종목은 아닌데 자리가 좀 이름<br>추세 확인되면 그때 담는 게 맞음<br>조금만 더 기다려봐', '긍정 지표 늘어나는 중인데<br>아직 매수 확신까지는 아님<br>좀 더 보다가 진입 타이밍 잡아봐'],
-    pvBgs:     ['대기', '시그널', '곧이야'],
-    tmWords:   ['🟡 긍정 눈팅', '🟡 좀 더 봐봐', '🟡 시그널 대기'],
-    tmSub:     '긍정 관망' },
-  { minConv: 44, pgCls: 'dvp-yellow',
-    pvWords:   ['눈팅각', '반반임', '모르겠음', '저울질 중', '중립'],
-    pvReasons: ['좋은 것도 있고 안 좋은 것도 있음<br>확신이 안 서는 자리<br>더 좋은 시그널 나오면 그때 대응', '종목 자체는 나쁘지 않은데<br>타이밍이 살짝 애매함<br>좀 더 내려오면 그때 담자', '반반임 솔직히<br>지금 들어가기도 애매하고 빠지기도 애매함<br>관망하면서 눈팅해봐', '확신이 안 서는 구간<br>섣불리 들어갔다가 멘탈 털릴 수 있음<br>좀 더 지켜보면서 판단해'],
-    pvBgs:     ['중립', '눈팅', '저울질'],
-    tmWords:   ['🟡 눈팅각', '🟡 반반임', '🟡 중립'],
-    tmSub:     '중립 관망' },
-  { minConv: 37, pgCls: 'dvp-yellow',
-    pvWords:   ['관망각', '기다려봐', '아직은 아냐', '타이밍 아님', '좀 더 기다려'],
-    pvReasons: ['좋긴 한데 지금 들어가면 물릴 수 있음<br>조금만 더 눌리면 그때 담아봐<br>지금은 관망각', '부정 신호 하나둘씩 켜지는 중<br>지금 들어가기엔 타이밍이 안 좋음<br>좀 더 기다려봐', '살짝 고점 느낌 나기 시작함<br>성급하게 들어갔다가 물릴 수 있음<br>관망하면서 기다려봐', '나쁜 종목은 아닌데<br>지금 들어가기엔 리스크가 있음<br>조금 더 내려오면 담자'],
-    pvBgs:     ['관망', '대기', '기다려'],
-    tmWords:   ['🟡 관망각', '🟡 기다려봐', '🟡 타이밍 아님'],
-    tmSub:     '소극적 관망' },
-  { minConv: 30, pgCls: 'dvp-red',
-    pvWords:   ['고점 주의', '아직 일러', '더 눌려야', '서두르지 마', '대기각'],
-    pvReasons: ['살짝 고점 느낌 남<br>지금 들어가면 물릴 수 있음<br>더 내려오면 그때 검토해봐', '지금 들어가기엔 부담스러운 자리<br>좀 더 눌려야 매력 있는 가격 됨<br>서두르지 마셈', '지표들 부정 신호 보내는 중<br>리스크 크고 기대수익은 작음<br>더 좋은 자리 기다려봐', '차트가 부담스러운 구간<br>수급 빠지기 시작하는 느낌<br>여기서 손댔다가 물리면 고생함'],
-    pvBgs:     ['고점', '대기', '주의'],
-    tmWords:   ['🟠 고점 주의', '🟠 아직 일러', '🟠 더 눌려야'],
-    tmSub:     '고점 주의' },
-  { minConv: 23, pgCls: 'dvp-red',
-    pvWords:   ['진입 부담', '손 빼봐', '위험한 자리', '뇌동 주의', '패스 고려'],
-    pvReasons: ['지금 들어가면 물릴 각도임<br>지표들 대부분 안 좋은 신호 보내는 중<br>관심종목만 넣고 손 빼셈', '차트 안 좋고 수급도 빠지는 중<br>지금 들어가는 건 뇌동매매임<br>더 내려오면 그때 다시 검토', '여러 지표가 경고 보내는 중<br>리스크 대비 기대수익 너무 안 나옴<br>더 좋은 종목 찾아봐', '지금 자리는 진입하면 안 됨<br>손절라인도 애매하고 지지도 약함<br>완전히 빠질 때까지 기다려'],
-    pvBgs:     ['부담', '주의', '패스'],
-    tmWords:   ['🟠 진입 부담', '🟠 손 빼봐', '🟠 뇌동 주의'],
-    tmSub:     '진입 부담' },
-  { minConv: 16, pgCls: 'dvp-red',
-    pvWords:   ['강한 경고', '진입 금물', '손 빼셈', '위험 구간', '절대 비추'],
-    pvReasons: ['지금 들어가면 높은 확률로 물림<br>지표들이 전부 경고 보내는 중<br>관심만 해두고 절대 손 대지 마', '차트 안 좋고 수급도 완전 빠지는 중<br>지금 들어가면 뇌동매매 확정<br>더 내려가는 거 구경만 해', '모멘텀 죽고 수급도 없음<br>여기서 들어가면 물리는 거 거의 확정<br>좋아질 때까지 무시해', '지표 전반적으로 매우 안 좋음<br>손절라인 없는 진입은 자살행위<br>절대 추격매수 금지'],
-    pvBgs:     ['경고', '금물', '위험'],
-    tmWords:   ['🟠 강한 경고', '🟠 진입 금물', '🟠 손 빼셈'],
-    tmSub:     '강한 경고' },
-  { minConv: 10, pgCls: 'dvp-red',
-    pvWords:   ['패스각', '손절각', '도망쳐', '버려', '손 빼셈'],
-    pvReasons: ['지금 들어가면 거의 물릴 각도임<br>지표들이 다 안 좋은 신호<br>관심만 해두고 절대 손대지 마', '차트 개못생김 솔직히<br>수급 빠지고 모멘텀도 죽었음<br>그냥 지켜만 봐', '이거 손대면 안 됨 진짜<br>모든 지표가 경고 보내는 중<br>관심종목만 넣고 기다려봐', '지금 들어가면 뇌동매매임<br>더 좋은 자리 나올 때까지 패스<br>절대 추격매수 금지'],
-    pvBgs:     ['패스', '손절', '회피'],
-    tmWords:   ['🔴 패스각', '🔴 손절각', '🔴 도망쳐'],
-    tmSub:     '강력 회피' },
-  { minConv: 5, pgCls: 'dvp-red',
-    pvWords:   ['탈출각', '청산각', '손절 검토', '빠져나와', '들고 있으면 위험'],
-    pvReasons: ['이미 갖고 있으면 탈출 검토해야 함<br>지표 전부 최악 신호<br>손절이 장기 버티기보다 나음', '차트 완전히 망가진 상황<br>수급 없고 모멘텀 바닥<br>빠르게 나오는 게 맞음', '지금 갖고 있다면 매도 고려해봐<br>회복까지 엄청 오래 걸릴 수 있음<br>기회비용 생각해야 함', '모든 지표 바닥 신호<br>물타기는 절대 안 됨<br>손실 확정하고 나오는 게 현명함'],
-    pvBgs:     ['탈출', '청산', '손절'],
-    tmWords:   ['🔴 탈출각', '🔴 청산각', '🔴 손절 검토'],
-    tmSub:     '탈출 권고' },
-  { minConv: 0, pgCls: 'dvp-red',
-    pvWords:   ['깡통 주의', '건드리지 마', '최고 위험', '절대 금지', '폭탄이야'],
-    pvReasons: ['이거 손대면 진짜 깡통 각도임<br>지표 전부 최악 중에 최악<br>존재 자체를 잊어버려', '차트 역대급으로 못생겼음<br>수급 제로에 모멘텀 나락<br>절대 건드리지 마', '이런 자리에서 들어가면 미련한 거임<br>회복 가능성도 낮고 기다릴 가치도 없음<br>관심종목에서도 삭제해', '지금 들어가면 깡통 확정에 가까움<br>어떤 이유로도 진입 금지<br>이거 갖고 있으면 지금 당장 팔아'],
-    pvBgs:     ['깡통', '절대금지', '최위험'],
-    tmWords:   ['🔴 깡통 주의', '🔴 절대 금지', '🔴 건드리지 마'],
-    tmSub:     '최고 위험' },
-];
-
 // ── 세이프 모드 (공공장소용 — 로고 클릭으로 토글) ─────────────────────
 const SafeMode = (() => {
   const KEY = 'safeMode';
@@ -329,20 +235,6 @@ function signalBg(signal) {
   return { strong: 'rgba(0,192,115,0.10)', buy: 'rgba(49,130,246,0.10)', hold: 'rgba(255,146,0,0.10)', sell: 'rgba(240,68,82,0.10)', neutral: 'var(--surface-subtle)' }[tier];
 }
 
-// API가 반환하는 verdict color 문자열 {green,yellow,red,neutral} → CSS 값
-function _verdictColor(c) {
-  return { green: '#22c55e', yellow: '#f59e0b', red: '#ef4444', neutral: '#94a3b8' }[c] || '#94a3b8';
-}
-function _verdictBg(c) {
-  return { green: 'rgba(34,197,94,0.08)', yellow: 'rgba(245,158,11,0.08)', red: 'rgba(239,68,68,0.08)', neutral: 'rgba(148,163,184,0.08)' }[c] || 'rgba(148,163,184,0.08)';
-}
-
-// ticker + conv 기반 결정론적 배열 선택 — 동일 종목은 재렌더 시에도 같은 문구 유지
-function _deterministicPick(arr, ticker, conv) {
-  const hash = (ticker || '').split('').reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) | 0, 0);
-  return arr[Math.abs(hash * 1000 + Math.round(conv)) % arr.length];
-}
-
 // 시그널 문자열에서 메인 시그널과 [태그]를 분리
 function _splitSignal(signal) {
   if (!signal) return { base: signal, tags: [] };
@@ -511,9 +403,7 @@ function _entryLight(stock) {
     aqBadge = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-left:2px;vertical-align:middle;" title="${esc(stock.AQ_Verdict||'')}"></span>`;
   }
   const volBadge = _volRegimeBadge(stock);
-  const _cons = (stock.EntryConsecutive != null) ? Number(stock.EntryConsecutive) : 0;
-  const consBadge = _cons >= 2 ? `<span class="entry-consecutive-badge" title="${_cons}일 연속 ${_ENTRY_LABEL[st] || st}">${_cons}일↑</span>` : '';
-  return `<span class="entry-badge entry-${cls}" title="${esc(tip)}">${ico}${lbl ? `<span class="entry-badge-label">${esc(lbl)}</span>` : ''}${aqBadge}</span>${consBadge}${volBadge}`;
+  return `<span class="entry-badge entry-${cls}" title="${esc(tip)}">${ico}${lbl ? `<span class="entry-badge-label">${esc(lbl)}</span>` : ''}${aqBadge}</span>${volBadge}`;
 }
 
 function _renderSignalHtml(signal, stock) {
@@ -531,7 +421,7 @@ function _renderSignalHtml(signal, stock) {
       : `<span class="signal-badge" style="color:${signalColor(base)};background:${signalBg(base)}">${esc(tr)}</span>`;
   }
   // 태그([BREAKOUT],[VOL] 등)는 핵심 이유 컬럼과 중복 → 등급+진입만 표시
-  return `<div class="signal-row">${_entryLight(stock)}${qualityHtml}</div>`;
+  return `<div class="signal-row">${qualityHtml}</div>`;
 }
 
 function fmt(v, digits = 0) {
@@ -1770,6 +1660,29 @@ function renderStockRow(stock, rank) {
     brokerHtml = '<div class="target-empty">컨센서스 없음</div>';
   }
 
+  // 진입 신호 배지 HTML (EntryConsecutive 없으면 1로 처리 → 점선 불안정)
+  const _esCons = stock.EntryConsecutive || 1;
+  const _esSt   = stock.EntryStatus;
+  let entryStatusHtml;
+  if (!_esSt) {
+    entryStatusHtml = '<span style="color:#9ca3af">—</span>';
+  } else {
+    const _esColorMap = { STRONG: '#16a34a', NEUTRAL: '#f59e0b', AVOID: '#dc2626' };
+    const _esCol  = _esColorMap[_esSt] || '#6b7280';
+    const _esIcon = { STRONG: '🔒', NEUTRAL: '❓', AVOID: '⚠️' }[_esSt] || '';
+    const _esStyle = _esCons >= 2
+      ? `background:${_esCol};color:#fff;`
+      : `border:1.5px dashed ${_esCol};color:${_esCol};background:transparent;`;
+    entryStatusHtml = `<span style="${_esStyle}padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600;" title="${_esCons}일째 유지">${_esIcon} ${_esSt}</span>`;
+  }
+
+  // 연속 일수 HTML
+  const _consN = stock.EntryConsecutive || 1;
+  const _consColor = _consN >= 5 ? '#15803d' : _consN >= 3 ? '#16a34a' : _consN >= 2 ? '#6b7280' : '#9ca3af';
+  const _consFz    = _consN >= 5 ? '15px' : _consN >= 3 ? '13px' : '12px';
+  const _consSuf   = _consN >= 5 ? ' 🔥' : _consN >= 3 ? ' ★' : _consN >= 2 ? ' ✓' : '';
+  const consecutiveHtml = `<span style="font-size:${_consFz};font-weight:600;color:${_consColor};" title="${_consN}일 연속 ${stock.EntryStatus || ''}">${_consN}${_consSuf}</span>`;
+
   const checked = _selectedStocks.has(stock.Ticker);
   const t = esc(stock.Ticker);
   // US 종목 로고 (Finnhub 정적 URL 패턴 — API 호출 0, lazy 로드, 없으면 onerror로 숨김)
@@ -1798,6 +1711,8 @@ function renderStockRow(stock, rank) {
     ${_renderSignalHtml(stock.Signal, stock)}
     ${riskHtml}
   </td>
+  <td class="center">${entryStatusHtml}</td>
+  <td class="center">${consecutiveHtml}</td>
   <td class="right">${fmtPrice(stock.Price)}</td>
   <td class="right ${chgClass}">${chgSign}${chgPct}%</td>
   <td class="right rsi-cell">${_rsiCellHtml(stock)}</td>
@@ -2993,6 +2908,8 @@ async function _loadSerenity(ticker, seq) {
     if (!res.ok) return; // 커버리지 없는 종목 — 조용히 숨김
     const d = await res.json();
     if (!d || d.error || seq !== _detailSeq) return;
+    const colorMap = { green: '#22c55e', yellow: '#f59e0b', red: '#ef4444', neutral: '#94a3b8' };
+    const bgMap    = { green: 'rgba(34,197,94,0.08)', yellow: 'rgba(245,158,11,0.08)', red: 'rgba(239,68,68,0.08)', neutral: 'rgba(148,163,184,0.08)' };
     const c = d.color || 'neutral';
     const badge = document.getElementById('dp-serenity-signal-badge');
     const signalEl = document.getElementById('dp-serenity-signal');
@@ -3000,7 +2917,7 @@ async function _loadSerenity(ticker, seq) {
     const ctxEl    = document.getElementById('dp-serenity-context');
     const linkEl   = document.getElementById('dp-serenity-link');
     const dateEl   = document.getElementById('dp-serenity-date');
-    if (badge)   { badge.textContent = (d.signal || '').split('—')[0].trim().split('(')[0].trim(); badge.style.background = _verdictBg(c); badge.style.color = _verdictColor(c); badge.style.borderColor = _verdictColor(c) + '44'; }
+    if (badge)   { badge.textContent = d.signal.split('—')[0].trim().split('(')[0].trim(); badge.style.background = bgMap[c]; badge.style.color = colorMap[c]; badge.style.borderColor = colorMap[c] + '44'; }
     if (signalEl) signalEl.textContent = d.signal;
     if (quoteEl)  quoteEl.textContent  = d.quote ? `"${d.quote}"` : '';
     if (ctxEl)    ctxEl.textContent    = d.context || '';
@@ -3025,18 +2942,6 @@ async function _loadSentiment(ticker, market, seq) {
     Object.assign(_lastDetailData, data);
     _renderInvestorCard(_lastDetailData);
     _renderFhLogo(_lastDetailData);
-    // US 뉴스 한 줄 바 — _FH_Headlines 첫 항목으로 채움
-    const _bar  = document.getElementById('dp-news-bar');
-    const _link = document.getElementById('dp-news-bar-link');
-    if (_bar && _link) {
-      const _headlines = (data._FH_Headlines || []);
-      const _h = _headlines.find(h => h.title);
-      if (_h) {
-        _link.textContent = _h.title;
-        _link.href = (_h.url && /^https?:\/\//.test(_h.url)) ? _h.url : '#';
-        _bar.style.display = 'flex';
-      }
-    }
   } catch (e) {
     console.debug('sentiment 로드 실패:', e);
   }
@@ -3097,8 +3002,6 @@ function _clearPanelDetail() {
   });
   const rg = document.getElementById('dp-risk-gauge');
   if (rg) rg.style.display = 'none';
-  const _vp = document.getElementById('dp-verdict-poster');
-  if (_vp) _vp.style.display = 'none';
 }
 
 function _populatePanelDetail(d, skipFourAxis, skipVerdict) {
@@ -3188,7 +3091,7 @@ function _populatePanelDetail(d, skipFourAxis, skipVerdict) {
   const scoreEl = document.getElementById('dp-score');
   if (scoreEl) {
     scoreEl.textContent = Math.round(d.TotalScore || 0);
-    scoreEl.className   = 'dp-stat-val ' + scoreClass(d.TotalScore || 0);
+    scoreEl.className   = 'dp-score-num ' + scoreClass(d.TotalScore || 0);
   }
 
   const sigEl = document.getElementById('dp-signal');
@@ -3226,8 +3129,13 @@ function _populatePanelDetail(d, skipFourAxis, skipVerdict) {
   // 실적 한눈에 카드 (Hero 바로 아래)
   _renderEarningsSummary(d, 'dp-earnings-card', 'dp-earnings-chips');
 
-  // 진입 타이밍 카드
-  if (!skipVerdict) _renderEntryVerdict(d);
+  // 진입 타이밍 카드 (캐시 렌더 시 플레이스홀더로 자리 확보 → 레이아웃 점프 방지)
+  if (!skipVerdict) {
+    _renderEntryVerdict(d);
+  } else {
+    const _vc = document.getElementById('dp-entry-verdict');
+    if (_vc) { _vc.style.display = ''; _vc.innerHTML = '<div style="height:72px;border-radius:8px;background:var(--surface-2);opacity:.4;"></div>'; }
+  }
 
   // 종합×진입 2축 사분면 배지
   _renderQuadrant(d);
@@ -3252,6 +3160,13 @@ function _populatePanelDetail(d, skipFourAxis, skipVerdict) {
   const usBtn = document.getElementById('dp-btn-usinsight');
   if (usBtn) usBtn.style.display = currentMarket === 'US' ? '' : 'none';
   _dpUSInsightLoaded = false;
+
+  // 노무라式 인라인 (US 전용 — 탭 없이 자동 로드)
+  const nmInline = document.getElementById('dp-nomura-inline');
+  if (nmInline) nmInline.style.display = currentMarket === 'US' ? '' : 'none';
+  _dpNomuraLoaded = false;
+  _nmLoaded = false;
+  if (currentMarket === 'US' && d.Ticker) loadDpNomuraScore(d.Ticker);
 
   // 미드캡 알파 시그널 (SP400 전용)
   _renderMidcapDetail(d);
@@ -3579,23 +3494,7 @@ function _renderEntryVerdict(d) {
   const mdd = ep.mdd_current;
   if (mdd != null && mdd < -25) { conv -= 8; cons.push('고 낙폭'); }
 
-  // Signal tier 보정 — 감산 페널티 방식 (하드캡 절벽 제거)
-  const sigTier = _signalTier(d.Signal || '');
-  if (sigTier === 'sell') {
-    conv -= 20; conv = Math.max(conv, 10); cons.push('시그널 약세');
-  } else if (sigTier === 'neutral') {
-    conv -= 8; cons.push('시그널 혼조');
-  }
-
   conv = Math.max(5, Math.min(95, conv));
-
-  // 레짐 경고 — 과열 시장 비중 조절 안내 (신호 점수 유지 — 모멘텀 팩터는 과열 시장에서도 유효)
-  let _regimeWarn = '';
-  if (gz >= 85) {
-    _regimeWarn = '극과열 시장 · 비중 30% 이하 · 손절선 필수';
-  } else if (gz >= 70) {
-    _regimeWarn = '과열 시장 · 비중 50% 이하 권장';
-  }
 
   // ── 신호 매핑 ──
   let label, icon, color;
@@ -3645,28 +3544,197 @@ function _renderEntryVerdict(d) {
 
   // ── 판단 포스터 렌더 (conv 단일 소스, 15단계) ──
   let _pgCls, _pvWord, _pvReason, _pvBg, _tmWord, _tmSub;
-  const _pick = arr => _deterministicPick(arr, d.Ticker, conv);
-  // ── 판단 포스터 데이터 테이블 (conv 내림차순, 첫 번째 minConv 이하 항목 선택) ──
-  const _vt = _VERDICT_TIERS.find(t => conv >= t.minConv) ?? _VERDICT_TIERS.at(-1);
-  _pgCls   = _vt.pgCls;
-  _pvWord  = _pick(_vt.pvWords);
-  _pvReason = _pick(_vt.pvReasons);
-  _pvBg    = _pick(_vt.pvBgs);
-  _tmWord  = _pick(_vt.tmWords);
-  _tmSub   = _vt.tmSub;
+  // ticker + conv 기반 결정론적 선택 — 동일 종목은 재렌더 시에도 같은 문구 유지
+  const _tickerHash = (d.Ticker || '').split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0);
+  const _seed = Math.abs(_tickerHash * 1000 + Math.round(conv));
+  const _pick = arr => arr[_seed % arr.length];
+  if (conv >= 93) {
+    _pgCls = 'dvp-green';
+    _pvWord   = _pick(['역대급', '인생 타이밍', '지금 당장', '올인각', '이게 자리다']);
+    _pvReason = _pick([
+      '지표·수급·모멘텀 삼박자 완벽<br>이런 자리 1년에 몇 번 안 옴<br>망설이면 두고두고 후회함',
+      '차트 보고 눈물 날 뻔함<br>모든 조건 동시에 충족된 자리<br>지금 안 담으면 진짜 바보',
+      '수급 폭발에 추세 완벽 우상향<br>기술적·기본적 지표 전부 켜짐<br>인생 타이밍 맞음 진짜',
+      '이런 신호 놓치면 후회함<br>볼수록 좋은 차트에 수급까지 터짐<br>비중 최대로 ㄱㄱ',
+    ]);
+    _pvBg = _pick(['인생각', '올인', '역대급']);
+    _tmWord = _pick(['🟢 인생 타이밍', '🟢 역대급', '🟢 지금 당장']);
+    _tmSub  = '인생 타이밍';
+  } else if (conv >= 86) {
+    _pgCls = 'dvp-green';
+    _pvWord   = _pick(['올인각', '풀매각', '슈팅각', '지금이야', '강력 매수']);
+    _pvReason = _pick([
+      '지표 다 켜졌고 수급까지 터짐<br>이런 타이밍 자주 안 옴<br>지금 안 담으면 진짜 후회함',
+      '차트 완벽하게 살아있음<br>추세 ㄹㅇ 강하고 모멘텀 최상<br>분할 말고 그냥 풀매각',
+      '수급 뒷받침에 모멘텀도 완벽<br>기술적·기본적 지표 전부 켜짐<br>올인각 나왔다 진짜',
+      '이거 지금 아니면 언제 사냐<br>모든 조건 충족된 자리임<br>소액이라도 반드시 담아봐',
+    ]);
+    _pvBg = _pick(['올인', '풀매', '슈팅']);
+    _tmWord = _pick(['🟢 올인각', '🟢 풀매각', '🟢 슈팅각']);
+    _tmSub  = '극강 타이밍';
+  } else if (conv >= 79) {
+    _pgCls = 'dvp-green';
+    _pvWord   = _pick(['풀매각', '적극 매수', '강하게 담아', '지금 담아', '줍줍각']);
+    _pvReason = _pick([
+      '지금 안 담으면 후회할 수 있음<br>추세 강하고 수급도 뒷받침됨<br>비중 실어서 담아봐',
+      '차트 ㄷㄷ하고 모멘텀 살아있음<br>수급 들어오는 게 확인됨<br>눌리면 추가 담기 각',
+      '지표 대부분 켜진 강한 자리<br>리스크 낮고 기대수익 높음<br>망설이지 말고 담아',
+      '이거 지금 아니면 비싸게 사야 함<br>추세 우상향 확실하고 수급도 좋음<br>분할이라도 지금 시작해',
+    ]);
+    _pvBg = _pick(['풀매', '적극', '줍줍']);
+    _tmWord = _pick(['🟢 풀매각', '🟢 적극 매수', '🟢 줍줍각']);
+    _tmSub  = '강한 매수';
+  } else if (conv >= 72) {
+    _pgCls = 'dvp-green';
+    _pvWord   = _pick(['줍줍각', '담아가', '매수각', '나눠서 담아', '비중 실어']);
+    _pvReason = _pick([
+      '지금 안 담으면 후회함<br>추세 좋고 수급도 받쳐주는 중<br>나눠서 조금씩 담아봐',
+      '차트 ㄷㄷ함<br>수급 들어오고 모멘텀 살아있음<br>눌리면 분할 담기 각',
+      '추세 우상향 중이고 수급도 좋음<br>리스크 관리하면서 분할로 ㄱㄱ<br>성급한 풀매는 피해',
+      '지표 켜져 있고 자리도 좋음<br>욕심 안 부리고 분할로 접근<br>생각보다 좋은 종목임',
+    ]);
+    _pvBg = _pick(['줍줍', '분할', '담기']);
+    _tmWord = _pick(['🟢 줍줍각', '🟢 담아가', '🟢 분할 ㄱㄱ']);
+    _tmSub  = '매수 추천';
+  } else if (conv >= 65) {
+    _pgCls = 'dvp-green';
+    _pvWord   = _pick(['분할 ㄱㄱ', '소량 진입', '슬금슬금', '조심스럽게', '나눠서']);
+    _pvReason = _pick([
+      '나쁘지 않은 자리긴 한데<br>확신이 100%는 아님<br>분할로 리스크 줄여서 접근',
+      '긍정 지표 있지만 일부 애매함<br>풀매보단 소량 분할이 맞는 상황<br>더 좋아지면 추가 담기',
+      '들어갈 수는 있는 자리인데<br>손실 감당 가능한 비중으로만<br>절대 몰빵은 금지',
+      '긍정적인 신호 있지만 리스크도 있음<br>작은 비중으로 먼저 확인해봐<br>차트 좋아지면 추가',
+    ]);
+    _pvBg = _pick(['소량', '분할', '조심']);
+    _tmWord = _pick(['🟢 소량 진입', '🟢 분할 ㄱㄱ', '🟢 슬금슬금']);
+    _tmSub  = '신중 매수';
+  } else if (conv >= 58) {
+    _pgCls = 'dvp-yellow';
+    _pvWord   = _pick(['테스트 담기', '발만 살짝', '소액만', '일단 찔러봐', '살짝만']);
+    _pvReason = _pick([
+      '지표 일부 긍정적이지만 전부는 아님<br>소액으로 먼저 포지션 잡아봐<br>확인되면 비중 늘리는 방식',
+      '긍정 신호 있는데 확신이 안 섬<br>물려도 감당 가능한 소액으로만<br>지켜보면서 추가 판단해',
+      '진입 가능한 자리긴 한데<br>추가 확인이 필요한 상황<br>소량 테스트 후 결정해봐',
+      '애매하긴 한데 아주 나쁘진 않음<br>발만 살짝 담가서 흐름 봐봐<br>좋아지면 그때 비중 추가',
+    ]);
+    _pvBg = _pick(['테스트', '소액', '찔러봐']);
+    _tmWord = _pick(['🟡 테스트 담기', '🟡 소액만', '🟡 발만 살짝']);
+    _tmSub  = '테스트 진입';
+  } else if (conv >= 51) {
+    _pgCls = 'dvp-yellow';
+    _pvWord   = _pick(['긍정 눈팅', '좀 더 봐봐', '시그널 대기', '거의 다 왔어', '조금만 기다려']);
+    _pvReason = _pick([
+      '긍정적인 신호 보이긴 하는데<br>아직 확실히 켜진 건 아님<br>좀 더 지켜보다가 들어가봐',
+      '방향성은 긍정적인데 타이밍이 아직<br>조금만 더 기다리면 좋은 자리 나옴<br>서두르지 말고 시그널 확인해',
+      '나쁜 종목은 아닌데 자리가 좀 이름<br>추세 확인되면 그때 담는 게 맞음<br>조금만 더 기다려봐',
+      '긍정 지표 늘어나는 중인데<br>아직 매수 확신까지는 아님<br>좀 더 보다가 진입 타이밍 잡아봐',
+    ]);
+    _pvBg = _pick(['대기', '시그널', '곧이야']);
+    _tmWord = _pick(['🟡 긍정 눈팅', '🟡 좀 더 봐봐', '🟡 시그널 대기']);
+    _tmSub  = '긍정 관망';
+  } else if (conv >= 44) {
+    _pgCls = 'dvp-yellow';
+    _pvWord   = _pick(['눈팅각', '반반임', '모르겠음', '저울질 중', '중립']);
+    _pvReason = _pick([
+      '좋은 것도 있고 안 좋은 것도 있음<br>확신이 안 서는 자리<br>더 좋은 시그널 나오면 그때 대응',
+      '종목 자체는 나쁘지 않은데<br>타이밍이 살짝 애매함<br>좀 더 내려오면 그때 담자',
+      '반반임 솔직히<br>지금 들어가기도 애매하고 빠지기도 애매함<br>관망하면서 눈팅해봐',
+      '확신이 안 서는 구간<br>섣불리 들어갔다가 멘탈 털릴 수 있음<br>좀 더 지켜보면서 판단해',
+    ]);
+    _pvBg = _pick(['중립', '눈팅', '저울질']);
+    _tmWord = _pick(['🟡 눈팅각', '🟡 반반임', '🟡 중립']);
+    _tmSub  = '중립 관망';
+  } else if (conv >= 37) {
+    _pgCls = 'dvp-yellow';
+    _pvWord   = _pick(['관망각', '기다려봐', '아직은 아냐', '타이밍 아님', '좀 더 기다려']);
+    _pvReason = _pick([
+      '좋긴 한데 지금 들어가면 물릴 수 있음<br>조금만 더 눌리면 그때 담아봐<br>지금은 관망각',
+      '부정 신호 하나둘씩 켜지는 중<br>지금 들어가기엔 타이밍이 안 좋음<br>좀 더 기다려봐',
+      '살짝 고점 느낌 나기 시작함<br>성급하게 들어갔다가 물릴 수 있음<br>관망하면서 기다려봐',
+      '나쁜 종목은 아닌데<br>지금 들어가기엔 리스크가 있음<br>조금 더 내려오면 담자',
+    ]);
+    _pvBg = _pick(['관망', '대기', '기다려']);
+    _tmWord = _pick(['🟡 관망각', '🟡 기다려봐', '🟡 타이밍 아님']);
+    _tmSub  = '소극적 관망';
+  } else if (conv >= 30) {
+    _pgCls = 'dvp-red';
+    _pvWord   = _pick(['고점 주의', '아직 일러', '더 눌려야', '서두르지 마', '대기각']);
+    _pvReason = _pick([
+      '살짝 고점 느낌 남<br>지금 들어가면 물릴 수 있음<br>더 내려오면 그때 검토해봐',
+      '지금 들어가기엔 부담스러운 자리<br>좀 더 눌려야 매력 있는 가격 됨<br>서두르지 마셈',
+      '지표들 부정 신호 보내는 중<br>리스크 크고 기대수익은 작음<br>더 좋은 자리 기다려봐',
+      '차트가 부담스러운 구간<br>수급 빠지기 시작하는 느낌<br>여기서 손댔다가 물리면 고생함',
+    ]);
+    _pvBg = _pick(['고점', '대기', '주의']);
+    _tmWord = _pick(['🟠 고점 주의', '🟠 아직 일러', '🟠 더 눌려야']);
+    _tmSub  = '고점 주의';
+  } else if (conv >= 23) {
+    _pgCls = 'dvp-red';
+    _pvWord   = _pick(['진입 부담', '손 빼봐', '위험한 자리', '뇌동 주의', '패스 고려']);
+    _pvReason = _pick([
+      '지금 들어가면 물릴 각도임<br>지표들 대부분 안 좋은 신호 보내는 중<br>관심종목만 넣고 손 빼셈',
+      '차트 안 좋고 수급도 빠지는 중<br>지금 들어가는 건 뇌동매매임<br>더 내려오면 그때 다시 검토',
+      '여러 지표가 경고 보내는 중<br>리스크 대비 기대수익 너무 안 나옴<br>더 좋은 종목 찾아봐',
+      '지금 자리는 진입하면 안 됨<br>손절라인도 애매하고 지지도 약함<br>완전히 빠질 때까지 기다려',
+    ]);
+    _pvBg = _pick(['부담', '주의', '패스']);
+    _tmWord = _pick(['🟠 진입 부담', '🟠 손 빼봐', '🟠 뇌동 주의']);
+    _tmSub  = '진입 부담';
+  } else if (conv >= 16) {
+    _pgCls = 'dvp-red';
+    _pvWord   = _pick(['강한 경고', '진입 금물', '손 빼셈', '위험 구간', '절대 비추']);
+    _pvReason = _pick([
+      '지금 들어가면 높은 확률로 물림<br>지표들이 전부 경고 보내는 중<br>관심만 해두고 절대 손 대지 마',
+      '차트 안 좋고 수급도 완전 빠지는 중<br>지금 들어가면 뇌동매매 확정<br>더 내려가는 거 구경만 해',
+      '모멘텀 죽고 수급도 없음<br>여기서 들어가면 물리는 거 거의 확정<br>좋아질 때까지 무시해',
+      '지표 전반적으로 매우 안 좋음<br>손절라인 없는 진입은 자살행위<br>절대 추격매수 금지',
+    ]);
+    _pvBg = _pick(['경고', '금물', '위험']);
+    _tmWord = _pick(['🟠 강한 경고', '🟠 진입 금물', '🟠 손 빼셈']);
+    _tmSub  = '강한 경고';
+  } else if (conv >= 10) {
+    _pgCls = 'dvp-red';
+    _pvWord   = _pick(['패스각', '손절각', '도망쳐', '버려', '손 빼셈']);
+    _pvReason = _pick([
+      '지금 들어가면 거의 물릴 각도임<br>지표들이 다 안 좋은 신호<br>관심만 해두고 절대 손대지 마',
+      '차트 개못생김 솔직히<br>수급 빠지고 모멘텀도 죽었음<br>그냥 지켜만 봐',
+      '이거 손대면 안 됨 진짜<br>모든 지표가 경고 보내는 중<br>관심종목만 넣고 기다려봐',
+      '지금 들어가면 뇌동매매임<br>더 좋은 자리 나올 때까지 패스<br>절대 추격매수 금지',
+    ]);
+    _pvBg = _pick(['패스', '손절', '회피']);
+    _tmWord = _pick(['🔴 패스각', '🔴 손절각', '🔴 도망쳐']);
+    _tmSub  = '강력 회피';
+  } else if (conv >= 5) {
+    _pgCls = 'dvp-red';
+    _pvWord   = _pick(['탈출각', '청산각', '손절 검토', '빠져나와', '들고 있으면 위험']);
+    _pvReason = _pick([
+      '이미 갖고 있으면 탈출 검토해야 함<br>지표 전부 최악 신호<br>손절이 장기 버티기보다 나음',
+      '차트 완전히 망가진 상황<br>수급 없고 모멘텀 바닥<br>빠르게 나오는 게 맞음',
+      '지금 갖고 있다면 매도 고려해봐<br>회복까지 엄청 오래 걸릴 수 있음<br>기회비용 생각해야 함',
+      '모든 지표 바닥 신호<br>물타기는 절대 안 됨<br>손실 확정하고 나오는 게 현명함',
+    ]);
+    _pvBg = _pick(['탈출', '청산', '손절']);
+    _tmWord = _pick(['🔴 탈출각', '🔴 청산각', '🔴 손절 검토']);
+    _tmSub  = '탈출 권고';
+  } else {
+    _pgCls = 'dvp-red';
+    _pvWord   = _pick(['깡통 주의', '건드리지 마', '최고 위험', '절대 금지', '폭탄이야']);
+    _pvReason = _pick([
+      '이거 손대면 진짜 깡통 각도임<br>지표 전부 최악 중에 최악<br>존재 자체를 잊어버려',
+      '차트 역대급으로 못생겼음<br>수급 제로에 모멘텀 나락<br>절대 건드리지 마',
+      '이런 자리에서 들어가면 미련한 거임<br>회복 가능성도 낮고 기다릴 가치도 없음<br>관심종목에서도 삭제해',
+      '지금 들어가면 깡통 확정에 가까움<br>어떤 이유로도 진입 금지<br>이거 갖고 있으면 지금 당장 팔아',
+    ]);
+    _pvBg = _pick(['깡통', '절대금지', '최위험']);
+    _tmWord = _pick(['🔴 깡통 주의', '🔴 절대 금지', '🔴 건드리지 마']);
+    _tmSub  = '최고 위험';
+  }
 
   const _vpEl = document.getElementById('dp-verdict-poster');
   if (_vpEl) {
     _vpEl.style.display = '';
     _vpEl.className = `dp-verdict-poster ${_pgCls}`;
-    // Re-evaluate _regimeWarn here so badge is never silently dropped by a mid-render exception
-    const _regimeWarnFinal = (gz >= 85) ? '극과열 시장 · 비중 30% 이하 · 손절선 필수'
-                           : (gz >= 70) ? '과열 시장 · 비중 50% 이하 권장'
-                           : '';
-    const _regimeBadge = _regimeWarnFinal
-      ? `<div class="dvp-regime-badge">⚠️ ${_regimeWarnFinal}</div>`
-      : '';
-    _vpEl.innerHTML = `<div class="dvp-main"><div class="dvp-eyebrow">살까? 말까?</div><div class="dvp-word">${_pvWord}</div><div class="dvp-reason">${_pvReason}</div></div><div class="dvp-conf"><div class="dvp-conf-num">${conv}<span class="dvp-conf-pct">%</span></div><div class="dvp-conf-lbl">확신도</div></div><div class="dvp-bg">${_pvBg}</div>${_regimeBadge}`;
+    _vpEl.innerHTML = `<div class="dvp-main"><div class="dvp-eyebrow">살까? 말까?</div><div class="dvp-word">${_pvWord}</div><div class="dvp-reason">${_pvReason}</div></div><div class="dvp-conf"><div class="dvp-conf-num">${conv}<span class="dvp-conf-pct">%</span></div><div class="dvp-conf-lbl">확신도</div></div><div class="dvp-bg">${_pvBg}</div>`;
   }
   // ── 렌더 (entry-verdict 카드는 내부 데이터 보존용, UI 미노출) ──
   card.style.display = 'none';
@@ -4331,6 +4399,7 @@ function switchDpTab(tabId) {
 
 let _dpDartNewsLoaded = false;
 let _dpUSInsightLoaded = false;
+let _dpNomuraLoaded = false;
 
 async function loadDpDartNews(ticker) {
   if (_dpDartNewsLoaded) return;
@@ -4392,6 +4461,40 @@ async function loadDpUSInsight(ticker) {
   } catch (e) {
     container.innerHTML = `<div class="dn-empty">US Insight 로드 실패: ${esc(e.message)}</div>`;
   }
+}
+
+async function loadDpNomuraScore(ticker) {
+  if (_dpNomuraLoaded) return;
+  _dpNomuraLoaded = true;
+  _nmLoaded = false;  // 드로어 컨텍스트에서 항상 fresh 로드
+
+  const container = document.getElementById('dp-nomura-inline');
+  if (!container) return;
+
+  // 아코디언 골격을 동적으로 주입 (IDs는 loadNomuraScore 함수가 참조)
+  container.innerHTML = `
+    <div style="padding:12px 16px 4px;">
+      <div id="nm-loading" style="text-align:center;padding:20px;color:var(--text-tertiary);font-size:13px;">로딩 중…</div>
+      <div id="nm-error" style="display:none;text-align:center;padding:20px;color:var(--destructive);font-size:13px;"></div>
+      <details id="nm-acc-tkscore" class="nm-accordion" open>
+        <summary class="nm-acc-summary"><span class="nm-acc-icon">📊</span><span class="nm-acc-title">TK Score</span><span class="nm-acc-chevron">▾</span></summary>
+        <div class="nm-acc-body" id="nm-tkscore-body"><div class="nm-placeholder">—</div></div>
+      </details>
+      <details id="nm-acc-nomura" class="nm-accordion">
+        <summary class="nm-acc-summary"><span class="nm-acc-icon">🏦</span><span class="nm-acc-title">노무라式 스코어 &amp; 레이팅</span><span class="nm-acc-chevron">▾</span></summary>
+        <div class="nm-acc-body" id="nm-nomura-body"><div class="nm-placeholder">—</div></div>
+      </details>
+      <details id="nm-acc-institution" class="nm-accordion">
+        <summary class="nm-acc-summary"><span class="nm-acc-icon">🏛</span><span class="nm-acc-title">기관 투자자 현황</span><span class="nm-acc-chevron">▾</span></summary>
+        <div class="nm-acc-body" id="nm-institution-body"><div class="nm-placeholder">—</div></div>
+      </details>
+      <details id="nm-acc-football" class="nm-accordion">
+        <summary class="nm-acc-summary"><span class="nm-acc-icon">⚽</span><span class="nm-acc-title">Football Field 밸류에이션</span><span class="nm-acc-chevron">▾</span></summary>
+        <div class="nm-acc-body" id="nm-football-body"><div class="nm-placeholder">—</div></div>
+      </details>
+    </div>`;
+
+  await loadNomuraScore(ticker);
 }
 
 async function loadDpFourAxis(ticker) {
@@ -4588,6 +4691,10 @@ function switchTab(tabId) {
   // US 인사이트 탭 lazy loading
   if (tabId === 'usinsight' && typeof TICKER !== 'undefined' && TICKER) {
     loadUSInsight(TICKER);
+  }
+  // 노무라式 탭 lazy loading
+  if (tabId === 'nomura' && typeof TICKER !== 'undefined' && TICKER) {
+    loadNomuraScore(TICKER);
   }
 }
 
@@ -5426,6 +5533,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (currentMarket === 'US') {
       const usBtn = document.getElementById('btn-usinsight');
       if (usBtn) usBtn.style.display = '';
+      const nmBtn = document.getElementById('btn-nomura');
+      if (nmBtn) nmBtn.style.display = '';
     }
   } else {
     // ── 스캐너 페이지
@@ -5951,45 +6060,27 @@ async function captureStockList() {
     const total = (_currentResults || []).length;
     const sectorLbl = (typeof _currentSector !== 'undefined' && _currentSector) ? _currentSector : '전체';
 
-    const strongCnt = (_currentResults || []).filter(s => _signalTier(s.Signal) === 'strong' || _signalTier(s.Signal) === 'buy').length;
-
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'background:#fff;overflow:hidden;font-family:-apple-system,Pretendard,"Noto Sans KR",system-ui,sans-serif;';
+    wrap.style.cssText = 'background:#ffffff;padding:0;font-family:-apple-system,Pretendard,Noto Sans KR,system-ui,sans-serif;';
     wrap.innerHTML = `
-      <div style="background:linear-gradient(135deg,#5B21B6 0%,#4F46E5 48%,#2563EB 100%);padding:22px 28px 20px;position:relative;overflow:hidden;color:#fff;">
-        <div style="position:absolute;top:-55px;right:-25px;width:190px;height:190px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none;"></div>
-        <div style="position:absolute;bottom:-80px;left:-15px;width:230px;height:230px;border-radius:50%;background:rgba(255,255,255,0.04);pointer-events:none;"></div>
-        <div style="position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
+      <div style="background:linear-gradient(135deg,#7C3AED,#3182F6);padding:16px 20px;color:#fff;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
           <div>
-            <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.55);letter-spacing:1px;text-transform:uppercase;margin-bottom:7px;">Stock Scanner</div>
-            <div style="font-size:22px;font-weight:900;letter-spacing:-0.5px;line-height:1.1;">${SafeMode.name()}</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:11px;flex-wrap:wrap;">
-              <span style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.28);border-radius:20px;padding:3px 11px;font-size:11px;font-weight:700;">${mkt}</span>
-              <span style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.28);border-radius:20px;padding:3px 11px;font-size:11px;font-weight:700;">${esc(sectorLbl)}</span>
-              <span style="font-size:11px;color:rgba(255,255,255,0.55);">${dateStr}</span>
-            </div>
+            <div style="font-size:16px;font-weight:800;letter-spacing:-0.4px;">${SafeMode.name()} — 종목 목록</div>
+            <div style="font-size:11px;opacity:0.85;margin-top:3px;">${mkt} · ${esc(sectorLbl)} · ${dateStr}</div>
           </div>
-          <div style="display:flex;flex-direction:column;align-items:center;gap:7px;flex-shrink:0;">
-            <div style="background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.28);border-radius:14px;padding:12px 22px;text-align:center;min-width:72px;">
-              <div style="font-size:30px;font-weight:900;line-height:1;">${total}</div>
-              <div style="font-size:10px;color:rgba(255,255,255,0.65);margin-top:3px;font-weight:600;letter-spacing:0.5px;">종 목</div>
-            </div>
-            ${strongCnt > 0 ? `<div style="background:rgba(0,192,115,0.22);border:1px solid rgba(0,192,115,0.45);border-radius:20px;padding:3px 11px;font-size:10px;font-weight:700;color:#6EE7B7;">🔥 주목 ${strongCnt}개</div>` : ''}
-          </div>
+          <div style="background:rgba(255,255,255,0.2);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;">${total}종목</div>
         </div>
       </div>
     `;
     wrap.appendChild(clone);
 
     const footer = document.createElement('div');
-    footer.style.cssText = 'padding:11px 28px;background:#F8F9FB;border-top:1px solid #ECEEF2;display:flex;align-items:center;justify-content:space-between;gap:8px;';
-    footer.innerHTML = `<span style="font-size:10px;color:#9CA3AF;">⚠ 알고리즘 스크리닝 참고용. 투자 판단·손익은 본인 책임.</span><span style="font-size:10px;font-weight:700;color:#C4C9D4;">${SafeMode.name()}</span>`;
+    footer.style.cssText = 'padding:10px 16px;background:#F5F6F8;border-top:1px solid #EAEBEE;font-size:10px;color:#8B95A1;text-align:center;';
+    footer.textContent = '알고리즘 스크리닝 결과일 뿐임. 판단과 손익은 본인 책임임.';
     wrap.appendChild(footer);
 
     stage.appendChild(wrap);
-
-    // 웹폰트 로드 완료 후 캡쳐 — 미로드 시 폴백 폰트로 글자 간격 깨짐 방지
-    await document.fonts.ready;
 
     // 고해상도 캡쳐 — DPR 반영, 최소 scale 3 보장 (4K/레티나 모니터에서도 선명)
     const dpr = window.devicePixelRatio || 1;
@@ -5999,7 +6090,7 @@ async function captureStockList() {
       backgroundColor: '#ffffff',
       useCORS: true,
       logging: false,
-      windowWidth: window.innerWidth,
+      windowWidth: wrap.scrollWidth,
     });
     stage.innerHTML = '';
 
@@ -6052,13 +6143,8 @@ async function captureDetail() {
   const panel = document.getElementById('detail-panel');
   if (!panel) return;
 
-  const ticker   = (document.getElementById('dp-ticker')?.textContent || 'stock').trim();
-  const stockName  = document.getElementById('dp-name')?.textContent?.trim() || '';
-  const stockPrice = document.getElementById('dp-price')?.textContent?.trim() || '';
-  const stockScore = document.getElementById('dp-score')?.textContent?.trim() || '';
-  const stockSig   = document.getElementById('dp-signal')?.textContent?.trim() || '';
-  const dateStr  = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const capDate  = (() => { const n = new Date(); return `${n.getFullYear()}.${String(n.getMonth()+1).padStart(2,'0')}.${String(n.getDate()).padStart(2,'0')} ${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`; })();
+  const ticker = (document.getElementById('dp-ticker')?.textContent || 'stock').trim();
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
 
   // ── 1) 모든 탭 컨텐츠 사전 로드 (라이브 DOM에 데이터 채워둠) ──
   try {
@@ -6143,34 +6229,8 @@ async function captureDetail() {
     pane.parentNode.insertBefore(hdr, pane);
   }
 
-  // 클론을 브랜드 헤더·푸터 래퍼로 감싸서 오프스크린에 마운트
-  const outerWrap = document.createElement('div');
-  outerWrap.style.cssText = 'background:#fff;overflow:hidden;font-family:-apple-system,Pretendard,"Noto Sans KR",system-ui,sans-serif;';
-  outerWrap.innerHTML = `
-    <div style="background:linear-gradient(135deg,#5B21B6 0%,#4F46E5 48%,#2563EB 100%);padding:20px 24px 18px;position:relative;overflow:hidden;color:#fff;">
-      <div style="position:absolute;top:-45px;right:-20px;width:165px;height:165px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none;"></div>
-      <div style="position:relative;">
-        <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.55);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">종목 분석 리포트</div>
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
-          <div>
-            <div style="font-size:26px;font-weight:900;letter-spacing:-0.6px;line-height:1.1;">${esc(ticker)}</div>
-            ${stockName ? `<div style="font-size:13px;color:rgba(255,255,255,0.75);margin-top:4px;font-weight:500;">${esc(stockName)}</div>` : ''}
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
-            ${stockSig ? `<span style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.28);border-radius:20px;padding:4px 13px;font-size:12px;font-weight:700;">${esc(stockSig)}</span>` : ''}
-            ${stockScore ? `<span style="background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.22);border-radius:10px;padding:4px 12px;font-size:13px;font-weight:800;">★ ${esc(stockScore)}점</span>` : ''}
-          </div>
-        </div>
-        <div style="margin-top:10px;font-size:11px;color:rgba(255,255,255,0.5);">${capDate}</div>
-      </div>
-    </div>
-  `;
-  outerWrap.appendChild(clone);
-  const capFooter = document.createElement('div');
-  capFooter.style.cssText = 'padding:11px 24px;background:#F8F9FB;border-top:1px solid #ECEEF2;display:flex;align-items:center;justify-content:space-between;gap:8px;';
-  capFooter.innerHTML = `<span style="font-size:10px;color:#9CA3AF;">⚠ 알고리즘 분석 참고용. 투자 판단·손익은 본인 책임.</span><span style="font-size:10px;font-weight:700;color:#C4C9D4;">${SafeMode.name()}</span>`;
-  outerWrap.appendChild(capFooter);
-  stage.appendChild(outerWrap);
+  // 클론을 오프스크린 스테이지에 마운트 (좌측 -9999px)
+  stage.appendChild(clone);
 
   // 클론 내 이미지 디코딩 대기 (4축 차트 등 base64 src)
   try {
@@ -6189,25 +6249,22 @@ async function captureDetail() {
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
   function cleanup() {
-    try { stage.removeChild(outerWrap); } catch (_) {}
+    try { stage.removeChild(clone); } catch (_) {}
   }
 
   try {
-    // 웹폰트 로드 완료 후 캡쳐 — 미로드 시 폴백 폰트로 글자 간격 깨짐 방지
-    await document.fonts.ready;
-
     // 고해상도 — DPR 반영, 최소 scale 3 (붙여넣기 시 원본 사이즈 가독성 확보)
     const _dpr = window.devicePixelRatio || 1;
     const _capScale = Math.max(3, Math.ceil(_dpr * 1.5));
-    const canvas = await html2canvas(outerWrap, {
+    const canvas = await html2canvas(clone, {
       scale: _capScale,
       backgroundColor: '#ffffff',
       useCORS: true,
       logging: false,
-      width: outerWrap.scrollWidth,
-      height: outerWrap.scrollHeight,
-      windowWidth: window.innerWidth,
-      windowHeight: window.innerHeight,
+      width: clone.scrollWidth,
+      height: clone.scrollHeight,
+      windowWidth: clone.scrollWidth,
+      windowHeight: clone.scrollHeight,
     });
     const img = canvas.toDataURL('image/png');
     const preview = document.getElementById('share-card-preview');
@@ -6448,4 +6505,302 @@ async function captureDetail() {
   });
   document.addEventListener('click', () => { menu.hidden = true; });
 })();
+
+// ── WSB 소셜 버즈 위젯 ──────────────────────────────────────────────
+async function loadWsbWidget() {
+  const wrap     = document.getElementById('wsb-widget');
+  const cardsEl  = document.getElementById('wsb-cards');
+  const updEl    = document.getElementById('wsb-updated');
+  if (!wrap || !cardsEl) return;
+
+  try {
+    const res  = await fetch('/api/social-buzz', { cache: 'no-store' });
+    const data = await res.json();
+
+    if (data.status === 'disabled' || data.status === 'error') {
+      wrap.hidden = true;
+      return;
+    }
+    if (data.status === 'loading') {
+      cardsEl.innerHTML = '<span class="wsb-empty">데이터 로딩 중…</span>';
+      wrap.hidden = false;
+      return;
+    }
+    if (!Array.isArray(data.items) || data.items.length === 0) {
+      wrap.hidden = true;
+      return;
+    }
+
+    if (updEl && data.updated_at) {
+      updEl.textContent = data.updated_at.replace('T', ' ').slice(0, 16) + ' UTC';
+    }
+
+    cardsEl.innerHTML = data.items.map(item => {
+      const grade    = item.total_score != null ? _stockGrade(item.total_score) : null;
+      const gradeHtml = grade
+        ? `<span class="grade-badge grade-${grade}">${grade}</span>`
+        : '';
+      const sentPct  = Math.min(100, Math.round((item.sentiment || 0) * 100));
+      const ticker   = String(item.ticker).replace(/[^A-Z0-9.]/g, '');
+      return `<div class="wsb-card" data-ticker="${ticker}" onclick="openDetail('${ticker}')">
+        <div class="wsb-card-ticker">${ticker}</div>
+        <div class="wsb-card-mentions">${item.mentions} mentions</div>
+        <div class="wsb-sent-bar-wrap" title="긍정 감성 ${sentPct}%">
+          <div class="wsb-sent-bar" style="width:${sentPct}%"></div>
+        </div>
+        ${gradeHtml}
+      </div>`;
+    }).join('');
+
+    wrap.hidden = false;
+  } catch (err) {
+    console.warn('[wsb] fetch failed', err);
+    if (wrap) wrap.hidden = true;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadWsbWidget);
+
+// ── 노무라式 탭 ──────────────────────────────────────────────────────────────
+
+let _nmLoaded = false;
+
+async function loadNomuraScore(ticker) {
+  if (_nmLoaded) return;
+  _nmLoaded = true;
+
+  const loading = document.getElementById('nm-loading');
+  const errEl   = document.getElementById('nm-error');
+  if (loading) loading.style.display = '';
+  if (errEl)   errEl.style.display   = 'none';
+
+  try {
+    const res  = await fetch(`/api/nomura-score/${encodeURIComponent(ticker)}`);
+    const json = await res.json();
+    if (!res.ok || json.status !== 'ok') throw new Error(json.message || `HTTP ${res.status}`);
+    if (loading) loading.style.display = 'none';
+    _renderNomuraTKScore(json.data);
+    _renderNomuraScore(json.data);
+    _initNomuraInstitutionAccordion(ticker);
+    _initNomuraFootballField(ticker);
+  } catch (e) {
+    if (loading) loading.style.display = 'none';
+    if (errEl) {
+      errEl.textContent = `노무라式 데이터 로드 실패: ${e.message}`;
+      errEl.style.display = '';
+    }
+  }
+}
+
+function _renderNomuraTKScore(d) {
+  const body = document.getElementById('nm-tkscore-body');
+  if (!body) return;
+  const score = d.quantitative_score ?? '—';
+  const grade = d.grade ?? '—';
+  const rating = d.nomura_rating ?? '—';
+
+  const ratingColor = {
+    'Conviction Buy': 'var(--brand)',
+    'Buy': 'var(--success)',
+    'Neutral': 'var(--text-secondary)',
+    'Reduce': 'var(--destructive)',
+    'Sell': 'var(--destructive)',
+  }[rating] || 'var(--text-primary)';
+
+  body.innerHTML = `
+    <div class="nm-score-grid">
+      <div class="nm-score-cell">
+        <span class="nm-score-label">종합 점수</span>
+        <span class="nm-score-val">${score}</span>
+      </div>
+      <div class="nm-score-cell">
+        <span class="nm-score-label">등급</span>
+        <span class="nm-score-val">${esc(grade)}</span>
+      </div>
+      <div class="nm-score-cell">
+        <span class="nm-score-label">레이팅</span>
+        <span class="nm-score-val" style="color:${ratingColor};font-size:12px">${esc(rating)}</span>
+      </div>
+      <div class="nm-score-cell">
+        <span class="nm-score-label">목표가</span>
+        <span class="nm-score-val" style="font-size:13px">${d.nomura_target ? '$' + d.nomura_target.toFixed(2) : '—'}</span>
+      </div>
+      <div class="nm-score-cell">
+        <span class="nm-score-label">업사이드</span>
+        <span class="nm-score-val" style="font-size:13px;color:${(d.nomura_upside||0)>=0?'var(--success)':'var(--destructive)'}">
+          ${d.nomura_upside != null ? (d.nomura_upside >= 0 ? '+' : '') + d.nomura_upside.toFixed(1) + '%' : '—'}
+        </span>
+      </div>
+    </div>`;
+}
+
+function _nmGaugeSVG(score, rating) {
+  const r = 28;
+  const circ = 2 * Math.PI * r;            // ≈ 175.9
+  const filled = (score / 100) * circ;
+  const ratingColors = {
+    'Conviction Buy': '#3b82f6',
+    'Buy': '#22c55e',
+    'Neutral': '#eab308',
+    'Reduce': '#f97316',
+    'Sell': '#ef4444',
+  };
+  const color = ratingColors[rating] || '#94a3b8';
+  const shortRating = {'Conviction Buy':'C.BUY','Buy':'BUY','Neutral':'NTRL','Reduce':'RDCE','Sell':'SELL'}[rating] || rating;
+  return `<svg viewBox="0 0 72 72" width="80" height="80">
+    <circle cx="36" cy="36" r="${r}" fill="none" stroke="#1e293b" stroke-width="6"/>
+    <circle cx="36" cy="36" r="${r}" fill="none" stroke="${color}" stroke-width="6"
+      stroke-dasharray="${filled.toFixed(1)} ${circ.toFixed(1)}" stroke-dashoffset="${(circ * 0.25).toFixed(1)}"
+      stroke-linecap="round" transform="rotate(-90 36 36)"/>
+    <text x="36" y="30" text-anchor="middle" font-size="7" fill="#64748b" font-weight="700">노무라式</text>
+    <text x="36" y="42" text-anchor="middle" font-size="11" fill="${color}" font-weight="900">${esc(shortRating)}</text>
+    <text x="36" y="52" text-anchor="middle" font-size="8" fill="#94a3b8">${score}/100</text>
+  </svg>`;
+}
+
+function _renderNomuraScore(d) {
+  const body = document.getElementById('nm-nomura-body');
+  if (!body) return;
+
+  const score   = d.quantitative_score ?? 0;
+  const rating  = d.nomura_rating ?? '—';
+  const pio     = d.piotroski    ?? '—';
+  const az      = d.altman_z     != null ? d.altman_z.toFixed(2)  : '—';
+  const bm      = d.beneish_m    != null ? d.beneish_m.toFixed(2) : '—';
+  const bWarn   = d.beneish_warning;
+
+  const azColor = d.altman_z != null
+    ? (d.altman_z > 2.99 ? 'var(--success)' : d.altman_z > 1.81 ? '#eab308' : 'var(--destructive)')
+    : 'var(--text-secondary)';
+  const azLabel = d.altman_z != null
+    ? (d.altman_z > 2.99 ? '안전' : d.altman_z > 1.81 ? '회색지대' : '위험')
+    : '';
+
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
+      ${_nmGaugeSVG(score, rating)}
+      <div>
+        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">정량 분석 스코어</div>
+        <div style="font-size:22px;font-weight:900;color:var(--text-primary);">${score}<span style="font-size:13px;font-weight:400;color:var(--text-tertiary);">/100</span></div>
+      </div>
+    </div>
+    <div class="nm-score-grid">
+      <div class="nm-score-cell">
+        <span class="nm-score-label">Piotroski</span>
+        <span class="nm-score-val">${pio}<span style="font-size:10px;font-weight:400;color:var(--text-tertiary);">/9</span></span>
+      </div>
+      <div class="nm-score-cell">
+        <span class="nm-score-label">Altman Z</span>
+        <span class="nm-score-val" style="color:${azColor};font-size:13px">${az} <span style="font-size:9px;">${azLabel}</span></span>
+      </div>
+      <div class="nm-score-cell">
+        <span class="nm-score-label">Beneish M</span>
+        <span class="nm-score-val" style="color:${bWarn ? 'var(--destructive)' : 'var(--success)'};font-size:13px">
+          ${bm} ${bWarn ? '⚠️' : '✓'}
+        </span>
+      </div>
+    </div>`;
+}
+
+function _initNomuraInstitutionAccordion(ticker) {
+  const acc = document.getElementById('nm-acc-institution');
+  if (!acc) return;
+  let loaded = false;
+  acc.addEventListener('toggle', async () => {
+    if (!acc.open || loaded) return;
+    loaded = true;
+    const body = document.getElementById('nm-institution-body');
+    if (!body) return;
+    body.innerHTML = '<div class="nm-placeholder">로딩 중…</div>';
+    try {
+      const res  = await fetch(`/api/ticker/${encodeURIComponent(ticker)}`);
+      const json = await res.json();
+      const inst = json?.tradingkey?.institutional;
+      if (!inst) throw new Error('기관 데이터 없음');
+      const qoqColor = (inst.holding_qoq || 0) >= 0 ? 'var(--success)' : 'var(--destructive)';
+      body.innerHTML = `
+        <div class="nm-score-grid">
+          <div class="nm-score-cell">
+            <span class="nm-score-label">기관 비중</span>
+            <span class="nm-score-val" style="font-size:13px">${inst.holding_pct != null ? inst.holding_pct.toFixed(1) + '%' : '—'}</span>
+          </div>
+          <div class="nm-score-cell">
+            <span class="nm-score-label">QoQ 변화</span>
+            <span class="nm-score-val" style="color:${qoqColor};font-size:13px">
+              ${inst.holding_qoq != null ? (inst.holding_qoq >= 0 ? '+' : '') + inst.holding_qoq.toFixed(1) + '%' : '—'}
+            </span>
+          </div>
+          <div class="nm-score-cell">
+            <span class="nm-score-label">최대 보유사</span>
+            <span class="nm-score-val" style="font-size:11px">${inst.top_holder ? esc(inst.top_holder) : '—'}</span>
+          </div>
+        </div>`;
+    } catch (e) {
+      body.innerHTML = `<div class="nm-placeholder">기관 데이터 없음 (${esc(e.message)})</div>`;
+    }
+  });
+}
+
+function _ffBar(label, pct, tag) {
+  const safePct = Math.max(0, Math.min(1, pct || 0));
+  return `<div class="ff-row">
+    <span class="ff-label">${esc(label)}</span>
+    <div class="ff-bar-wrap">
+      <div class="ff-marker" style="left:${(safePct * 100).toFixed(1)}%"></div>
+    </div>
+    <span class="ff-tag">${esc(tag || '')}</span>
+  </div>`;
+}
+
+function _initNomuraFootballField(ticker) {
+  const acc = document.getElementById('nm-acc-football');
+  if (!acc) return;
+  let loaded = false;
+  acc.addEventListener('toggle', async () => {
+    if (!acc.open || loaded) return;
+    loaded = true;
+    const body = document.getElementById('nm-football-body');
+    if (!body) return;
+    body.innerHTML = '<div class="nm-placeholder">로딩 중…</div>';
+    try {
+      const res  = await fetch(`/api/nomura-score/${encodeURIComponent(ticker)}`);
+      const json = await res.json();
+      if (!res.ok || json.status !== 'ok') throw new Error(json.message || 'error');
+      const d = json.data;
+      let html = '<div style="margin-top:4px;">';
+
+      // 1) 노무라式 종합 점수
+      const scorePct = (d.quantitative_score || 0) / 100;
+      const scoreTag = d.quantitative_score >= 75 ? '고품질' : d.quantitative_score >= 55 ? '보통' : '저품질';
+      html += _ffBar('노무라式 점수', scorePct, scoreTag);
+
+      // 2) 목표가 업사이드
+      if (d.nomura_upside != null) {
+        const upPct = 0.5 - (d.nomura_upside / 100) * 0.5;
+        const upTag = d.nomura_upside >= 10 ? '저평가' : d.nomura_upside >= 0 ? '적정' : '고평가';
+        html += _ffBar('목표가 업사이드', Math.max(0.05, Math.min(0.95, upPct)), upTag);
+      }
+
+      // 3) Piotroski F-Score
+      if (d.piotroski != null) {
+        const pioPct = d.piotroski / 9;
+        const pioTag = `F${d.piotroski}`;
+        html += _ffBar('Piotroski F-Score', pioPct, pioTag);
+      }
+
+      // 4) Altman Z (리스크)
+      if (d.altman_z != null) {
+        const azPct = 1 - Math.min(1, Math.max(0, d.altman_z / 4));
+        const azTag = d.altman_z > 2.99 ? '안전' : d.altman_z > 1.81 ? '회색' : '위험';
+        html += _ffBar('Altman Z (리스크)', azPct, azTag);
+      }
+
+      html += '</div>';
+      html += '<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-tertiary);margin-top:4px;padding:0 2px;"><span>← 긍정</span><span>부정 →</span></div>';
+      body.innerHTML = html;
+    } catch (e) {
+      body.innerHTML = `<div class="nm-placeholder">Football Field 로드 실패: ${esc(e.message)}</div>`;
+    }
+  });
+}
 

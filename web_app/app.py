@@ -2893,9 +2893,28 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
         chart_title = chart_title or ticker
 
         if want_chart:
+            _sr_data      = None
+            _nomura_data  = None
+            if market == "US":
+                try:
+                    from tradingkey_api import get_support_resistance
+                    _sr_data = get_support_resistance(ticker)
+                except Exception:
+                    pass
+                try:
+                    from nomura_score import get_nomura_score
+                    _nomura_data = get_nomura_score(ticker)
+                except Exception:
+                    pass
+
             renderer = HandDrawnChartRenderer(
                 hist, result, ticker=chart_title,
                 width_px=1200, height_px=560, dpi=100,
+                support=_sr_data[0] if _sr_data else None,
+                resistance=_sr_data[1] if _sr_data else None,
+                show_fib=True,
+                show_sr=_sr_data is not None,
+                nomura_score_data=_nomura_data,
             )
             img = renderer.render()
 
@@ -3612,6 +3631,51 @@ def api_regime():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/social-buzz")
+def api_social_buzz():
+    """GET /api/social-buzz → WSB 인기 종목 상위 N개 (소셜 버즈 × TotalScore).
+
+    social_buzz 캐시에서 소셜 데이터를 읽고, _scan_results_cache에서
+    TotalScore를 병합한 뒤 점수 내림차순 상위 N개를 반환한다.
+    SWAGGY_API_KEY 미설정 시 status="disabled" 반환.
+    """
+    if not os.environ.get("SWAGGY_API_KEY", "").strip():
+        return jsonify({"status": "disabled", "items": [], "updated_at": None})
+    try:
+        import social_buzz as _sb
+        snap = _sb.get_cached()
+        if snap["status"] != "ok":
+            return jsonify({"status": snap["status"], "items": [], "updated_at": snap.get("updated_at")})
+
+        # _scan_results_cache에서 ticker → TotalScore 역인덱스 구성
+        ticker_scores: dict = {}
+        with _scan_results_cache_lock:
+            for cache_val in _scan_results_cache.values():
+                for row in (cache_val.get("data") or []):
+                    t = (row.get("Ticker") or "").upper()
+                    if t and t not in ticker_scores:
+                        ts = row.get("TotalScore")
+                        ticker_scores[t] = float(ts) if isinstance(ts, (int, float)) else None
+
+        top_n = int(os.environ.get("SOCIAL_BUZZ_TOP_N", "5"))
+        enriched = [
+            {**item, "total_score": ticker_scores.get(item["ticker"])}
+            for item in snap["items"]
+        ]
+        enriched.sort(
+            key=lambda x: x["total_score"] if x["total_score"] is not None else -1,
+            reverse=True,
+        )
+        return jsonify({
+            "status": "ok",
+            "updated_at": snap["updated_at"],
+            "items": enriched[:top_n],
+        })
+    except Exception as exc:
+        logging.warning("api_social_buzz failed: %s", exc)
+        return jsonify({"status": "error", "items": [], "updated_at": None})
+
+
 @app.route("/api/serenity/<ticker>")
 def api_serenity(ticker: str):
     """Serenity (@aleabitoreddit) 인사이트 조회."""
@@ -3629,7 +3693,39 @@ def api_serenity(ticker: str):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/nomura-score/<ticker>")
+def api_nomura_score(ticker: str):
+    """GET /api/nomura-score/<ticker> → 노무라式 종합 스코어 JSON.
+
+    성공: {"status": "ok", "data": {...}} HTTP 200
+    KR 종목 또는 데이터 없음: {"status": "error", "message": "..."} HTTP 404
+    예외: {"status": "error", "message": "internal error"} HTTP 500
+    """
+    safe = _validate_ticker(ticker)
+    if not safe:
+        return jsonify({"status": "error", "message": "ticker not supported or data unavailable"}), 404
+    try:
+        from nomura_score import get_nomura_score
+        result = get_nomura_score(safe.upper())
+        if result is None:
+            return jsonify({"status": "error", "message": "ticker not supported or data unavailable"}), 404
+        return jsonify({"status": "ok", "data": result})
+    except Exception as e:
+        logging.warning("api_nomura_score %s: %s", safe, e)
+        return jsonify({"status": "error", "message": "internal error"}), 500
+
+
 threading.Thread(target=_cold_start_fill, daemon=True, name="cold-start-fill").start()
+
+# ── 소셜 버즈 백그라운드 갱신 ──
+try:
+    import social_buzz as _social_buzz
+    if os.environ.get("SWAGGY_API_KEY", "").strip():
+        _social_buzz.init()
+    else:
+        logging.info("[social_buzz] SWAGGY_API_KEY 미설정 — 소셜 버즈 비활성화")
+except Exception as _e:
+    logging.warning("[social_buzz] init 실패: %s", _e)
 
 if __name__ == "__main__":
     debug = (os.environ.get("FLASK_DEBUG") or "0").strip().lower() in ("1", "true", "yes")

@@ -1660,6 +1660,22 @@ function renderStockRow(stock, rank) {
     brokerHtml = '<div class="target-empty">컨센서스 없음</div>';
   }
 
+  // 진입 신호 배지 HTML (EntryConsecutive 없으면 1로 처리 → 점선 불안정)
+  const _esCons = stock.EntryConsecutive || 1;
+  const _esSt   = stock.EntryStatus;
+  let entryStatusHtml;
+  if (!_esSt) {
+    entryStatusHtml = '<span style="color:#9ca3af">—</span>';
+  } else {
+    const _esColorMap = { STRONG: '#16a34a', NEUTRAL: '#f59e0b', AVOID: '#dc2626' };
+    const _esCol  = _esColorMap[_esSt] || '#6b7280';
+    const _esIcon = { STRONG: '🔒', NEUTRAL: '❓', AVOID: '⚠️' }[_esSt] || '';
+    const _esStyle = _esCons >= 2
+      ? `background:${_esCol};color:#fff;`
+      : `border:1.5px dashed ${_esCol};color:${_esCol};background:transparent;`;
+    entryStatusHtml = `<span style="${_esStyle}padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600;" title="${_esCons}일째 유지">${_esIcon} ${_esSt}</span>`;
+  }
+
   const checked = _selectedStocks.has(stock.Ticker);
   const t = esc(stock.Ticker);
   // US 종목 로고 (Finnhub 정적 URL 패턴 — API 호출 0, lazy 로드, 없으면 onerror로 숨김)
@@ -1688,6 +1704,7 @@ function renderStockRow(stock, rank) {
     ${_renderSignalHtml(stock.Signal, stock)}
     ${riskHtml}
   </td>
+  <td class="center">${entryStatusHtml}</td>
   <td class="right">${fmtPrice(stock.Price)}</td>
   <td class="right ${chgClass}">${chgSign}${chgPct}%</td>
   <td class="right rsi-cell">${_rsiCellHtml(stock)}</td>
@@ -6510,6 +6527,7 @@ async function loadNomuraScore(ticker) {
     _renderNomuraTKScore(json.data);
     _renderNomuraScore(json.data);
     _initNomuraInstitutionAccordion(ticker);
+    _initNomuraFootballField(ticker);
   } catch (e) {
     if (loading) loading.style.display = 'none';
     if (errEl) {
@@ -6664,6 +6682,69 @@ function _initNomuraInstitutionAccordion(ticker) {
         </div>`;
     } catch (e) {
       body.innerHTML = `<div class="nm-placeholder">기관 데이터 없음 (${esc(e.message)})</div>`;
+    }
+  });
+}
+
+function _ffBar(label, pct, tag) {
+  const safePct = Math.max(0, Math.min(1, pct || 0));
+  return `<div class="ff-row">
+    <span class="ff-label">${esc(label)}</span>
+    <div class="ff-bar-wrap">
+      <div class="ff-marker" style="left:${(safePct * 100).toFixed(1)}%"></div>
+    </div>
+    <span class="ff-tag">${esc(tag || '')}</span>
+  </div>`;
+}
+
+function _initNomuraFootballField(ticker) {
+  const acc = document.getElementById('nm-acc-football');
+  if (!acc) return;
+  let loaded = false;
+  acc.addEventListener('toggle', async () => {
+    if (!acc.open || loaded) return;
+    loaded = true;
+    const body = document.getElementById('nm-football-body');
+    if (!body) return;
+    body.innerHTML = '<div class="nm-placeholder">로딩 중…</div>';
+    try {
+      const res  = await fetch(`/api/nomura-score/${encodeURIComponent(ticker)}`);
+      const json = await res.json();
+      if (!res.ok || json.status !== 'ok') throw new Error(json.message || 'error');
+      const d = json.data;
+      let html = '<div style="margin-top:4px;">';
+
+      // 1) 노무라式 종합 점수
+      const scorePct = (d.quantitative_score || 0) / 100;
+      const scoreTag = d.quantitative_score >= 75 ? '고품질' : d.quantitative_score >= 55 ? '보통' : '저품질';
+      html += _ffBar('노무라式 점수', scorePct, scoreTag);
+
+      // 2) 목표가 업사이드
+      if (d.nomura_upside != null) {
+        const upPct = 0.5 - (d.nomura_upside / 100) * 0.5;
+        const upTag = d.nomura_upside >= 10 ? '저평가' : d.nomura_upside >= 0 ? '적정' : '고평가';
+        html += _ffBar('목표가 업사이드', Math.max(0.05, Math.min(0.95, upPct)), upTag);
+      }
+
+      // 3) Piotroski F-Score
+      if (d.piotroski != null) {
+        const pioPct = d.piotroski / 9;
+        const pioTag = `F${d.piotroski}`;
+        html += _ffBar('Piotroski F-Score', pioPct, pioTag);
+      }
+
+      // 4) Altman Z (리스크)
+      if (d.altman_z != null) {
+        const azPct = 1 - Math.min(1, Math.max(0, d.altman_z / 4));
+        const azTag = d.altman_z > 2.99 ? '안전' : d.altman_z > 1.81 ? '회색' : '위험';
+        html += _ffBar('Altman Z (리스크)', azPct, azTag);
+      }
+
+      html += '</div>';
+      html += '<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-tertiary);margin-top:4px;padding:0 2px;"><span>← 긍정</span><span>부정 →</span></div>';
+      body.innerHTML = html;
+    } catch (e) {
+      body.innerHTML = `<div class="nm-placeholder">Football Field 로드 실패: ${esc(e.message)}</div>`;
     }
   });
 }

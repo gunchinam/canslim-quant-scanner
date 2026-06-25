@@ -32,6 +32,8 @@ from PIL import Image
 # xkcd 폰트 미설치 경고 억제 (matplotlib 자체 폴백 사용)
 logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
 warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib")
+# plt.xkcd()가 Comic Sans MS를 강제하면서 한글/CJK 글리프 경고 발생 — 메시지 패턴으로 직접 억제
+warnings.filterwarnings("ignore", message="Glyph .* missing from font", category=UserWarning)
 
 from four_axis_analyzer import Annotation, FourAxisResult
 
@@ -137,15 +139,7 @@ class HandDrawnChartRenderer:
                  nomura_score_data: dict | None = None):
         from four_axis_analyzer import _ema, _bb
         h = hist.copy()
-        # GreedZone 시리즈 계산 (차트 배경 음영용)
         self._gz_zone = None
-        try:
-            from greedzone import calc_greedzone
-            gz_series = calc_greedzone(h, low_period=112, stdev_period=50, _return_series=True)
-            if gz_series is not None and len(gz_series) == len(h):
-                self._gz_zone = gz_series
-        except Exception:
-            pass
         # 기본 지표
         if "EMA20" not in h.columns:
             h["EMA20"]  = _ema(h["Close"], 20)
@@ -181,15 +175,14 @@ class HandDrawnChartRenderer:
         from matplotlib.patches import Arc
 
         rating_colors = {
-            "Conviction Buy": "#3b82f6",
-            "Buy": "#22c55e",
-            "Neutral": "#eab308",
-            "Reduce": "#f97316",
-            "Sell": "#ef4444",
+            "최우량": "#3b82f6",
+            "우량":   "#22c55e",
+            "양호":   "#eab308",
+            "불량":   "#f97316",
+            "최하":   "#ef4444",
         }
         color = rating_colors.get(rating, "#94a3b8")
-        short = {"Conviction Buy": "C.BUY", "Buy": "BUY",
-                 "Neutral": "NTRL", "Reduce": "RDCE", "Sell": "SELL"}.get(rating, rating[:4])
+        short = rating  # 한글 그대로 표시
 
         # inset axes: 우상단 0.18×0.22 비율
         ax_inset = ax.inset_axes([0.80, 0.76, 0.18, 0.22])
@@ -231,6 +224,13 @@ class HandDrawnChartRenderer:
         lw_scale  = s
 
         with plt.xkcd(scale=1.0, length=80, randomness=2):
+            # xkcd가 Comic Sans MS를 강제하므로 한글 폰트를 폴백으로 삽입
+            if KFONT:
+                import matplotlib as _mpl
+                _cur = _mpl.rcParams.get("font.family", [])
+                if isinstance(_cur, str):
+                    _cur = [_cur]
+                _mpl.rcParams["font.family"] = _cur + [KFONT]
             fig = plt.figure(figsize=self.size, dpi=self.dpi, facecolor="#FFFFFF")
             # 2패널 구성 — 가격 + 거래량 (RSI/MACD는 4축 분석 점수 카드와 중복이라 제거)
             gs  = gridspec.GridSpec(
@@ -278,18 +278,6 @@ class HandDrawnChartRenderer:
                                       self.hist["BB_UP"].values,
                                       color="#3182F6", alpha=0.05, zorder=1)
 
-            # ── GreedZone 구간 음영 ──────────────────────────────────
-            if self._gz_zone is not None:
-                gz_tail = self._gz_zone.iloc[-self._lookback:].reset_index(drop=True).values
-                if len(gz_tail) == len(x):
-                    ymin, ymax = ax_price.get_ylim()
-                    ax_price.fill_between(
-                        x, ymin, ymax,
-                        where=gz_tail.astype(bool),
-                        color="#FCD34D", alpha=0.18, zorder=0,
-                        label="GreedZone",
-                    )
-                    ax_price.set_ylim(ymin, ymax)
 
             # 어노테이션/하이쿠 제목 제거 — 차트 위 텍스트는 모두 분석 카드로 분리
             ax_price.set_title(
@@ -309,19 +297,29 @@ class HandDrawnChartRenderer:
                     h_min = self.hist["Low"].min()
                     fib_levels = [0.236, 0.382, 0.5, 0.618, 0.786]
                     fib_colors = ["#a78bfa", "#8b5cf6", "#7c3aed", "#6d28d9", "#5b21b6"]
+                    fib_names  = {0.236: "얕은", 0.382: "1차지지", 0.5: "중간",
+                                  0.618: "황금비", 0.786: "강한지지"}
                     _ffs = max(8, int(fs_tick * 0.88))
+                    def _fmt_fib(p):
+                        if p >= 1000: return f"{p:,.0f}"
+                        if p >= 10:   return f"{p:,.1f}"
+                        return f"{p:,.2f}"
                     for lvl, col in zip(fib_levels, fib_colors):
                         fib_price = h_min + (h_max - h_min) * lvl
                         ax_price.axhline(fib_price, color=col, linewidth=0.8 * lw_scale,
                                          linestyle=(0, (5, 4)), alpha=0.55)
                         ax_price.text(
-                            1.0, fib_price,
-                            f" {fib_price:.1f} ({lvl:.3f})",
+                            0.99, fib_price,
+                            f"{_fmt_fib(fib_price)} {fib_names[lvl]}",
                             transform=ax_price.get_yaxis_transform(),
-                            fontsize=_ffs, color=col, va="center", ha="left",
+                            fontsize=_ffs, color=col, va="center", ha="right",
                             bbox=dict(boxstyle="round,pad=0.15", facecolor="white",
                                       alpha=0.75, edgecolor=col, linewidth=0.6),
                         )
+                    # Y축을 현재가 중심으로 타이트하게 — Fib 전체 범위가 너무 넓어지는 현상 방지
+                    cur = float(close[-1])
+                    pad = (h_max - h_min) * 0.25
+                    ax_price.set_ylim(min(h_min, cur - pad), max(h_max, cur + pad) * 1.04)
                 except Exception:
                     pass
 
@@ -400,7 +398,12 @@ class HandDrawnChartRenderer:
 
             # tight_layout이 일부 Axes(워터마크/주석 텍스트 포함)와 호환되지 않아
             # 수동 여백 지정으로 대체 — UserWarning 제거
-            fig.subplots_adjust(left=0.06, right=0.97, top=0.94, bottom=0.10, hspace=0.10)
+            ax_price.yaxis.set_major_formatter(
+                plt.FuncFormatter(lambda v, _:
+                    f"{v/10000:.0f}만" if v >= 10000 else
+                    f"{v:,.0f}" if v >= 1000 else
+                    f"{v:,.1f}"))
+            fig.subplots_adjust(left=0.10, right=0.97, top=0.94, bottom=0.10, hspace=0.10)
 
             buf = io.BytesIO()
             fig.savefig(buf, format="png", dpi=self.dpi,
@@ -463,15 +466,6 @@ class HandDrawnChartRenderer:
                     arrowprops=dict(arrowstyle="-|>", color="#F04452",
                                     lw=1.4 * lw_scale, mutation_scale=14 * s),
                 )
-            elif ann.kind == "circle":
-                r = pr * 0.025
-                ax.add_patch(Circle((xi, yi), radius=r, fill=False,
-                                    edgecolor="#FF8A00", linewidth=1.6 * lw_scale,
-                                    zorder=4))
-                ty = _slot(yi + r * 1.8, up=True)
-                ax.text(xi, ty, label,
-                        fontsize=fs_ann, color="#FF8A00", ha="center",
-                        fontname=KFONT or "DejaVu Sans")
             elif ann.kind == "dashed":
                 hl = ax.axhline(yi, color="#888", linewidth=0.8 * lw_scale, alpha=0.6)
                 hl.set_dashes((4, 3))

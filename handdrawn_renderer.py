@@ -129,7 +129,11 @@ class HandDrawnChartRenderer:
 
     def __init__(self, hist: pd.DataFrame, result: FourAxisResult,
                  ticker: str = "", lookback: int = 120,
-                 width_px: int = 720, height_px: int = 600, dpi: int = 100):
+                 width_px: int = 720, height_px: int = 600, dpi: int = 100,
+                 support: float | None = None,
+                 resistance: float | None = None,
+                 show_fib: bool = True,
+                 show_sr: bool = True):
         from four_axis_analyzer import _ema, _bb
         h = hist.copy()
         # GreedZone 시리즈 계산 (차트 배경 음영용)
@@ -156,14 +160,18 @@ class HandDrawnChartRenderer:
         if "OBV" not in h.columns:
             h["OBV"] = _obv_local(h["Close"], h["Volume"])
 
-        self._full_len = len(h)
-        self._lookback = min(lookback, len(h))
-        self._offset   = self._full_len - self._lookback
-        self.hist      = h.tail(self._lookback).reset_index(drop=False)
-        self.result    = result
-        self.ticker    = ticker
-        self.size      = (width_px / dpi, height_px / dpi)
-        self.dpi       = dpi
+        self._full_len   = len(h)
+        self._lookback   = min(lookback, len(h))
+        self._offset     = self._full_len - self._lookback
+        self.hist        = h.tail(self._lookback).reset_index(drop=False)
+        self.result      = result
+        self.ticker      = ticker
+        self.size        = (width_px / dpi, height_px / dpi)
+        self.dpi         = dpi
+        self._support    = support
+        self._resistance = resistance
+        self._show_fib   = show_fib
+        self._show_sr    = show_sr
 
     # ---------------------------------------------------------------
     def render(self) -> Image.Image:
@@ -249,6 +257,41 @@ class HandDrawnChartRenderer:
             for t in leg.get_texts():
                 t.set_color("#444")
             plt.setp(ax_price.get_xticklabels(), visible=False)
+
+            # ── ⑤ Fibonacci 수평선 ─────────────────────────────────
+            if self._show_fib and len(self.hist) > 1:
+                try:
+                    h_max = self.hist["High"].max()
+                    h_min = self.hist["Low"].min()
+                    fib_levels = [0.236, 0.382, 0.5, 0.618, 0.786]
+                    fib_colors = ["#a78bfa", "#8b5cf6", "#7c3aed", "#6d28d9", "#5b21b6"]
+                    for lvl, col in zip(fib_levels, fib_colors):
+                        price = h_min + (h_max - h_min) * lvl
+                        ax_price.axhline(price, color=col, linewidth=0.8 * lw_scale,
+                                         linestyle=(0, (5, 4)), alpha=0.55)
+                        ax_price.text(len(x) - 1, price, f" {lvl:.3f}",
+                                      fontsize=max(6, int(fs_tick * 0.75)),
+                                      color=col, va="center", alpha=0.7)
+                except Exception:
+                    pass
+
+            # ── ⑥ S/R 수평점선 ─────────────────────────────────────
+            if self._show_sr:
+                try:
+                    if self._support is not None:
+                        ax_price.axhline(self._support, color="#22c55e",
+                                         linewidth=1.2 * lw_scale, linestyle="--", alpha=0.7)
+                        ax_price.text(0, self._support, "S ",
+                                      fontsize=max(6, int(fs_tick * 0.8)),
+                                      color="#22c55e", va="bottom", ha="left", alpha=0.8)
+                    if self._resistance is not None:
+                        ax_price.axhline(self._resistance, color="#ef4444",
+                                         linewidth=1.2 * lw_scale, linestyle="--", alpha=0.7)
+                        ax_price.text(0, self._resistance, "R ",
+                                      fontsize=max(6, int(fs_tick * 0.8)),
+                                      color="#ef4444", va="top", ha="left", alpha=0.8)
+                except Exception:
+                    pass
 
             # ── ② 거래량 + OBV 패널 ──────────────────────────────────
             vol = self.hist["Volume"].values

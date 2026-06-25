@@ -95,6 +95,15 @@
     <span>여기 나오는 점수·등급·신호는 <b>알고리즘 스크리닝 결과</b>일 뿐임. 판단과 손익은 본인 책임임.</span>
   </div>
 
+  <!-- WSB 소셜 버즈 위젯 -->
+  <section id="wsb-widget" class="wsb-widget" hidden>
+    <div class="wsb-header">
+      <span class="wsb-title">🔥 오늘의 WSB 픽</span>
+      <span class="wsb-updated" id="wsb-updated"></span>
+    </div>
+    <div class="wsb-cards" id="wsb-cards"></div>
+  </section>
+
   <!-- Macro Strip (신호등 띠) -->
   <div class="macro-strip" id="macro-strip">
     <span class="macro-signal unknown" id="macro-signal">⚪ <span>로딩…</span></span>
@@ -176,6 +185,8 @@
               <th class="sortable" data-sort="Sector">섹터 <span class="sort-arrow"></span></th>
               <th class="score-col sortable" data-sort="TotalScore" title="5개 전략(균형/모멘텀/가치/CAN SLIM/스캘핑)을 평균 60% + 최고 40% 로 통합한 복합 점수">점수 <span class="sort-arrow"></span></th>
               <th>시그널</th>
+              <th title="진입 신호 (2일 이상 유지 시 실선, 미만 점선)">진입 신호</th>
+              <th class="center" title="현재 진입 신호 연속 유지 일수 (숫자가 클수록 안정)">연속</th>
               <th class="right sortable" data-sort="Price">현재가 <span class="sort-arrow"></span></th>
               <th class="right sortable" data-sort="DayChg">등락 <span class="sort-arrow"></span></th>
               <th class="right sortable" data-sort="RSI">RSI <span class="sort-arrow"></span></th>
@@ -187,7 +198,7 @@
             </tr>
           </thead>
           <tbody id="stock-list">
-            <tr><td colspan="14" class="state-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</td></tr>
+            <tr><td colspan="16" class="state-msg">섹터를 선택하거나 스캔 버튼을 눌러주세요.</td></tr>
           </tbody>
         </table>
       </div>
@@ -469,6 +480,8 @@
         <div id="dp-usinsight-content" class="dp-tab-content"></div>
       </div>
       </div><!-- /dp-tabs-card -->
+      <!-- 노무라式 인라인 섹션 (US 전용, 항상 표시) -->
+      <div id="dp-nomura-inline" style="display:none;"></div>
       <div id="dp-drawdown-risk" class="dp-drawdown-wrap"></div>
       <div id="dp-midcap-card" style="display:none;">
         <div class="card midcap-detail-card">

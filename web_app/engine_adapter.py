@@ -54,6 +54,35 @@ def _attach_regime(rows: list[dict], market: str) -> None:
         logging.debug("[Adapter] regime attach 실패: %s", e)
 
 
+def _attach_consecutive(rows: list[dict], market: str) -> None:
+    """스냅샷 파일 비교로 EntryStatus 연속 유지 일수를 EntryConsecutive 필드에 부착."""
+    import glob as _glob
+    import json as _json
+    snap_dir = os.path.join(os.path.dirname(__file__), "snapshots")
+    files = sorted(_glob.glob(os.path.join(snap_dir, f"scanner_{market}_*.json")))[-10:]
+    history_map: dict[str, list[str]] = {}
+    for fpath in files:
+        try:
+            with open(fpath, encoding="utf-8") as f:
+                snap = _json.load(f)
+            for ticker, data in snap.items():
+                st = (data.get("entry") or "") if isinstance(data, dict) else ""
+                history_map.setdefault(ticker, []).append(st)
+        except Exception:
+            pass
+    for r in rows:
+        t = r.get("Ticker", "")
+        cur = r.get("EntryStatus", "")
+        past = history_map.get(t, [])
+        count = 1
+        for prev in reversed(past):
+            if prev == cur:
+                count += 1
+            else:
+                break
+        r["EntryConsecutive"] = count
+
+
 def _scan_sort_key(row: dict):
     """REGIME_RANK=1 이면 RegimeEntryScore, 아니면 기존 TotalScore 정렬."""
     if _regime is not None:
@@ -690,6 +719,7 @@ class ScanAdapter:
         _attach_midcap_alpha(results)
         _attach_valuation_context(results)
         _attach_regime(results, self._market)  # 모듈1~4: 레짐 전환확률·OFI·리드래그 → RegimeEntryScore
+        _attach_consecutive(results, self._market)
         results.sort(key=_scan_sort_key, reverse=True)
         return results
 
@@ -730,6 +760,7 @@ class ScanAdapter:
         _attach_midcap_alpha(results)
         _attach_valuation_context(results)
         _attach_regime(results, self._market)  # 모듈1~4: 레짐 전환확률·OFI·리드래그 → RegimeEntryScore
+        _attach_consecutive(results, self._market)
         results.sort(key=_scan_sort_key, reverse=True)
         # forward IC 추적: BOTTLENECK_SNAPSHOT=1 일 때만 오늘 병목 등급 스냅샷 적재
         if os.environ.get("BOTTLENECK_SNAPSHOT") == "1":

@@ -2786,7 +2786,7 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
         tried = []
         periods = ("2y", "1y", "6mo", "3mo")
         for yt in candidates:
-            rate_limited_break = False
+
             for period in periods:
                 tried.append(f"{yt}({period})")
                 try:
@@ -2807,7 +2807,7 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
                     logging.warning("four_axis history fetch failed: %s", exc)
                     if "too many requests" in msg or "rate" in msg and "limit" in msg:
                         try:
-                            time.sleep(1.0)
+                            time.sleep(3.0)
                             h = _run_with_timeout(
                                 lambda yt=yt, period=period: yf.Ticker(yt).history(
                                     period=period,
@@ -2822,8 +2822,7 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
                                 break
                         except Exception as _e:
                             logging.debug("silent except (app.py): %s", _e)
-                        rate_limited_break = True
-                        break
+                        continue  # rate limit 후 다음 period 시도 (break 대신)
                     continue
             if hist is not None:
                 break
@@ -2909,7 +2908,7 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
 
             renderer = HandDrawnChartRenderer(
                 hist, result, ticker=chart_title,
-                width_px=1200, height_px=560, dpi=100,
+                width_px=1140, height_px=532, dpi=100,
                 support=_sr_data[0] if _sr_data else None,
                 resistance=_sr_data[1] if _sr_data else None,
                 show_fib=True,

@@ -182,7 +182,7 @@ def test_get_nomura_score_conviction_buy(mock_yf, mock_tk):
     # overall=95 → 76pt + piotroski=9 → 10pt + 1m=5.3 → 6pt = 92 → A+
     result = nomura_score.get_nomura_score("NVDA")
     assert result["grade"] == "A+"
-    assert result["nomura_rating"] == "Conviction Buy"
+    assert result["nomura_rating"] == "최우량"
 
 
 @patch("nomura_score.get_tradingkey_data", return_value=MOCK_TK_RESPONSE)

@@ -6600,11 +6600,11 @@ function _renderNomuraTKScore(d) {
   const rating = d.nomura_rating ?? '—';
 
   const ratingColor = {
-    'Conviction Buy': 'var(--brand)',
-    'Buy': 'var(--success)',
-    'Neutral': 'var(--text-secondary)',
-    'Reduce': 'var(--destructive)',
-    'Sell': 'var(--destructive)',
+    '최우량': 'var(--brand)',
+    '우량': 'var(--success)',
+    '양호': 'var(--text-secondary)',
+    '불량': 'var(--destructive)',
+    '최하': 'var(--destructive)',
   }[rating] || 'var(--text-primary)';
 
   body.innerHTML = `
@@ -6618,7 +6618,7 @@ function _renderNomuraTKScore(d) {
         <span class="nm-score-val">${esc(grade)}</span>
       </div>
       <div class="nm-score-cell">
-        <span class="nm-score-label">레이팅</span>
+        <span class="nm-score-label">퀄리티 등급</span>
         <span class="nm-score-val" style="color:${ratingColor};font-size:12px">${esc(rating)}</span>
       </div>
       <div class="nm-score-cell">
@@ -6639,14 +6639,14 @@ function _nmGaugeSVG(score, rating) {
   const circ = 2 * Math.PI * r;            // ≈ 175.9
   const filled = (score / 100) * circ;
   const ratingColors = {
-    'Conviction Buy': '#3b82f6',
-    'Buy': '#22c55e',
-    'Neutral': '#eab308',
-    'Reduce': '#f97316',
-    'Sell': '#ef4444',
+    '최우량': '#3b82f6',
+    '우량': '#22c55e',
+    '양호': '#eab308',
+    '불량': '#f97316',
+    '최하': '#ef4444',
   };
   const color = ratingColors[rating] || '#94a3b8';
-  const shortRating = {'Conviction Buy':'C.BUY','Buy':'BUY','Neutral':'NTRL','Reduce':'RDCE','Sell':'SELL'}[rating] || rating;
+  const shortRating = {'최우량':'최우량','우량':'우량','양호':'양호','불량':'불량','최하':'최하'}[rating] || rating;
   return `<svg viewBox="0 0 72 72" width="80" height="80">
     <circle cx="36" cy="36" r="${r}" fill="none" stroke="#1e293b" stroke-width="6"/>
     <circle cx="36" cy="36" r="${r}" fill="none" stroke="${color}" stroke-width="6"

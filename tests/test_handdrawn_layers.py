@@ -65,7 +65,7 @@ def test_renderer_nomura_badge_no_crash():
         "altman_z": 3.5,
         "beneish_m": -2.1,
         "beneish_warning": False,
-        "nomura_rating": "Buy",
+        "nomura_rating": "우량",
         "nomura_target": 200.0,
         "nomura_upside": 12.5,
     }

@@ -322,8 +322,8 @@ def _score_to_grade(score: int) -> str:
 
 
 def _grade_to_rating(grade: str) -> str:
-    return {"A+": "Conviction Buy", "A": "Buy", "B": "Neutral",
-            "C": "Reduce", "D": "Sell"}.get(grade, "Neutral")
+    return {"A+": "최우량", "A": "우량", "B": "양호",
+            "C": "불량", "D": "최하"}.get(grade, "양호")
 
 
 # ── 메인 공개 API ────────────────────────────────────────────────────────────

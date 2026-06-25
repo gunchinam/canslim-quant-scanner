@@ -74,7 +74,7 @@ MOCK_NOMURA = {
     "altman_z": 3.2,
     "beneish_m": -2.1,
     "beneish_warning": False,
-    "nomura_rating": "Buy",
+    "nomura_rating": "우량",
     "nomura_target": 315.0,
     "nomura_upside": 7.5,
 }
@@ -106,7 +106,7 @@ def test_nomura_score_success_shape(client):
     body = resp.get_json()
     assert body["status"] == "ok"
     d = body["data"]
-    assert d["nomura_rating"] == "Buy"
+    assert d["nomura_rating"] == "우량"
     assert d["quantitative_score"] == 78
     for key in ("piotroski", "altman_z", "beneish_m", "beneish_warning",
                 "grade", "nomura_target", "nomura_upside"):

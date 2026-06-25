@@ -309,31 +309,48 @@ class HandDrawnChartRenderer:
                     h_min = self.hist["Low"].min()
                     fib_levels = [0.236, 0.382, 0.5, 0.618, 0.786]
                     fib_colors = ["#a78bfa", "#8b5cf6", "#7c3aed", "#6d28d9", "#5b21b6"]
+                    _ffs = max(8, int(fs_tick * 0.88))
                     for lvl, col in zip(fib_levels, fib_colors):
-                        price = h_min + (h_max - h_min) * lvl
-                        ax_price.axhline(price, color=col, linewidth=0.8 * lw_scale,
+                        fib_price = h_min + (h_max - h_min) * lvl
+                        ax_price.axhline(fib_price, color=col, linewidth=0.8 * lw_scale,
                                          linestyle=(0, (5, 4)), alpha=0.55)
-                        ax_price.text(len(x) - 1, price, f" {lvl:.3f}",
-                                      fontsize=max(6, int(fs_tick * 0.75)),
-                                      color=col, va="center", alpha=0.7)
+                        ax_price.text(
+                            1.0, fib_price,
+                            f" {fib_price:.1f} ({lvl:.3f})",
+                            transform=ax_price.get_yaxis_transform(),
+                            fontsize=_ffs, color=col, va="center", ha="left",
+                            bbox=dict(boxstyle="round,pad=0.15", facecolor="white",
+                                      alpha=0.75, edgecolor=col, linewidth=0.6),
+                        )
                 except Exception:
                     pass
 
             # ── ⑥ S/R 수평점선 ─────────────────────────────────────
             if self._show_sr:
+                _srfs = max(8, int(fs_tick * 0.88))
                 try:
                     if self._support is not None:
                         ax_price.axhline(self._support, color="#22c55e",
                                          linewidth=1.2 * lw_scale, linestyle="--", alpha=0.7)
-                        ax_price.text(0, self._support, "S ",
-                                      fontsize=max(6, int(fs_tick * 0.8)),
-                                      color="#22c55e", va="bottom", ha="left", alpha=0.8)
+                        ax_price.text(
+                            0.0, self._support,
+                            f" S  {self._support:.1f}",
+                            transform=ax_price.get_yaxis_transform(),
+                            fontsize=_srfs, color="#22c55e", va="bottom", ha="left",
+                            bbox=dict(boxstyle="round,pad=0.15", facecolor="white",
+                                      alpha=0.75, edgecolor="#22c55e", linewidth=0.6),
+                        )
                     if self._resistance is not None:
                         ax_price.axhline(self._resistance, color="#ef4444",
                                          linewidth=1.2 * lw_scale, linestyle="--", alpha=0.7)
-                        ax_price.text(0, self._resistance, "R ",
-                                      fontsize=max(6, int(fs_tick * 0.8)),
-                                      color="#ef4444", va="top", ha="left", alpha=0.8)
+                        ax_price.text(
+                            0.0, self._resistance,
+                            f" R  {self._resistance:.1f}",
+                            transform=ax_price.get_yaxis_transform(),
+                            fontsize=_srfs, color="#ef4444", va="top", ha="left",
+                            bbox=dict(boxstyle="round,pad=0.15", facecolor="white",
+                                      alpha=0.75, edgecolor="#ef4444", linewidth=0.6),
+                        )
                 except Exception:
                     pass
 

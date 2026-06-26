@@ -5736,11 +5736,11 @@ function renderFearGreed(d) {
   // 현재 구간 인덱스 (0=EF, 1=F, 2=N, 3=G, 4=EG)
   const zi = score > 75 ? 4 : score > 55 ? 3 : score > 45 ? 2 : score > 25 ? 1 : 0;
   const zones = [
-    { lbl: 'EF', clr: '#e74c3c' },
-    { lbl: 'F',  clr: '#e67e22' },
-    { lbl: 'N',  clr: '#f0b429' },
-    { lbl: 'G',  clr: '#2ecc71' },
-    { lbl: 'EG', clr: '#1abc9c' },
+    { lbl: '극공포', clr: '#e74c3c' },
+    { lbl: '공포',   clr: '#e67e22' },
+    { lbl: '중립',   clr: '#f0b429' },
+    { lbl: '탐욕',   clr: '#2ecc71' },
+    { lbl: '극탐욕', clr: '#1abc9c' },
   ];
 
   const segs = zones.map((z, i) =>

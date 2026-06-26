@@ -1870,6 +1870,27 @@ def api_ticker(ticker: str):
             logging.warning("MECE price levels failed: %s", _mece_e3)
             result.setdefault("PriceLevels", None)
 
+        # 스캔 캐시에서 RSRating/RSBucket/RSBucketName 주입 — 상세 패널 '주도주 몇 위' 표기용
+        try:
+            with _scan_results_cache_lock:
+                _rs_all = list(_scan_results_cache.values())
+            for _rs_entry in _rs_all:
+                _rs_row = next(
+                    (r for r in (_rs_entry.get("data") or [])
+                     if str(r.get("Ticker", "")).upper() == ticker.upper()),
+                    None,
+                )
+                if _rs_row:
+                    if not result.get("RSRating") and _rs_row.get("RSRating"):
+                        result["RSRating"] = _rs_row["RSRating"]
+                    if _rs_row.get("RSBucket") is not None:
+                        result.setdefault("RSBucket", _rs_row["RSBucket"])
+                    if _rs_row.get("RSBucketName"):
+                        result.setdefault("RSBucketName", _rs_row["RSBucketName"])
+                    break
+        except Exception as _rse:
+            logging.debug("RSBucket enrichment failed: %s", _rse)
+
         # ── 응답 캐시 저장 ──
         with _ticker_detail_cache_lock:
             if len(_ticker_detail_cache) >= _TICKER_DETAIL_MAX:

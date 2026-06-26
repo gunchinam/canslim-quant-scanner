@@ -5296,32 +5296,39 @@ details[open] .nm-acc-chevron { transform: rotate(180deg); }
 }
 .ff-tag { font-size: 10px; color: var(--text-tertiary); width: 44px; text-align: right; }
 
-/* ── CNN 공탐지수 위젯 (매크로 스트립 내 정사각형) ─────────────────── */
+/* ── CNN 공탐지수 위젯 (매크로 스트립 내) ───────────────────────────── */
 .fg-widget {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  width: 76px;
+  gap: 6px;
   flex-shrink: 0;
-  cursor: default;
+  padding: 0 6px;
+  border-left: 1px solid var(--border);
 }
-.fg-gauge {
-  width: 76px;
-  height: 52px;
-  display: block;
+.fg-num {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  min-width: 28px;
+  text-align: right;
 }
-.fg-w-lbl {
+.fg-zones {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fg-z {
   font-size: 9px;
-  color: var(--text-secondary);
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 3px;
+  color: #fff;
   letter-spacing: 0.04em;
-  line-height: 1;
-  margin-bottom: 1px;
+  line-height: 1.1;
+  transition: opacity 0.25s;
 }
-.fg-w-rtg {
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1;
-  margin-top: 1px;
-  text-align: center;
+.fg-z-on {
+  font-size: 11px;
+  padding: 3px 7px;
+  box-shadow: 0 0 6px rgba(0,0,0,0.3);
 }

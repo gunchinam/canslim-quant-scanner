@@ -5728,45 +5728,28 @@ function renderFearGreed(d) {
   const widget = document.getElementById('fg-widget');
   if (!widget) return;
   if (!d || d.score == null) { widget.style.display = 'none'; return; }
-
   widget.style.display = '';
+
   const score = d.score;
   const color = _fgColor(score);
 
-  // 반원형 게이지 SVG (viewBox: 100×68, 반원 하단 중앙)
-  const cx = 50, cy = 52, r = 38;
-  // score 0 → 왼쪽(π), score 100 → 오른쪽(0)
-  const ang = Math.PI * (1 - score / 100);
-  const nx = (cx + r * Math.cos(ang)).toFixed(1);
-  const ny = (cy - r * Math.sin(ang)).toFixed(1);
+  // 현재 구간 인덱스 (0=EF, 1=F, 2=N, 3=G, 4=EG)
+  const zi = score > 75 ? 4 : score > 55 ? 3 : score > 45 ? 2 : score > 25 ? 1 : 0;
+  const zones = [
+    { lbl: 'EF', clr: '#e74c3c' },
+    { lbl: 'F',  clr: '#e67e22' },
+    { lbl: 'N',  clr: '#f0b429' },
+    { lbl: 'G',  clr: '#2ecc71' },
+    { lbl: 'EG', clr: '#1abc9c' },
+  ];
 
-  // 5구간 배경 호
-  const zoneClrs = ['#e74c3c','#e67e22','#f0b429','#2ecc71','#1abc9c'];
-  let svg = '';
-  for (let i = 0; i < 5; i++) {
-    const a1 = Math.PI * (1 - i / 5);
-    const a2 = Math.PI * (1 - (i + 1) / 5);
-    const x1 = (cx + r * Math.cos(a1)).toFixed(1);
-    const y1 = (cy - r * Math.sin(a1)).toFixed(1);
-    const x2 = (cx + r * Math.cos(a2)).toFixed(1);
-    const y2 = (cy - r * Math.sin(a2)).toFixed(1);
-    svg += `<path d="M${x1},${y1} A${r},${r} 0 0,0 ${x2},${y2}" fill="none" stroke="${zoneClrs[i]}" stroke-width="8" opacity="0.22"/>`;
-  }
-  // 활성 호 (현재 점수까지)
-  if (score > 0.5) {
-    const laf = score > 50 ? 1 : 0;
-    svg += `<path d="M${cx - r},${cy} A${r},${r} 0 ${laf},0 ${nx},${ny}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"/>`;
-  }
-  // 바늘
-  svg += `<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
-  svg += `<circle cx="${cx}" cy="${cy}" r="3" fill="${color}"/>`;
-  // 점수 텍스트
-  svg += `<text x="${cx}" y="${cy + 1}" text-anchor="middle" dominant-baseline="hanging" font-size="12" font-weight="700" fill="${color}">${Math.round(score)}</text>`;
+  const segs = zones.map((z, i) =>
+    `<span class="fg-z${i === zi ? ' fg-z-on' : ''}" style="background:${z.clr};${i === zi ? '' : 'opacity:0.18'}">${z.lbl}</span>`
+  ).join('');
 
   widget.innerHTML =
-    `<div class="fg-w-lbl">CNN 공탐</div>` +
-    `<svg viewBox="0 0 100 68" class="fg-gauge">${svg}</svg>` +
-    `<div class="fg-w-rtg" style="color:${color}">${esc(d.rating_ko || d.rating || '')}</div>`;
+    `<span class="fg-num" style="color:${color}">${Math.round(score)}</span>` +
+    `<div class="fg-zones">${segs}</div>`;
 }
 
 function renderMacro(d) {

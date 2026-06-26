@@ -5313,13 +5313,15 @@ function _renderIndexBarMeta() {
   const parts = [];
   if (_indexMeta && _indexMeta.generated) {
     const day = String(_indexMeta.generated).slice(0, 10);
-    parts.push(`명단 ${day}${_indexMeta.is_stale ? ' ⚠️갱신요망' : ''}`);
+    const staleDays = _indexMeta.stale_days;
+    const ageStr = staleDays != null ? (staleDays === 0 ? '오늘' : `${staleDays}일 전`) : day;
+    parts.push(`명단 ${ageStr}${_indexMeta.is_stale ? ' ⚠️갱신요망' : ''}`);
   }
   if (_scanCacheAgeMin != null && isFinite(_scanCacheAgeMin)) {
     const h = _scanCacheAgeMin / 60;
     const fresh = h < 24 ? `${Math.round(_scanCacheAgeMin)}분 전` :
                   `${(h / 24).toFixed(1)}일 전`;
-    const warn = h >= 24 ? ' ⚠️' : '';
+    const warn = h >= 72 ? ' ⚠️' : '';  // 3일 이상일 때만 경고
     parts.push(`시세 ${fresh}${warn}`);
   }
   el.textContent = parts.join('  ·  ');

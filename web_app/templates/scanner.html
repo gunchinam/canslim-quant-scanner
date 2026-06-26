@@ -113,6 +113,20 @@
   </div>
 
 
+  <!-- Fear & Greed Panel -->
+  <div class="fg-panel" id="fg-panel" style="display:none;">
+    <div class="fg-left">
+      <span class="fg-label">CNN 공탐지수</span>
+      <span class="fg-score" id="fg-score">—</span>
+      <span class="fg-rating" id="fg-rating"></span>
+      <span class="fg-compare" id="fg-compare"></span>
+    </div>
+    <svg class="fg-chart" id="fg-chart" viewBox="0 0 400 56" preserveAspectRatio="none"></svg>
+    <div class="fg-axis">
+      <span>극공포</span><span>공포</span><span>중립</span><span>탐욕</span><span>극탐욕</span>
+    </div>
+  </div>
+
   <!-- Stats Bar -->
   <div class="stats-bar">
     <div class="stat-item">
@@ -141,6 +155,7 @@
         <button class="chip chip-delta" data-filter="new_entry" title="기준일 이후 목록에 새로 진입한 종목">🆕 신규진입</button>
         <button class="chip" data-filter="breakout" title="추세 돌파 감지 종목">🚀 돌파</button>
         <button class="chip" data-filter="bf_buy" title="저점매수 점수 25점 이상 — 과매도+재무건전 후보 (40+: 적극, 60+: 강력)">🎣 저점매수</button>
+        <button class="chip" data-filter="swing" title="스윙 복합 조건 — S·A등급 + AVOID 제외 + BREAKOUT/PIVOT 3일↑ + RS주도주(80+) + 거래량 1.5배↑">🏹 스윙</button>
         <button class="chip" data-filter="laggard" title="RS Rating 40 미만 또는 위험 등급 — 주의 대상">⛔ 위험</button>
       </div>
     </div>
@@ -337,6 +352,8 @@
       </div>
       <!-- 분할매수 플랜 — 타이밍 섹션 마지막 (언제·어떻게 진입할지) -->
       <div id="dp-split-plan" style="padding:4px 20px 8px;"></div>
+      <!-- 스윙 목표가 구간 -->
+      <div id="dp-swing-target" style="padding:0 20px 12px;display:none;"></div>
     </section>
     </div><!-- /dp-hero-card -->
 

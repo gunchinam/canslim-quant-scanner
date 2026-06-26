@@ -704,6 +704,15 @@ function _matchesFilter(s, f) {
     case 'score_surge': return (s.ScoreDelta ?? -Infinity) >= 3;   // 어제 대비 점수 +3 이상 급등
     case 'new_entry':   return !!s.IsNew;                          // 기준일 이후 새로 진입
     case 'laggard':     return (s.RSRating ?? 99) < 40 || _signalTier(s.Signal) === 'sell';
+    case 'swing': {
+      const _swGrade = _stockGrade(s.TotalScore);
+      return (_swGrade === 'S' || _swGrade === 'A')                          // 종합점수 S·A등급
+          && s.EntryStatus !== 'AVOID' && s.EntryStatus !== 'RED'            // 진입 부적합 제외 (NEUTRAL 허용)
+          && typeof s.Signal === 'string' && /BREAKOUT|PIVOT/.test(s.Signal) // BREAKOUT/PIVOT 신호
+          && (s.EntryConsecutive ?? 0) >= 3                                  // 3일 이상 연속
+          && (s.RSRating ?? 0) >= 80                                         // RS주도주
+          && (s.VolRatio ?? 0) >= 1.5;                                       // 거래량 1.5배 이상
+    }
     default: return true;
   }
 }
@@ -3745,6 +3754,48 @@ function _renderEntryVerdict(d) {
   // 분할매수 플랜은 얼마나? 섹션으로 분리
   const _spEl = document.getElementById('dp-split-plan');
   if (_spEl) _spEl.innerHTML = splitHtml;
+
+  // ── 스윙 목표가 구간 ──
+  const _stEl = document.getElementById('dp-swing-target');
+  if (_stEl && price != null && price > 0) {
+    const _atrP = d.ATRPercent != null ? Number(d.ATRPercent) : (atr != null ? atr : 3.0);
+    const _stopLoss  = price * (1 - _atrP / 100);
+    const _tgt1      = price * (1 + _atrP * 2 / 100);
+    const _tgt2      = price * (1 + _atrP * 4 / 100);
+    const _broker    = d.BrokerTarget || d.NomuraTarget || null;
+    const _brokerUp  = _broker ? ((_broker - price) / price * 100) : null;
+    const _fp = v => fmtPrice(v);
+    const _pct = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+    _stEl.style.display = '';
+    _stEl.innerHTML = `
+      <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:.4px;margin-bottom:6px;">🏹 스윙 목표 구간</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr${_broker ? ' 1fr' : ''};gap:6px;">
+        <div style="background:var(--surface-subtle);border-radius:10px;padding:8px 10px;border-left:3px solid #DC2626;">
+          <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px;">손절 (−1 ATR)</div>
+          <div style="font-size:13px;font-weight:700;color:#DC2626;">${_fp(_stopLoss)}</div>
+          <div style="font-size:10px;color:#DC2626;">${_pct((_stopLoss - price) / price * 100)}</div>
+        </div>
+        <div style="background:var(--surface-subtle);border-radius:10px;padding:8px 10px;border-left:3px solid #F59E0B;">
+          <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px;">1차 목표 (+2 ATR)</div>
+          <div style="font-size:13px;font-weight:700;color:#F59E0B;">${_fp(_tgt1)}</div>
+          <div style="font-size:10px;color:#F59E0B;">${_pct((_tgt1 - price) / price * 100)}</div>
+        </div>
+        <div style="background:var(--surface-subtle);border-radius:10px;padding:8px 10px;border-left:3px solid #16A34A;">
+          <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px;">2차 목표 (+4 ATR)</div>
+          <div style="font-size:13px;font-weight:700;color:#16A34A;">${_fp(_tgt2)}</div>
+          <div style="font-size:10px;color:#16A34A;">${_pct((_tgt2 - price) / price * 100)}</div>
+        </div>
+        ${_broker ? `<div style="background:var(--surface-subtle);border-radius:10px;padding:8px 10px;border-left:3px solid #2563EB;">
+          <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px;">증권사 목표가</div>
+          <div style="font-size:13px;font-weight:700;color:#2563EB;">${_fp(_broker)}</div>
+          <div style="font-size:10px;color:#2563EB;">${_pct(_brokerUp)}</div>
+        </div>` : ''}
+      </div>
+      <div style="font-size:10px;color:var(--text-tertiary);margin-top:5px;">ATR ${_atrP.toFixed(1)}% 기준 · 1차 익절 후 절반 보유, 2차에서 전량 매도 또는 손절가 추격</div>
+    `;
+  } else if (_stEl) {
+    _stEl.style.display = 'none';
+  }
 }
 
 // Bottom-Fishing Score card
@@ -5548,10 +5599,12 @@ document.addEventListener('DOMContentLoaded', () => {
     runScan().then(() => {
       loadWatchlist();
       loadMacro();
+      loadFearGreed();
       loadScoreEval();
       if (typeof _loadMacroStrip === 'function') _loadMacroStrip(currentMarket);
     });
     setInterval(loadMacro, 15 * 60 * 1000);
+    setInterval(loadFearGreed, 15 * 60 * 1000);
     // 장중에만 3분 갱신, 장 외에는 30분 간격 — 불필요한 네트워크/서버 부하 방지
     setInterval(() => {
       if (document.hidden) return;
@@ -5622,6 +5675,77 @@ async function loadMacro() {
   } catch (e) {
     console.warn('loadMacro failed', e);
   }
+}
+
+// ───────── CNN 공포탐욕지수 ─────────
+async function loadFearGreed() {
+  try {
+    const res = await fetch('/api/fear-greed');
+    const d = await res.json();
+    renderFearGreed(d);
+  } catch (e) {
+    console.warn('loadFearGreed failed', e);
+  }
+}
+
+function _fgColor(score) {
+  if (score <= 25) return '#e74c3c';
+  if (score <= 44) return '#e67e22';
+  if (score <= 55) return '#f0b429';
+  if (score <= 74) return '#2ecc71';
+  return '#1abc9c';
+}
+
+function renderFearGreed(d) {
+  const panel    = document.getElementById('fg-panel');
+  const scoreEl  = document.getElementById('fg-score');
+  const ratingEl = document.getElementById('fg-rating');
+  const cmpEl    = document.getElementById('fg-compare');
+  const chartEl  = document.getElementById('fg-chart');
+  if (!panel || !scoreEl) return;
+  if (!d || d.score == null) { panel.style.display = 'none'; return; }
+
+  panel.style.display = '';
+  const score = d.score;
+  const color = _fgColor(score);
+  scoreEl.textContent = Math.round(score);
+  scoreEl.style.color = color;
+  ratingEl.textContent = d.rating_ko || d.rating || '';
+  ratingEl.style.color = color;
+
+  const cp = [];
+  if (d.prev_week  != null) cp.push(`1주전 <b>${Math.round(d.prev_week)}</b>`);
+  if (d.prev_month != null) cp.push(`1달전 <b>${Math.round(d.prev_month)}</b>`);
+  if (d.prev_year  != null) cp.push(`1년전 <b>${Math.round(d.prev_year)}</b>`);
+  cmpEl.innerHTML = cp.join('<span class="fg-sep">|</span>');
+
+  if (!chartEl || !d.history || d.history.length < 2) return;
+  const W = 400, H = 56, P = 3;
+  const pts = d.history, n = pts.length;
+  const xs = pts.map((_, i) => P + (W - P * 2) * i / (n - 1));
+  const ys = pts.map(p => P + (H - P * 2) * (1 - p.y / 100));
+
+  const bands = [
+    [0,  25, 'rgba(231,76,60,0.10)'],
+    [25, 44, 'rgba(230,126,34,0.07)'],
+    [44, 56, 'rgba(240,180,41,0.07)'],
+    [56, 75, 'rgba(46,204,113,0.07)'],
+    [75, 100,'rgba(26,188,156,0.10)'],
+  ];
+  let svg = '';
+  for (const [y1, y2, fill] of bands) {
+    const top = (P + (H - P * 2) * (1 - y2 / 100)).toFixed(1);
+    const bot = (P + (H - P * 2) * (1 - y1 / 100)).toFixed(1);
+    svg += `<rect x="${P}" y="${top}" width="${W - P * 2}" height="${(+bot - +top).toFixed(1)}" fill="${fill}"/>`;
+  }
+  const midY = (P + (H - P * 2) * 0.5).toFixed(1);
+  svg += `<line x1="${P}" y1="${midY}" x2="${W - P}" y2="${midY}" stroke="rgba(255,255,255,0.12)" stroke-width="0.7" stroke-dasharray="4,3"/>`;
+  const linePts = xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+  const area = `M${P},${H} ` + xs.map((x, i) => `L${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ') + ` L${(W - P).toFixed(1)},${H} Z`;
+  svg += `<path d="${area}" fill="${color}" opacity="0.18"/>`;
+  svg += `<polyline points="${linePts}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+  svg += `<circle cx="${xs[n-1].toFixed(1)}" cy="${ys[n-1].toFixed(1)}" r="3.5" fill="${color}" stroke="#1a1a2e" stroke-width="1.5"/>`;
+  chartEl.innerHTML = svg;
 }
 
 function renderMacro(d) {
@@ -6673,6 +6797,60 @@ function _renderNomuraScore(d) {
     ? (d.altman_z > 2.99 ? '안전' : d.altman_z > 1.81 ? '회색지대' : '위험')
     : '';
 
+  // 점수 기여도 분해 (score_breakdown)
+  const sb = d.score_breakdown;
+  let breakdownHtml = '';
+  if (sb) {
+    const mkBar = (label, val, maxVal, color) => {
+      const pct = maxVal > 0 ? Math.min(100, (val / maxVal) * 100) : 0;
+      return `<div style="margin-bottom:6px;">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-tertiary);margin-bottom:2px;">
+          <span>${esc(label)}</span><span>${val}점</span>
+        </div>
+        <div style="background:var(--surface-3,#1e293b);border-radius:3px;height:5px;">
+          <div style="width:${pct.toFixed(1)}%;height:5px;background:${color};border-radius:3px;transition:width 0.4s;"></div>
+        </div>
+      </div>`;
+    };
+    breakdownHtml = `
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border,#1e293b);">
+        <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.05em;margin-bottom:8px;">점수 기여도</div>
+        ${mkBar('TK 퀄리티 (max 80)', sb.tk_contribution||0, 80, 'var(--brand,#3b82f6)')}
+        ${mkBar('Piotroski (max 10)', sb.piotroski_contribution||0, 10, '#22c55e')}
+        ${mkBar('기관 모멘텀 (max 4)', sb.qoq_contribution||0, 4, '#a78bfa')}
+        ${mkBar('1개월 수익률 (max 6)', sb.momentum_1m_contribution||0, 6, '#f59e0b')}
+      </div>`;
+  }
+
+  // Piotroski 9개 체크리스트 (piotroski_detail)
+  const pd = d.piotroski_detail;
+  const pdLabels = {
+    roa_positive:    'ROA 양수',
+    ocf_positive:    '영업현금흐름 양수',
+    roa_improved:    'ROA 전년 대비 개선',
+    accrual_quality: '발생주의 품질 (OCF > ROA)',
+    leverage_down:   '부채비율 감소',
+    liquidity_up:    '유동비율 개선',
+    no_dilution:     '신주 미발행',
+    gm_improved:     '매출총이익률 개선',
+    at_improved:     '자산회전율 개선',
+  };
+  let pioDetailHtml = '';
+  if (pd && Object.keys(pd).length > 0) {
+    const items = Object.entries(pdLabels).map(([key, label]) => {
+      const pass = pd[key];
+      return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border-subtle,#0f172a);">
+        <span style="font-size:12px;color:${pass ? 'var(--success,#22c55e)' : 'var(--text-tertiary,#64748b)'};">${pass ? '✓' : '✗'}</span>
+        <span style="font-size:11px;color:${pass ? 'var(--text-primary)' : 'var(--text-tertiary)'};">${esc(label)}</span>
+      </div>`;
+    }).join('');
+    pioDetailHtml = `
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border,#1e293b);">
+        <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.05em;margin-bottom:6px;">Piotroski 9개 기준</div>
+        ${items}
+      </div>`;
+  }
+
   body.innerHTML = `
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
       ${_nmGaugeSVG(score, rating)}
@@ -6696,7 +6874,9 @@ function _renderNomuraScore(d) {
           ${bm} ${bWarn ? '⚠️' : '✓'}
         </span>
       </div>
-    </div>`;
+    </div>
+    ${breakdownHtml}
+    ${pioDetailHtml}`;
 }
 
 function _initNomuraInstitutionAccordion(ticker) {

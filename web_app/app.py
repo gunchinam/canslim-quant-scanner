@@ -1550,6 +1550,17 @@ def api_scan():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/fear-greed")
+def api_fear_greed():
+    """GET /api/fear-greed → CNN 공탐지수 + 90일 히스토리."""
+    try:
+        import macro as _macro_mod
+        return jsonify(_macro_mod.get_fear_greed())
+    except Exception as e:
+        logging.warning("api_fear_greed: %s", e)
+        return jsonify({"score": None, "rating": "", "rating_ko": "", "history": []})
+
+
 @app.route("/api/macro")
 def api_macro():
     """GET /api/macro → 상단 신호등 띠용 거시 지표. /api/scan 과 완전 분리."""
@@ -3007,11 +3018,11 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
                     _sr_data = get_support_resistance(ticker)
                 except Exception:
                     pass
-                try:
-                    from nomura_score import get_nomura_score
-                    _nomura_data = get_nomura_score(ticker)
-                except Exception:
-                    pass
+            try:
+                from nomura_score import get_nomura_score
+                _nomura_data = get_nomura_score(ticker)
+            except Exception:
+                pass
 
             renderer = HandDrawnChartRenderer(
                 hist, result, ticker=chart_title,

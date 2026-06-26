@@ -2738,6 +2738,13 @@ def api_consensus(ticker: str):
             except Exception:
                 continue
 
+        # Naver API가 high/low를 안 줄 때 리포트 목표가에서 계산
+        if result["reports"] and not result["summary"].get("high"):
+            tgts = [r["target"] for r in result["reports"] if r.get("target") and r["target"] > 0]
+            if tgts:
+                result["summary"]["high"] = max(tgts)
+                result["summary"]["low"]  = min(tgts)
+
     else:  # US — yfinance 사용
         try:
             import yfinance as yf

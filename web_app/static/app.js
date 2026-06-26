@@ -5095,8 +5095,9 @@ function _renderUSInsight(container, data) {
 async function loadConsensus(ticker, wrapId = 'consensus-wrap', prefix = 'cons') {
   const wrap = document.getElementById(wrapId);
   if (!wrap) return;
-  const p = new URLSearchParams({ market: currentMarket });
-  const cacheKey = `consensus:${ticker}:${currentMarket}`;
+  const mkt = /\.(KS|KQ)$/i.test(ticker) ? 'KR' : currentMarket;
+  const p = new URLSearchParams({ market: mkt });
+  const cacheKey = `consensus:${ticker}:${mkt}`;
   const cached = _clientCache.get(cacheKey);
   if (cached) { _renderConsensusData(wrap, cached, prefix); return; }
   try {

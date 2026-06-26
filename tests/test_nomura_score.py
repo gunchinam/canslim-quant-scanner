@@ -194,3 +194,88 @@ def test_get_nomura_score_range(mock_yf, mock_tk):
 
 def test_get_nomura_score_kr_returns_none():
     assert nomura_score.get_nomura_score("005930.KS") is None
+
+
+# ── score_breakdown 필드 ──────────────────────────────────────────────────────
+
+@patch("nomura_score.get_tradingkey_data", return_value=MOCK_TK_RESPONSE)
+@patch("nomura_score._fetch_yf", return_value=_YF9)
+def test_score_breakdown_keys(mock_yf, mock_tk):
+    """score_breakdown dict에 6개 필수 키가 모두 존재해야 한다."""
+    result = nomura_score.get_nomura_score("AAPL")
+    assert result is not None
+    sb = result.get("score_breakdown")
+    assert sb is not None, "score_breakdown 키 누락"
+    for key in ("tk_overall", "tk_contribution", "piotroski_contribution",
+                "qoq_contribution", "momentum_1m_contribution", "rev_1m"):
+        assert key in sb, f"score_breakdown에 '{key}' 키 누락"
+
+
+@patch("nomura_score.get_tradingkey_data", return_value=MOCK_TK_RESPONSE)
+@patch("nomura_score._fetch_yf", return_value=_YF9)
+def test_score_breakdown_values(mock_yf, mock_tk):
+    """score_breakdown 각 값이 예상 범위 내에 있어야 한다."""
+    result = nomura_score.get_nomura_score("AAPL")
+    sb = result["score_breakdown"]
+    assert 0 <= sb["tk_contribution"] <= 80
+    assert 0 <= sb["piotroski_contribution"] <= 10
+    assert sb["qoq_contribution"] in (0, 2, 4)
+    assert sb["momentum_1m_contribution"] in (0, 1, 3, 6)
+    # overall=72, piotroski=9(F9), qoq=-7.1, 1m=5.3
+    assert sb["tk_contribution"] == 57         # int(72/100*80)
+    assert sb["piotroski_contribution"] == 10  # int(9/9*10)
+    assert sb["qoq_contribution"] == 0         # qoq=-7.1 < 0
+    assert sb["momentum_1m_contribution"] == 6 # 1m=5.3 > 5
+
+
+# ── piotroski_detail 필드 ─────────────────────────────────────────────────────
+
+@patch("nomura_score.get_tradingkey_data", return_value=MOCK_TK_RESPONSE)
+@patch("nomura_score._fetch_yf", return_value=_YF9)
+def test_piotroski_detail_keys(mock_yf, mock_tk):
+    """piotroski_detail dict에 9개 필수 키가 모두 존재해야 한다."""
+    result = nomura_score.get_nomura_score("AAPL")
+    assert result is not None
+    pd = result.get("piotroski_detail")
+    assert pd is not None, "piotroski_detail 키 누락"
+    for key in ("roa_positive", "ocf_positive", "roa_improved", "accrual_quality",
+                "leverage_down", "liquidity_up", "no_dilution", "gm_improved", "at_improved"):
+        assert key in pd, f"piotroski_detail에 '{key}' 키 누락"
+
+
+@patch("nomura_score.get_tradingkey_data", return_value=MOCK_TK_RESPONSE)
+@patch("nomura_score._fetch_yf", return_value=_YF9)
+def test_piotroski_detail_all_true_for_f9(mock_yf, mock_tk):
+    """_YF9(F-Score=9) 픽스처에서 piotroski_detail의 9개 항목이 모두 True여야 한다."""
+    result = nomura_score.get_nomura_score("AAPL")
+    pd = result["piotroski_detail"]
+    for key, val in pd.items():
+        assert val is True, f"_YF9에서 '{key}'가 False — F9 픽스처 검증 실패"
+
+
+@patch("nomura_score.get_tradingkey_data", return_value=MOCK_TK_RESPONSE)
+@patch("nomura_score._fetch_yf", return_value=None)
+def test_piotroski_detail_empty_when_no_yf_data(mock_yf, mock_tk):
+    """yfinance 데이터 없을 때 piotroski_detail은 빈 dict여야 한다."""
+    result = nomura_score.get_nomura_score("AAPL")
+    # yf_data=None → piotroski=0, altman_z=None 등도 확인
+    pd = result["piotroski_detail"]
+    assert pd == {}, f"yf_data=None 시 piotroski_detail이 비어있지 않음: {pd}"
+
+
+# ── 기존 구조 테스트 확장 ─────────────────────────────────────────────────────
+
+@patch("nomura_score.get_tradingkey_data", return_value=MOCK_TK_RESPONSE)
+@patch("nomura_score._fetch_yf", return_value=_YF9)
+def test_get_nomura_score_all_keys(mock_yf, mock_tk):
+    """get_nomura_score()가 11개 키를 모두 반환해야 한다."""
+    result = nomura_score.get_nomura_score("AAPL")
+    assert result is not None
+    expected_keys = {
+        "quantitative_score", "grade", "piotroski", "altman_z",
+        "beneish_m", "beneish_warning", "nomura_rating",
+        "nomura_target", "nomura_upside",
+        "score_breakdown", "piotroski_detail",  # 새 필드
+    }
+    missing = expected_keys - set(result.keys())
+    assert not missing, f"누락된 키: {missing}"

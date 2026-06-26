@@ -1146,7 +1146,26 @@ def api_pyramid_suggest():
         import yfinance as yf
         import math
 
-        hist = yf.Ticker(yf_symbol).history(period="1y", interval="1d", auto_adjust=True)
+        hist = None
+        try:
+            hist = yf.Ticker(yf_symbol).history(period="1y", interval="1d", auto_adjust=True)
+        except Exception as _yfe:
+            logging.warning("pyramid yf fetch failed (%s): %s", yf_symbol, _yfe)
+
+        # KR 종목: yfinance rate limit 시 FDR 폴백
+        if (hist is None or len(hist) < 20) and market == "KR":
+            try:
+                import FinanceDataReader as fdr
+                from datetime import datetime, timedelta
+                code6 = _strip_kr_suffix(raw_ticker).zfill(6)
+                start = (datetime.now() - timedelta(days=400)).strftime("%Y-%m-%d")
+                fdr_df = fdr.DataReader(code6, start)
+                if fdr_df is not None and not fdr_df.empty and len(fdr_df) >= 20:
+                    keep = [c for c in ("Open", "High", "Low", "Close", "Volume") if c in fdr_df.columns]
+                    hist = fdr_df[keep].copy()
+            except Exception as _fdre:
+                logging.warning("pyramid FDR fallback failed (%s): %s", raw_ticker, _fdre)
+
         if hist is None or len(hist) < 20:
             return jsonify({"error": f"{raw_ticker} 데이터 부족 (최소 20거래일 필요)"}), 404
 
@@ -2738,12 +2757,57 @@ def api_consensus(ticker: str):
             except Exception:
                 continue
 
-        # Naver API가 high/low를 안 줄 때 리포트 목표가에서 계산
-        if result["reports"] and not result["summary"].get("high"):
+        # 3) PC Naver Finance HTML 파싱 (JSON API 404 시 폴백)
+        if not result["reports"]:
+            try:
+                import re as _re
+                _html_url = (
+                    f"https://finance.naver.com/research/company_list.naver"
+                    f"?search_type=itemCode&itemcode={code}&page=1"
+                )
+                _req3 = urllib.request.Request(_html_url, headers=_ua)
+                with urllib.request.urlopen(_req3, timeout=8) as _resp3:
+                    _html = _resp3.read().decode('cp949', errors='replace')
+                _rows = _re.findall(r'<tr[^>]*>(.*?)</tr>', _html, _re.DOTALL)
+                for _row in _rows:
+                    _tds = _re.findall(r'<td[^>]*>(.*?)</td>', _row, _re.DOTALL)
+                    _cells = [_re.sub(r'<[^>]+>', '', td).strip() for td in _tds]
+                    _cells = [c for c in _cells if c]
+                    _firm, _tp, _date, _op = '', 0, '', ''
+                    for _ci, _cell in enumerate(_cells):
+                        _clean = _cell.replace('\xa0', '').replace(',', '').strip()
+                        if _re.match(r'^\d+$', _clean):
+                            _v = int(_clean)
+                            if 10000 < _v < 10000000:
+                                _tp = _v
+                        elif not _firm and len(_cell) > 1 and not _re.match(r'^\d', _cell):
+                            _firm = _cell[:30]
+                        if _re.match(r'^\d{4}\.\d{2}\.\d{2}$', _cell.strip()):
+                            _date = _cell.strip()
+                    if _tp:
+                        result["reports"].append({
+                            'firm':    _firm or '—',
+                            'target':  _tp,
+                            'date':    _date,
+                            'opinion': _op,
+                        })
+            except Exception as _he:
+                logging.debug("naver html consensus fallback: %s", _he)
+
+        # 리포트 목표가에서 high/low/count/mean 계산
+        if result["reports"]:
             tgts = [r["target"] for r in result["reports"] if r.get("target") and r["target"] > 0]
             if tgts:
-                result["summary"]["high"] = max(tgts)
-                result["summary"]["low"]  = min(tgts)
+                if not result["summary"].get("high"):
+                    result["summary"]["high"] = max(tgts)
+                if not result["summary"].get("low"):
+                    result["summary"]["low"]  = min(tgts)
+                if not result["summary"].get("count"):
+                    result["summary"]["count"] = len(tgts)
+                _computed_mean = round(sum(tgts) / len(tgts))
+                # Naver priceTargetMean이 합계처럼 이상하게 크면 계산값으로 교체
+                if not result["summary"].get("mean") or result["summary"]["mean"] > _computed_mean * 5:
+                    result["summary"]["mean"] = _computed_mean
 
     else:  # US — yfinance 사용
         try:

@@ -3728,7 +3728,7 @@ function _renderEntryVerdict(d) {
   if (_vpEl) {
     _vpEl.style.display = '';
     _vpEl.className = `dp-verdict-poster ${_pgCls}`;
-    _vpEl.innerHTML = `<div class="dvp-main"><div class="dvp-eyebrow">살까? 말까?</div><div class="dvp-word">${_pvWord}</div><div class="dvp-reason">${_pvReason}</div></div><div class="dvp-conf"><div class="dvp-conf-num">${conv}<span class="dvp-conf-pct">%</span></div><div class="dvp-conf-lbl">확신도</div></div><div class="dvp-bg">${_pvBg}</div>`;
+    _vpEl.innerHTML = `<div class="dvp-main"><div class="dvp-eyebrow-row"><div class="dvp-eyebrow">살까? 말까?</div><div class="dvp-conf"><div class="dvp-conf-num">${conv}<span class="dvp-conf-pct">%</span></div><div class="dvp-conf-lbl">확신도</div></div></div><div class="dvp-word">${_pvWord}</div><div class="dvp-reason">${_pvReason}</div></div><div class="dvp-bg">${_pvBg}</div>`;
   }
   // ── 렌더 (entry-verdict 카드는 내부 데이터 보존용, UI 미노출) ──
   card.style.display = 'none';

@@ -2570,10 +2570,6 @@ td.score-col {
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
 }
 /* 상단 광택 + 하단 음영 — 단색 그라데이션을 입체적으로 */
 .dp-verdict-poster::before {
@@ -2593,28 +2589,12 @@ td.score-col {
   flex: 1;
   min-width: 0;
 }
-.dvp-conf {
-  flex-shrink: 0;
-  background: rgba(255,255,255,.18);
-  border-radius: 12px;
-  padding: 8px 14px;
-  text-align: center;
-}
-.dvp-conf-num {
-  font-size: 28px;
-  font-weight: 900;
-  color: white;
-  line-height: 1;
-}
-.dvp-conf-pct {
-  font-size: 12px;
-  font-weight: 700;
-  vertical-align: super;
-}
-.dvp-conf-lbl {
-  font-size: 10px;
-  color: rgba(255,255,255,.8);
-  margin-top: 2px;
+.dvp-eyebrow-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
 }
 .dvp-eyebrow {
   font-size: 11px;
@@ -2622,6 +2602,32 @@ td.score-col {
   opacity: .8;
   letter-spacing: .08em;
   text-transform: uppercase;
+}
+.dvp-conf {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  background: rgba(255,255,255,.18);
+  border-radius: 10px;
+  padding: 4px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.dvp-conf-num {
+  font-size: 20px;
+  font-weight: 900;
+  color: white;
+  line-height: 1;
+}
+.dvp-conf-pct {
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: super;
+}
+.dvp-conf-lbl {
+  font-size: 10px;
+  color: rgba(255,255,255,.8);
 }
 .dvp-word {
   font-size: 38px;

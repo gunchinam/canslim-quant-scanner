@@ -5296,67 +5296,32 @@ details[open] .nm-acc-chevron { transform: rotate(180deg); }
 }
 .ff-tag { font-size: 10px; color: var(--text-tertiary); width: 44px; text-align: right; }
 
-/* ── CNN 공탐지수 패널 ───────────────────────────────────────────────── */
-.fg-panel {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 5px 16px;
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border);
-  min-height: 68px;
-}
-.fg-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.fg-label {
-  font-size: 10px;
-  color: var(--text-secondary);
-  letter-spacing: 0.03em;
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  line-height: 1;
-}
-.fg-score {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1;
-  min-width: 40px;
-  text-align: center;
-}
-.fg-rating {
-  font-size: 12px;
-  font-weight: 600;
-  max-width: 70px;
-  line-height: 1.2;
-}
-.fg-compare {
-  font-size: 11px;
-  color: var(--text-secondary);
+/* ── CNN 공탐지수 위젯 (매크로 스트립 내 정사각형) ─────────────────── */
+.fg-widget {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  line-height: 1.4;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  flex-shrink: 0;
+  cursor: default;
 }
-.fg-sep { margin: 0 3px; opacity: 0.3; }
-.fg-chart {
-  flex: 1;
-  min-width: 0;
-  height: 56px;
+.fg-gauge {
+  width: 76px;
+  height: 52px;
   display: block;
 }
-.fg-axis {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  height: 56px;
+.fg-w-lbl {
   font-size: 9px;
   color: var(--text-secondary);
-  opacity: 0.45;
-  white-space: nowrap;
-  flex-shrink: 0;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  margin-bottom: 1px;
+}
+.fg-w-rtg {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  margin-top: 1px;
+  text-align: center;
 }

@@ -3755,20 +3755,48 @@ function _renderEntryVerdict(d) {
   const _spEl = document.getElementById('dp-split-plan');
   if (_spEl) _spEl.innerHTML = splitHtml;
 
-  // ── 스윙 목표가 구간 ──
+  // ── 스윙 목표가 구간 (동적 손익비) — 스윙 조건 충족 종목만 표시 ──
   const _stEl = document.getElementById('dp-swing-target');
-  if (_stEl && price != null && price > 0) {
-    const _atrP = d.ATRPercent != null ? Number(d.ATRPercent) : (atr != null ? atr : 3.0);
-    const _stopLoss  = price * (1 - _atrP / 100);
-    const _tgt1      = price * (1 + _atrP * 2 / 100);
-    const _tgt2      = price * (1 + _atrP * 4 / 100);
-    const _broker    = d.BrokerTarget || d.NomuraTarget || null;
+  const _swingPass = (() => {
+    const _g = _stockGrade(d.TotalScore);
+    return (_g === 'S' || _g === 'A')
+        && d.EntryStatus !== 'AVOID' && d.EntryStatus !== 'RED'
+        && typeof d.Signal === 'string' && /BREAKOUT|PIVOT/.test(d.Signal)
+        && (d.EntryConsecutive ?? 0) >= 3
+        && (d.RSRating ?? 0) >= 80
+        && (d.VolRatio ?? 0) >= 1.5;
+  })();
+  if (_stEl && _swingPass && price != null && price > 0) {
+    const _atrP   = d.ATRPercent != null ? Number(d.ATRPercent) : (atr != null ? atr : 3.0);
+    const _rs     = d.RSRating   != null ? Number(d.RSRating)   : 0;
+    const _vol    = d.VolRatio   != null ? Number(d.VolRatio)   : 1;
+
+    // RSRating 기반 기본 손익비 결정
+    let _rr1 = _rs >= 95 ? 3.5 : _rs >= 90 ? 3.0 : _rs >= 85 ? 2.5 : 2.0;
+    // 거래량 급증(2배↑) 보너스
+    if (_vol >= 2.0) _rr1 += 0.5;
+    // 확신도(conv) 보너스
+    if (conv >= 80) _rr1 += 0.5;
+    _rr1 = Math.min(_rr1, 5.0); // 최대 5:1
+
+    const _rr2      = _rr1 + 1.0;
+    const _stopDist = price * _atrP / 100;
+    const _stopLoss = price - _stopDist;
+    const _tgt1     = price + _stopDist * _rr1;
+    const _tgt2     = price + _stopDist * _rr2;
+
+    // 증권사 목표가 — 현재가 위일 때만 표시
+    const _rawBroker = d.BrokerTarget || d.NomuraTarget || null;
+    const _broker    = (_rawBroker && _rawBroker > price) ? _rawBroker : null;
     const _brokerUp  = _broker ? ((_broker - price) / price * 100) : null;
-    const _fp = v => fmtPrice(v);
+
+    const _fp  = v => fmtPrice(v);
     const _pct = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+    const _rrLabel = r => `RR ${r.toFixed(1)}:1`;
+
     _stEl.style.display = '';
     _stEl.innerHTML = `
-      <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:.4px;margin-bottom:6px;">🏹 스윙 목표 구간</div>
+      <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:.4px;margin-bottom:6px;">🏹 스윙 목표 구간 <span style="font-weight:400;font-size:10px;">RS${Math.round(_rs)} · ATR ${_atrP.toFixed(1)}% 기반</span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr${_broker ? ' 1fr' : ''};gap:6px;">
         <div style="background:var(--surface-subtle);border-radius:10px;padding:8px 10px;border-left:3px solid #DC2626;">
           <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px;">손절 (−1 ATR)</div>
@@ -3776,12 +3804,12 @@ function _renderEntryVerdict(d) {
           <div style="font-size:10px;color:#DC2626;">${_pct((_stopLoss - price) / price * 100)}</div>
         </div>
         <div style="background:var(--surface-subtle);border-radius:10px;padding:8px 10px;border-left:3px solid #F59E0B;">
-          <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px;">1차 목표 (+2 ATR)</div>
+          <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px;">1차 목표 (${_rrLabel(_rr1)})</div>
           <div style="font-size:13px;font-weight:700;color:#F59E0B;">${_fp(_tgt1)}</div>
           <div style="font-size:10px;color:#F59E0B;">${_pct((_tgt1 - price) / price * 100)}</div>
         </div>
         <div style="background:var(--surface-subtle);border-radius:10px;padding:8px 10px;border-left:3px solid #16A34A;">
-          <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px;">2차 목표 (+4 ATR)</div>
+          <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px;">2차 목표 (${_rrLabel(_rr2)})</div>
           <div style="font-size:13px;font-weight:700;color:#16A34A;">${_fp(_tgt2)}</div>
           <div style="font-size:10px;color:#16A34A;">${_pct((_tgt2 - price) / price * 100)}</div>
         </div>
@@ -3791,7 +3819,7 @@ function _renderEntryVerdict(d) {
           <div style="font-size:10px;color:#2563EB;">${_pct(_brokerUp)}</div>
         </div>` : ''}
       </div>
-      <div style="font-size:10px;color:var(--text-tertiary);margin-top:5px;">ATR ${_atrP.toFixed(1)}% 기준 · 1차 익절 후 절반 보유, 2차에서 전량 매도 또는 손절가 추격</div>
+      <div style="font-size:10px;color:var(--text-tertiary);margin-top:5px;">1차 도달 시 절반 익절 · 손절가를 매입가 근처로 올려 추격 · 2차에서 전량 정리</div>
     `;
   } else if (_stEl) {
     _stEl.style.display = 'none';
@@ -5697,55 +5725,48 @@ function _fgColor(score) {
 }
 
 function renderFearGreed(d) {
-  const panel    = document.getElementById('fg-panel');
-  const scoreEl  = document.getElementById('fg-score');
-  const ratingEl = document.getElementById('fg-rating');
-  const cmpEl    = document.getElementById('fg-compare');
-  const chartEl  = document.getElementById('fg-chart');
-  if (!panel || !scoreEl) return;
-  if (!d || d.score == null) { panel.style.display = 'none'; return; }
+  const widget = document.getElementById('fg-widget');
+  if (!widget) return;
+  if (!d || d.score == null) { widget.style.display = 'none'; return; }
 
-  panel.style.display = '';
+  widget.style.display = '';
   const score = d.score;
   const color = _fgColor(score);
-  scoreEl.textContent = Math.round(score);
-  scoreEl.style.color = color;
-  ratingEl.textContent = d.rating_ko || d.rating || '';
-  ratingEl.style.color = color;
 
-  const cp = [];
-  if (d.prev_week  != null) cp.push(`1주전 <b>${Math.round(d.prev_week)}</b>`);
-  if (d.prev_month != null) cp.push(`1달전 <b>${Math.round(d.prev_month)}</b>`);
-  if (d.prev_year  != null) cp.push(`1년전 <b>${Math.round(d.prev_year)}</b>`);
-  cmpEl.innerHTML = cp.join('<span class="fg-sep">|</span>');
+  // 반원형 게이지 SVG (viewBox: 100×68, 반원 하단 중앙)
+  const cx = 50, cy = 52, r = 38;
+  // score 0 → 왼쪽(π), score 100 → 오른쪽(0)
+  const ang = Math.PI * (1 - score / 100);
+  const nx = (cx + r * Math.cos(ang)).toFixed(1);
+  const ny = (cy - r * Math.sin(ang)).toFixed(1);
 
-  if (!chartEl || !d.history || d.history.length < 2) return;
-  const W = 400, H = 56, P = 3;
-  const pts = d.history, n = pts.length;
-  const xs = pts.map((_, i) => P + (W - P * 2) * i / (n - 1));
-  const ys = pts.map(p => P + (H - P * 2) * (1 - p.y / 100));
-
-  const bands = [
-    [0,  25, 'rgba(231,76,60,0.10)'],
-    [25, 44, 'rgba(230,126,34,0.07)'],
-    [44, 56, 'rgba(240,180,41,0.07)'],
-    [56, 75, 'rgba(46,204,113,0.07)'],
-    [75, 100,'rgba(26,188,156,0.10)'],
-  ];
+  // 5구간 배경 호
+  const zoneClrs = ['#e74c3c','#e67e22','#f0b429','#2ecc71','#1abc9c'];
   let svg = '';
-  for (const [y1, y2, fill] of bands) {
-    const top = (P + (H - P * 2) * (1 - y2 / 100)).toFixed(1);
-    const bot = (P + (H - P * 2) * (1 - y1 / 100)).toFixed(1);
-    svg += `<rect x="${P}" y="${top}" width="${W - P * 2}" height="${(+bot - +top).toFixed(1)}" fill="${fill}"/>`;
+  for (let i = 0; i < 5; i++) {
+    const a1 = Math.PI * (1 - i / 5);
+    const a2 = Math.PI * (1 - (i + 1) / 5);
+    const x1 = (cx + r * Math.cos(a1)).toFixed(1);
+    const y1 = (cy - r * Math.sin(a1)).toFixed(1);
+    const x2 = (cx + r * Math.cos(a2)).toFixed(1);
+    const y2 = (cy - r * Math.sin(a2)).toFixed(1);
+    svg += `<path d="M${x1},${y1} A${r},${r} 0 0,0 ${x2},${y2}" fill="none" stroke="${zoneClrs[i]}" stroke-width="8" opacity="0.22"/>`;
   }
-  const midY = (P + (H - P * 2) * 0.5).toFixed(1);
-  svg += `<line x1="${P}" y1="${midY}" x2="${W - P}" y2="${midY}" stroke="rgba(255,255,255,0.12)" stroke-width="0.7" stroke-dasharray="4,3"/>`;
-  const linePts = xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
-  const area = `M${P},${H} ` + xs.map((x, i) => `L${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ') + ` L${(W - P).toFixed(1)},${H} Z`;
-  svg += `<path d="${area}" fill="${color}" opacity="0.18"/>`;
-  svg += `<polyline points="${linePts}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
-  svg += `<circle cx="${xs[n-1].toFixed(1)}" cy="${ys[n-1].toFixed(1)}" r="3.5" fill="${color}" stroke="#1a1a2e" stroke-width="1.5"/>`;
-  chartEl.innerHTML = svg;
+  // 활성 호 (현재 점수까지)
+  if (score > 0.5) {
+    const laf = score > 50 ? 1 : 0;
+    svg += `<path d="M${cx - r},${cy} A${r},${r} 0 ${laf},0 ${nx},${ny}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"/>`;
+  }
+  // 바늘
+  svg += `<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
+  svg += `<circle cx="${cx}" cy="${cy}" r="3" fill="${color}"/>`;
+  // 점수 텍스트
+  svg += `<text x="${cx}" y="${cy + 1}" text-anchor="middle" dominant-baseline="hanging" font-size="12" font-weight="700" fill="${color}">${Math.round(score)}</text>`;
+
+  widget.innerHTML =
+    `<div class="fg-w-lbl">CNN 공탐</div>` +
+    `<svg viewBox="0 0 100 68" class="fg-gauge">${svg}</svg>` +
+    `<div class="fg-w-rtg" style="color:${color}">${esc(d.rating_ko || d.rating || '')}</div>`;
 }
 
 function renderMacro(d) {
@@ -6812,13 +6833,21 @@ function _renderNomuraScore(d) {
         </div>
       </div>`;
     };
+    const isKR = sb.altman_z_contribution !== undefined;
     breakdownHtml = `
       <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border,#1e293b);">
         <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.05em;margin-bottom:8px;">점수 기여도</div>
-        ${mkBar('TK 퀄리티 (max 80)', sb.tk_contribution||0, 80, 'var(--brand,#3b82f6)')}
-        ${mkBar('Piotroski (max 10)', sb.piotroski_contribution||0, 10, '#22c55e')}
-        ${mkBar('기관 모멘텀 (max 4)', sb.qoq_contribution||0, 4, '#a78bfa')}
-        ${mkBar('1개월 수익률 (max 6)', sb.momentum_1m_contribution||0, 6, '#f59e0b')}
+        ${isKR
+          ? mkBar('Piotroski (max 40)', sb.piotroski_contribution||0, 40, '#22c55e')
+            + mkBar('Altman Z (max 20)', sb.altman_z_contribution||0, 20, 'var(--brand,#3b82f6)')
+            + mkBar('Beneish M (max 10)', sb.beneish_contribution||0, 10, '#a78bfa')
+            + mkBar('1개월 수익률 (max 20)', sb.momentum_1m_contribution||0, 20, '#f59e0b')
+            + mkBar('기관/외인 수급 (max 10)', sb.inst_contribution||0, 10, '#34d399')
+          : mkBar('TK 퀄리티 (max 80)', sb.tk_contribution||0, 80, 'var(--brand,#3b82f6)')
+            + mkBar('Piotroski (max 10)', sb.piotroski_contribution||0, 10, '#22c55e')
+            + mkBar('기관 모멘텀 (max 4)', sb.qoq_contribution||0, 4, '#a78bfa')
+            + mkBar('1개월 수익률 (max 6)', sb.momentum_1m_contribution||0, 6, '#f59e0b')
+        }
       </div>`;
   }
 

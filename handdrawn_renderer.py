@@ -304,12 +304,13 @@ class HandDrawnChartRenderer:
                         if p >= 1000: return f"{p:,.0f}"
                         if p >= 10:   return f"{p:,.1f}"
                         return f"{p:,.2f}"
-                    for lvl, col in zip(fib_levels, fib_colors):
+                    for i, (lvl, col) in enumerate(zip(fib_levels, fib_colors)):
                         fib_price = h_min + (h_max - h_min) * lvl
                         ax_price.axhline(fib_price, color=col, linewidth=1.0 * lw_scale,
                                          linestyle=(0, (5, 4)), alpha=0.70)
+                        x_pos = 1.01 if i % 2 == 0 else 1.09
                         ax_price.text(
-                            1.01, fib_price,
+                            x_pos, fib_price,
                             f"{fib_sym[lvl]}\n{_fmt_fib(fib_price)}",
                             transform=ax_price.get_yaxis_transform(),
                             fontsize=_ffs, color=col, va="center", ha="left",

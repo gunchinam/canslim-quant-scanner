@@ -258,7 +258,7 @@ class HandDrawnChartRenderer:
             for col, c, lw, dash in [
                 ("EMA20",  "#3182F6", 1.6 * lw_scale, None),
                 ("EMA50",  "#FF8A00", 1.4 * lw_scale, None),
-                ("EMA200", "#721FE5", 1.2 * lw_scale, (6, 4)),
+                ("EMA200", "#E05A00", 1.2 * lw_scale, (6, 4)),
             ]:
                 if col in self.hist.columns:
                     y = self.hist[col].values
@@ -297,8 +297,8 @@ class HandDrawnChartRenderer:
                     h_min = self.hist["Low"].min()
                     fib_levels = [0.236, 0.382, 0.5, 0.618, 0.786]
                     fib_colors = ["#a78bfa", "#8b5cf6", "#7c3aed", "#6d28d9", "#5b21b6"]
-                    fib_names  = {0.236: "얕은", 0.382: "1차지지", 0.5: "중간",
-                                  0.618: "황금비", 0.786: "강한지지"}
+                    fib_sym    = {0.236: "F23", 0.382: "F38", 0.5: "F50",
+                                  0.618: "F62", 0.786: "F79"}
                     _ffs = max(8, int(fs_tick * 0.88))
                     def _fmt_fib(p):
                         if p >= 1000: return f"{p:,.0f}"
@@ -306,15 +306,16 @@ class HandDrawnChartRenderer:
                         return f"{p:,.2f}"
                     for lvl, col in zip(fib_levels, fib_colors):
                         fib_price = h_min + (h_max - h_min) * lvl
-                        ax_price.axhline(fib_price, color=col, linewidth=0.8 * lw_scale,
-                                         linestyle=(0, (5, 4)), alpha=0.55)
+                        ax_price.axhline(fib_price, color=col, linewidth=1.0 * lw_scale,
+                                         linestyle=(0, (5, 4)), alpha=0.70)
                         ax_price.text(
-                            0.99, fib_price,
-                            f"{_fmt_fib(fib_price)} {fib_names[lvl]}",
+                            1.01, fib_price,
+                            f"{fib_sym[lvl]}\n{_fmt_fib(fib_price)}",
                             transform=ax_price.get_yaxis_transform(),
-                            fontsize=_ffs, color=col, va="center", ha="right",
+                            fontsize=_ffs, color=col, va="center", ha="left",
+                            clip_on=False,
                             bbox=dict(boxstyle="round,pad=0.15", facecolor="white",
-                                      alpha=0.75, edgecolor=col, linewidth=0.6),
+                                      alpha=0.85, edgecolor=col, linewidth=0.6),
                         )
                     # Y축을 현재가 중심으로 타이트하게 — Fib 전체 범위가 너무 넓어지는 현상 방지
                     cur = float(close[-1])
@@ -351,16 +352,6 @@ class HandDrawnChartRenderer:
                         )
                 except Exception:
                     pass
-
-            # ── ⑨ 노무라式 배지 ─────────────────────────────────────
-            if self._nomura_score_data:
-                _nm = self._nomura_score_data
-                _score  = _nm.get("quantitative_score", 0) or 0
-                _rating = _nm.get("nomura_rating", "")  or ""
-                try:
-                    self._draw_nomura_badge(ax_price, _score, _rating, lw_scale)
-                except Exception as _badge_err:
-                    logging.debug("nomura badge draw failed: %s", _badge_err)
 
             # ── ② 거래량 + OBV 패널 ──────────────────────────────────
             vol = self.hist["Volume"].values
@@ -403,7 +394,7 @@ class HandDrawnChartRenderer:
                     f"{v/10000:.0f}만" if v >= 10000 else
                     f"{v:,.0f}" if v >= 1000 else
                     f"{v:,.1f}"))
-            fig.subplots_adjust(left=0.10, right=0.97, top=0.94, bottom=0.10, hspace=0.10)
+            fig.subplots_adjust(left=0.10, right=0.82, top=0.94, bottom=0.10, hspace=0.10)
 
             buf = io.BytesIO()
             fig.savefig(buf, format="png", dpi=self.dpi,

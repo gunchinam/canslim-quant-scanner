@@ -57,6 +57,9 @@ if not _app_sh_exists:
     _app_sh.setFormatter(_app_fmt)
     _root_logger.addHandler(_app_sh)
 
+# yfinance rate-limit WARNING 노이즈 억제 (ERROR 이상만 표시)
+logging.getLogger("yfinance").setLevel(logging.ERROR)
+
 # 앱 시작 시 저장된 설정을 환경변수에 반영
 apply_to_environ()
 
@@ -209,6 +212,11 @@ def _strip_heavy(rows: list) -> list:
     for r in rows:
         if not isinstance(r, dict):
             out.append(r)
+            continue
+        # 거래정지 종목 자동 제거 — 20일 평균 거래량이 0이면 거래 불가
+        avg_vol = r.get("_AvgVol20", None)
+        if avg_vol is not None and float(avg_vol) < 1:
+            logging.info("거래정지 종목 제외: %s (AvgVol20=%.0f)", r.get("Ticker", "?"), float(avg_vol))
             continue
         d = {k: v for k, v in r.items() if k not in _SCAN_STRIP_FIELDS}
         ep = d.get("EntryPlan")
@@ -2783,21 +2791,31 @@ def api_consensus(ticker: str):
                 for _row in _rows:
                     _tds = _re.findall(r'<td[^>]*>(.*?)</td>', _row, _re.DOTALL)
                     _cells = [_re.sub(r'<[^>]+>', '', td).strip() for td in _tds]
-                    _cells = [c for c in _cells if c]
+                    _cells = [c for c in _cells if c and c.strip() not in ('', '\xa0')]
+                    if len(_cells) < 4:
+                        continue
                     _firm, _tp, _date, _op = '', 0, '', ''
+                    # 날짜(YYYY.MM.DD) 위치를 먼저 찾아, 바로 앞 셀을 증권사명으로 사용
+                    _date_idx = -1
                     for _ci, _cell in enumerate(_cells):
+                        if _re.match(r'^\d{4}\.\d{2}\.\d{2}$', _cell.strip()):
+                            _date = _cell.strip()
+                            _date_idx = _ci
+                            break
+                    if _date_idx > 0:
+                        _firm = _cells[_date_idx - 1][:30]
+                    # 목표가: 첫 셀(종목명) 제외하고 숫자 범위 10000~10000000
+                    _search_to = _date_idx if _date_idx > 0 else len(_cells)
+                    for _cell in _cells[1:_search_to]:
                         _clean = _cell.replace('\xa0', '').replace(',', '').strip()
                         if _re.match(r'^\d+$', _clean):
                             _v = int(_clean)
                             if 10000 < _v < 10000000:
                                 _tp = _v
-                        elif not _firm and len(_cell) > 1 and not _re.match(r'^\d', _cell):
-                            _firm = _cell[:30]
-                        if _re.match(r'^\d{4}\.\d{2}\.\d{2}$', _cell.strip()):
-                            _date = _cell.strip()
-                    if _tp:
+                                break
+                    if _tp and _firm:
                         result["reports"].append({
-                            'firm':    _firm or '—',
+                            'firm':    _firm,
                             'target':  _tp,
                             'date':    _date,
                             'opinion': _op,

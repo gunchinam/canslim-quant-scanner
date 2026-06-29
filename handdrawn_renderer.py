@@ -290,38 +290,30 @@ class HandDrawnChartRenderer:
                 t.set_color("#444")
             plt.setp(ax_price.get_xticklabels(), visible=False)
 
-            # ── ⑤ Fibonacci 수평선 ─────────────────────────────────
+            # ── ⑤ Fibonacci 캡션 (차트 하단 한 줄) ────────────────
             if self._show_fib and len(self.hist) > 1:
                 try:
                     h_max = self.hist["High"].max()
                     h_min = self.hist["Low"].min()
                     fib_levels = [0.236, 0.382, 0.5, 0.618, 0.786]
-                    fib_colors = ["#a78bfa", "#8b5cf6", "#7c3aed", "#6d28d9", "#5b21b6"]
-                    fib_sym    = {0.236: "F23", 0.382: "F38", 0.5: "F50",
-                                  0.618: "F62", 0.786: "F79"}
-                    _ffs = max(8, int(fs_tick * 0.88))
+                    fib_sym    = {0.236: "23%", 0.382: "38%", 0.5: "50%",
+                                  0.618: "62%", 0.786: "79%"}
                     def _fmt_fib(p):
                         if p >= 1000: return f"{p:,.0f}"
                         if p >= 10:   return f"{p:,.1f}"
                         return f"{p:,.2f}"
-                    for i, (lvl, col) in enumerate(zip(fib_levels, fib_colors)):
-                        fib_price = h_min + (h_max - h_min) * lvl
-                        ax_price.axhline(fib_price, color=col, linewidth=1.0 * lw_scale,
-                                         linestyle=(0, (5, 4)), alpha=0.70)
-                        x_pos = 1.01 if i % 2 == 0 else 1.09
-                        ax_price.text(
-                            x_pos, fib_price,
-                            f"{fib_sym[lvl]}\n{_fmt_fib(fib_price)}",
-                            transform=ax_price.get_yaxis_transform(),
-                            fontsize=_ffs, color=col, va="center", ha="left",
-                            clip_on=False,
-                            bbox=dict(boxstyle="round,pad=0.15", facecolor="white",
-                                      alpha=0.85, edgecolor=col, linewidth=0.6),
-                        )
-                    # Y축을 현재가 중심으로 타이트하게 — Fib 전체 범위가 너무 넓어지는 현상 방지
-                    cur = float(close[-1])
-                    pad = (h_max - h_min) * 0.25
-                    ax_price.set_ylim(min(h_min, cur - pad), max(h_max, cur + pad) * 1.04)
+                    parts = [
+                        f"{fib_sym[lvl]} {_fmt_fib(h_min + (h_max - h_min) * lvl)}"
+                        for lvl in fib_levels
+                    ]
+                    caption = "Fib(120d)  " + "   ".join(parts)
+                    fig.text(
+                        0.5, 0.005, caption,
+                        ha="center", va="bottom",
+                        fontsize=max(7, int(fs_tick * 0.82)),
+                        color="#888888",
+                        fontfamily=KFONT or "DejaVu Sans",
+                    )
                 except Exception:
                     pass
 

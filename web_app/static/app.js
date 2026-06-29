@@ -4894,6 +4894,25 @@ function switchTab(tabId) {
 }
 
 
+function _renderFibChips(fibLevels) {
+  const wrap = document.getElementById('fib-chips');
+  if (!wrap) return;
+  if (!fibLevels || !fibLevels.length) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.innerHTML = '<span style="font-size:11px;font-weight:700;color:var(--text-secondary);white-space:nowrap;">Fib 120d</span>';
+  fibLevels.forEach(f => {
+    const chip = document.createElement('span');
+    chip.textContent = `${f.pct} ${f.price.toLocaleString()}`;
+    chip.style.cssText = f.key
+      ? 'background:#ede9fe;color:#7c3aed;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;white-space:nowrap;'
+      : 'background:#f1f0ff;color:#aaa;border-radius:20px;padding:3px 10px;font-size:11px;white-space:nowrap;';
+    wrap.appendChild(chip);
+  });
+  wrap.style.display = 'flex';
+}
+
 async function loadFourAxis(ticker) {
   const loading = document.getElementById('fouraxis-loading');
   const errDiv  = document.getElementById('fouraxis-error');
@@ -4906,6 +4925,7 @@ async function loadFourAxis(ticker) {
     document.getElementById('fouraxis-chart').src = 'data:image/png;base64,' + cached.chart;
     chartW.style.display = 'block';
     loading.style.display = 'none';
+    _renderFibChips(cached.fib_levels);
     return;
   }
 
@@ -4925,6 +4945,7 @@ async function loadFourAxis(ticker) {
     _clientCache.set(cacheKey, d);
     document.getElementById('fouraxis-chart').src = 'data:image/png;base64,' + d.chart;
     chartW.style.display = 'block';
+    _renderFibChips(d.fib_levels);
     _renderRsRating(d.rs_rating_data);
     _renderHeatSignal(d.heat_signal);
   } catch (e) {

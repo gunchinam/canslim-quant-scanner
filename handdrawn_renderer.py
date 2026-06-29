@@ -395,7 +395,7 @@ class HandDrawnChartRenderer:
 
             buf = io.BytesIO()
             fig.savefig(buf, format="png", dpi=self.dpi,
-                        facecolor="#FFFFFF", bbox_inches="tight")
+                        facecolor="#FFFFFF")
             plt.close(fig)
             buf.seek(0)
             return Image.open(buf).copy()

@@ -5489,7 +5489,8 @@ a.news-card-title:hover { color: var(--brand); }
 /* ── 드로어 핸드드로잉 차트 ─────────────────────────────── */
 .dp-hd-chart-wrap {
   position: relative;
-  width: 100%;
+  width: 90%;
+  margin: 0 auto;
   aspect-ratio: 12 / 5.6;
   overflow: hidden;
   background: var(--card);

@@ -3787,9 +3787,9 @@ function _renderEntryVerdict(d) {
   if (_mddV != null && _mddV < -25) _calcTRows.push({lbl: `고낙폭 (고점 대비 ${_mddV.toFixed(0)}%)`, delta: -8,
     why: `현재 낙폭 ${_mddV.toFixed(0)}% < -25%p 구간. 저점매수 신호와 별개로, 낙폭 -25% 이상 종목은 단기 추가 하락 진입이 빈번해요.`});
   const _timingCalcHtml =
-    `<div class="gmm-calc-desc">확신도 = 기준 50점 + 아래 신호 합산. 각 신호가 <strong>왜</strong> 더하거나 빼는지 수치 근거를 확인하세요.</div>` +
-    `<div class="gmm-calc-row"><span class="gmm-calc-lbl">기준점<span class="gmm-calc-why">어떤 신호도 없을 때의 중립값. 완전 랜덤 진입 시 이론적 기댓값 50%에 대응해요.</span></span><span class="gmm-calc-base">50점</span></div>` +
-    _calcTRows.map(r => `<div class="gmm-calc-row"><span class="gmm-calc-lbl">${r.lbl}${r.why ? `<span class="gmm-calc-why">${r.why}</span>` : ''}</span><span class="gmm-calc-delta ${r.delta > 0 ? 'pos' : 'neg'}">${r.delta > 0 ? '+' : ''}${r.delta}점</span></div>`).join('') +
+    `<div class="gmm-calc-desc">확신도 = 기준 50점 + 신호 합산 <span style="opacity:.6;font-size:9px">(ⓘ hover → 근거)</span></div>` +
+    `<div class="gmm-calc-row"><span class="gmm-calc-lbl">기준점<span class="gmm-calc-info">ⓘ<span class="gmm-calc-why">어떤 신호도 없을 때의 중립값. 완전 랜덤 진입 시 이론적 기댓값 50%에 대응해요.</span></span></span><span class="gmm-calc-base">50점</span></div>` +
+    _calcTRows.map(r => `<div class="gmm-calc-row"><span class="gmm-calc-lbl">${r.lbl}${r.why ? `<span class="gmm-calc-info">ⓘ<span class="gmm-calc-why">${r.why}</span></span>` : ''}</span><span class="gmm-calc-delta ${r.delta > 0 ? 'pos' : 'neg'}">${r.delta > 0 ? '+' : ''}${r.delta}점</span></div>`).join('') +
     `<div class="gmm-calc-row gmm-calc-total"><span class="gmm-calc-lbl">최종 타이밍</span><span class="gmm-calc-result">${conv}%</span></div>`;
 
   // ── 산점도 매트릭스 위젯 (타이밍 × 펀더멘털) ──
@@ -4919,7 +4919,7 @@ async function loadFourAxis(ticker) {
   const chartW  = document.getElementById('fouraxis-chart-wrap');
   if (!loading) return;
 
-  const cacheKey = `fouraxis:${ticker}:${currentMarket}`;
+  const cacheKey = `fouraxis:v2:${ticker}:${currentMarket}`;
   const cached = _clientCache.get(cacheKey);
   if (cached) {
     document.getElementById('fouraxis-chart').src = 'data:image/png;base64,' + cached.chart;

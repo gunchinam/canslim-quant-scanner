@@ -281,7 +281,7 @@ class HandDrawnChartRenderer:
             ax_price.set_title(
                 self.ticker,
                 fontname=KFONT or "DejaVu Sans",
-                fontsize=fs_title, color="#191919", loc="left", pad=8,
+                fontsize=fs_title, color="#191919", loc="left", pad=2,
             )
             leg = ax_price.legend(loc="upper left", fontsize=fs_legend, frameon=False, ncol=4)
             for t in leg.get_texts():
@@ -358,7 +358,7 @@ class HandDrawnChartRenderer:
                     f"{v/10000:.0f}만" if v >= 10000 else
                     f"{v:,.0f}" if v >= 1000 else
                     f"{v:,.1f}"))
-            fig.subplots_adjust(left=0.10, right=0.82, top=0.94, bottom=0.10, hspace=0.10)
+            fig.subplots_adjust(left=0.10, right=0.82, top=0.97, bottom=0.10, hspace=0.10)
 
             buf = io.BytesIO()
             fig.savefig(buf, format="png", dpi=self.dpi,

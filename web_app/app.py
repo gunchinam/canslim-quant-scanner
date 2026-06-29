@@ -2763,19 +2763,37 @@ def api_consensus(ticker: str):
         except Exception as e:
             logging.warning("consensus integration: %s", e)
 
-        # 2) integration researches → 리포트 목록 (firm/date; 목표가는 API에서 미제공)
-        for _it in _researches_meta[:5]:
-            _firm = _it.get('bnm', '')
-            if not _firm:
-                continue
+        # 2) integration researches → 리포트 목록 (개별 API로 목표가 조회)
+        def _fetch_report_detail(report_id):
+            try:
+                ep = f"https://m.stock.naver.com/api/research/company/{report_id}"
+                req2 = urllib.request.Request(ep, headers=_ua)
+                with urllib.request.urlopen(req2, timeout=4) as resp2:
+                    rd = _json.loads(resp2.read().decode('utf-8'))
+                rc = rd.get('researchContent') or {}
+                return {
+                    'target':  _int(rc.get('goalPrice') or ''),
+                    'opinion': rc.get('opinion', ''),
+                }
+            except Exception:
+                return {'target': 0, 'opinion': ''}
+
+        _meta_items = [it for it in _researches_meta[:5] if it.get('bnm')]
+        _report_ids = [it.get('id', 0) for it in _meta_items]
+
+        from concurrent.futures import ThreadPoolExecutor as _TPE
+        with _TPE(max_workers=5) as _ex:
+            _details = list(_ex.map(_fetch_report_detail, _report_ids))
+
+        for _it, _detail in zip(_meta_items, _details):
             _raw_date = _it.get('wdt', '')
             if len(_raw_date) == 8 and _raw_date.isdigit():
                 _raw_date = f"{_raw_date[:4]}.{_raw_date[4:6]}.{_raw_date[6:]}"
             result["reports"].append({
-                'firm':    _firm,
-                'target':  0,
+                'firm':    _it.get('bnm', ''),
+                'target':  _detail['target'],
                 'date':    _raw_date,
-                'opinion': '',
+                'opinion': _detail['opinion'],
             })
 
         # 리포트 목표가에서 high/low/count/mean 계산
@@ -3178,7 +3196,7 @@ def _warm_four_axis(ticker: str, market: str, timeframe: str = "default") -> Non
 
     드로어가 핸드드로잉 차트를 표시하므로 c1(차트 포함) 페이로드를 워밍한다.
     """
-    cache_key = f"{ticker}:{market}:{timeframe}:c1"
+    cache_key = f"v2:{ticker}:{market}:{timeframe}:c1"
     with _four_axis_cache_lock:
         if cache_key in _four_axis_cache:
             return  # BG warm hit — move_to_end 호출 안 함 (cold entry가 hot으로 위장하는 것 방지)
@@ -3225,7 +3243,7 @@ def api_four_axis(ticker: str):
             logging.debug("silent except (app.py): %s", _e)
     timeframe = (request.args.get("timeframe") or "default").strip() or "default"
     want_chart = (request.args.get("chart", "1") != "0")  # 드로어는 chart=0 → 핸드드로잉 렌더 생략
-    cache_key = f"{ticker}:{market}:{timeframe}:{'c1' if want_chart else 'c0'}"
+    cache_key = f"v2:{ticker}:{market}:{timeframe}:{'c1' if want_chart else 'c0'}"
     now = int(time.time())
     with _four_axis_cache_lock:
         cached = _four_axis_cache.get(cache_key)

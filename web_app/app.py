@@ -2734,94 +2734,49 @@ def api_consensus(ticker: str):
             try: return int(str(v).replace(',', ''))
             except: return 0
 
-        # 1) integration API ? ???? ?? (??/??/??/??)
+        # 1) integration API → consensusInfo + researches 메타
+        _researches_meta = []
         try:
             url = f"https://m.stock.naver.com/api/stock/{code}/integration"
             req = urllib.request.Request(url, headers=_ua)
             with urllib.request.urlopen(req, timeout=5) as resp:
                 data = _json.loads(resp.read().decode('utf-8'))
             ci = data.get('consensusInfo') or {}
+            _researches_meta = data.get('researches') or []
+
+            # recommMean: 1~5 float → 한국어 투자의견 (priceTargetHigh/Low/count/investmentOpinion 필드 제거됨)
+            _rm = float(ci.get('recommMean') or 0)
+            if _rm >= 4.5:   _opinion = '강력매수'
+            elif _rm >= 3.5: _opinion = '매수'
+            elif _rm >= 2.5: _opinion = '중립'
+            elif _rm >= 1.5: _opinion = '매도'
+            elif _rm > 0:    _opinion = '강력매도'
+            else:            _opinion = ''
+
             result["summary"] = {
                 "mean":    _int(ci.get('priceTargetMean', '')),
                 "high":    _int(ci.get('priceTargetHigh', '')),
-                "low":     _int(ci.get('priceTargetLow', '')),
-                "count":   _int(ci.get('targetPriceCount', '') or ci.get('consensusCount', '') or ci.get('stockFirmCount', '')),
-                "opinion": ci.get('investmentOpinion', ''),
+                "low":     _int(ci.get('priceTargetLow',  '')),
+                "count":   _int(ci.get('targetPriceCount', '')) or len(_researches_meta),
+                "opinion": _opinion,
             }
         except Exception as e:
             logging.warning("consensus integration: %s", e)
 
-        # 2) research API ? ?? ??? ???
-        for ep in [
-            f"https://m.stock.naver.com/api/stock/{code}/finance/research?pageSize=5",
-            f"https://m.stock.naver.com/api/stock/{code}/research?pageSize=5",
-        ]:
-            try:
-                req2 = urllib.request.Request(ep, headers=_ua)
-                with urllib.request.urlopen(req2, timeout=5) as resp2:
-                    rd = _json.loads(resp2.read().decode('utf-8'))
-                items = rd if isinstance(rd, list) else (rd.get('list') or rd.get('reports') or rd.get('items') or [])
-                for it in items[:5]:
-                    firm = it.get('stockFirmName','') or it.get('brokerName','') or it.get('provider','')
-                    tp   = it.get('priceTarget','') or it.get('targetPrice','')
-                    if firm:
-                        result["reports"].append({
-                            'firm':    firm,
-                            'target':  _int(tp),
-                            'date':    it.get('date','') or it.get('writeDate',''),
-                            'opinion': it.get('investmentOpinion','') or it.get('opinion',''),
-                        })
-                if result["reports"]:
-                    break
-            except Exception:
+        # 2) integration researches → 리포트 목록 (firm/date; 목표가는 API에서 미제공)
+        for _it in _researches_meta[:5]:
+            _firm = _it.get('bnm', '')
+            if not _firm:
                 continue
-
-        # 3) PC Naver Finance HTML 파싱 (JSON API 404 시 폴백)
-        if not result["reports"]:
-            try:
-                import re as _re
-                _html_url = (
-                    f"https://finance.naver.com/research/company_list.naver"
-                    f"?search_type=itemCode&itemcode={code}&page=1"
-                )
-                _req3 = urllib.request.Request(_html_url, headers=_ua)
-                with urllib.request.urlopen(_req3, timeout=8) as _resp3:
-                    _html = _resp3.read().decode('cp949', errors='replace')
-                _rows = _re.findall(r'<tr[^>]*>(.*?)</tr>', _html, _re.DOTALL)
-                for _row in _rows:
-                    _tds = _re.findall(r'<td[^>]*>(.*?)</td>', _row, _re.DOTALL)
-                    _cells = [_re.sub(r'<[^>]+>', '', td).strip() for td in _tds]
-                    _cells = [c for c in _cells if c and c.strip() not in ('', '\xa0')]
-                    if len(_cells) < 4:
-                        continue
-                    _firm, _tp, _date, _op = '', 0, '', ''
-                    # 날짜(YYYY.MM.DD) 위치를 먼저 찾아, 바로 앞 셀을 증권사명으로 사용
-                    _date_idx = -1
-                    for _ci, _cell in enumerate(_cells):
-                        if _re.match(r'^\d{4}\.\d{2}\.\d{2}$', _cell.strip()):
-                            _date = _cell.strip()
-                            _date_idx = _ci
-                            break
-                    if _date_idx > 0:
-                        _firm = _cells[_date_idx - 1][:30]
-                    # 목표가: 첫 셀(종목명) 제외하고 숫자 범위 10000~10000000
-                    _search_to = _date_idx if _date_idx > 0 else len(_cells)
-                    for _cell in _cells[1:_search_to]:
-                        _clean = _cell.replace('\xa0', '').replace(',', '').strip()
-                        if _re.match(r'^\d+$', _clean):
-                            _v = int(_clean)
-                            if 10000 < _v < 10000000:
-                                _tp = _v
-                                break
-                    if _tp and _firm:
-                        result["reports"].append({
-                            'firm':    _firm,
-                            'target':  _tp,
-                            'date':    _date,
-                            'opinion': _op,
-                        })
-            except Exception as _he:
-                logging.debug("naver html consensus fallback: %s", _he)
+            _raw_date = _it.get('wdt', '')
+            if len(_raw_date) == 8 and _raw_date.isdigit():
+                _raw_date = f"{_raw_date[:4]}.{_raw_date[4:6]}.{_raw_date[6:]}"
+            result["reports"].append({
+                'firm':    _firm,
+                'target':  0,
+                'date':    _raw_date,
+                'opinion': '',
+            })
 
         # 리포트 목표가에서 high/low/count/mean 계산
         if result["reports"]:
@@ -3027,6 +2982,7 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
             logging.debug("silent except (app.py): %s", _e)
         chart_title = chart_title or ticker
 
+        _fib_levels = None
         if want_chart:
             _sr_data      = None
             _nomura_data  = None
@@ -3042,12 +2998,28 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
             except Exception:
                 pass
 
+            # Fib 레벨 계산 — 렌더러에서 뺀 뒤 payload로 전달
+            _fib_levels = None
+            if hist is not None and len(hist) > 1:
+                _h_max = float(hist["High"].max())
+                _h_min = float(hist["Low"].min())
+                _fib_lvls = [
+                    (0.236, "23%", False),
+                    (0.382, "38%", True),
+                    (0.5,   "50%", True),
+                    (0.618, "62%", True),
+                    (0.786, "79%", False),
+                ]
+                _fib_levels = [
+                    {"pct": sym, "price": round(_h_min + (_h_max - _h_min) * r, 2), "key": key}
+                    for r, sym, key in _fib_lvls
+                ]
+
             renderer = HandDrawnChartRenderer(
                 hist, result, ticker=chart_title,
                 width_px=1140, height_px=532, dpi=100,
                 support=_sr_data[0] if _sr_data else None,
                 resistance=_sr_data[1] if _sr_data else None,
-                show_fib=True,
                 show_sr=_sr_data is not None,
                 nomura_score_data=_nomura_data,
             )
@@ -3080,6 +3052,7 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
         rd = _sanitize_np(result.to_dict())
         payload = {
             "chart": chart_b64,
+            "fib_levels": _fib_levels,
             "phase": rd["phase"],
             "signal_stars": rd["signal_stars"],
             "haiku": rd["haiku"],

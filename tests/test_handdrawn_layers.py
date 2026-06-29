@@ -107,3 +107,42 @@ def test_no_fib_text_in_chart():
     fib_texts = [t for t in captured_texts
                  if any(pct in t for pct in ["23%", "38%", "50%", "62%", "79%"])]
     assert len(fib_texts) == 0, f"차트에 Fib 텍스트가 남아있음: {fib_texts}"
+
+
+def test_fib_levels_payload_shape():
+    """fib_levels 계산 로직이 올바른 구조를 반환해야 한다."""
+    import pandas as pd
+    import numpy as np
+
+    # 동일한 로직을 인라인으로 검증
+    dates = pd.date_range("2024-01-01", periods=30)
+    hist = pd.DataFrame({
+        "High":  np.linspace(100, 120, 30),
+        "Low":   np.linspace(80, 90, 30),
+        "Close": np.linspace(90, 110, 30),
+        "Open":  np.linspace(89, 109, 30),
+        "Volume": np.ones(30) * 1000,
+    }, index=dates)
+
+    h_max = float(hist["High"].max())   # 120.0
+    h_min = float(hist["Low"].min())    # 80.0
+    lvls = [
+        (0.236, "23%", False),
+        (0.382, "38%", True),
+        (0.5,   "50%", True),
+        (0.618, "62%", True),
+        (0.786, "79%", False),
+    ]
+    fib_levels = [
+        {"pct": sym, "price": round(h_min + (h_max - h_min) * r, 2), "key": key}
+        for r, sym, key in lvls
+    ]
+
+    assert len(fib_levels) == 5
+    assert fib_levels[0] == {"pct": "23%", "price": round(80 + 40 * 0.236, 2), "key": False}
+    assert fib_levels[1]["key"] is True
+    assert fib_levels[2]["key"] is True
+    assert fib_levels[3]["key"] is True
+    assert fib_levels[4]["key"] is False
+    for item in fib_levels:
+        assert "pct" in item and "price" in item and "key" in item

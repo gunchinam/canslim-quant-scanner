@@ -5508,7 +5508,7 @@ a.news-card-title:hover { color: var(--brand); }
   position: relative;
   width: 90%;
   margin: 0 auto;
-  aspect-ratio: 12 / 5.6;
+  aspect-ratio: 6 / 5;
   overflow: hidden;
   background: var(--card);
   border-top: 1px solid var(--border);
@@ -5528,7 +5528,7 @@ a.news-card-title:hover { color: var(--brand); }
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   opacity: 0;
   border-bottom: 1px solid var(--border);
   transition: opacity 150ms ease;
@@ -5935,7 +5935,7 @@ details[open] .nm-acc-chevron { transform: rotate(180deg); }
 
 /* 6. 소형폰(≤480px): 4축 차트 더 높게 + 섹션버튼 컴팩트 */
 @media (max-width: 480px) {
-  .dp-hd-chart-wrap { aspect-ratio: 4 / 3; }
+  .dp-hd-chart-wrap { aspect-ratio: 6 / 5; width: 100%; }
   .dp-section-btn { padding: 8px 10px; font-size: 12px; }
   .dp-name { font-size: 15px; }
   .dp-score-num { font-size: 36px; }

@@ -290,7 +290,7 @@ class HandDrawnChartRenderer:
                 t.set_color("#444")
             plt.setp(ax_price.get_xticklabels(), visible=False)
 
-            # ── ⑤ Fibonacci 캡션 (차트 하단 한 줄) ────────────────
+            # ── ⑤ Fibonacci 텍스트 박스 (가격 패널 우측 상단) ──────
             if self._show_fib and len(self.hist) > 1:
                 try:
                     h_max = self.hist["High"].max()
@@ -302,17 +302,21 @@ class HandDrawnChartRenderer:
                         if p >= 1000: return f"{p:,.0f}"
                         if p >= 10:   return f"{p:,.1f}"
                         return f"{p:,.2f}"
-                    parts = [
-                        f"{fib_sym[lvl]} {_fmt_fib(h_min + (h_max - h_min) * lvl)}"
+                    lines = ["Fib(120d)"] + [
+                        f"{fib_sym[lvl]}  {_fmt_fib(h_min + (h_max - h_min) * lvl)}"
                         for lvl in fib_levels
                     ]
-                    caption = "Fib(120d)  " + "   ".join(parts)
-                    fig.text(
-                        0.5, 0.005, caption,
-                        ha="center", va="bottom",
-                        fontsize=max(7, int(fs_tick * 0.82)),
-                        color="#888888",
+                    fib_text = "\n".join(lines)
+                    _ffs = max(7, int(fs_tick * 0.80))
+                    ax_price.text(
+                        0.995, 0.97, fib_text,
+                        transform=ax_price.transAxes,
+                        fontsize=_ffs, color="#888888",
+                        va="top", ha="right",
                         fontfamily=KFONT or "DejaVu Sans",
+                        linespacing=1.5,
+                        bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
+                                  alpha=0.75, edgecolor="#dddddd", linewidth=0.5),
                     )
                 except Exception:
                     pass

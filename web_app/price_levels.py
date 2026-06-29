@@ -138,6 +138,27 @@ def compute_price_levels(
             result['fib_500'] = round(high_52w - range_52w * 0.500, 2)
             result['fib_618'] = round(high_52w - range_52w * 0.618, 2)
 
+            # σ 밴드 진입가 ↔ 피보나치 ±2% 겹침 감지
+            fib_map = {
+                'fib_382': (result['fib_382'], '38.2%'),
+                'fib_500': (result['fib_500'], '50%'),
+                'fib_618': (result['fib_618'], '61.8%'),
+            }
+            overlaps = []
+            for i, e in enumerate(entries):
+                for fk, (fp, flabel) in fib_map.items():
+                    diff_pct = abs(e['price'] - fp) / fp * 100
+                    if diff_pct <= 2.0:
+                        overlaps.append({
+                            'entry_idx': i,
+                            'entry_k': e['k'],
+                            'fib_label': flabel,
+                            'fib_price': fp,
+                            'diff_pct': round(diff_pct, 2),
+                        })
+            if overlaps:
+                result['fib_overlaps'] = overlaps
+
     return result
 
 

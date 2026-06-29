@@ -5387,6 +5387,23 @@ a.news-card-title:hover { color: var(--brand); }
 .pm-fib .price-map-line     { background: #7C3AED; opacity: 0.3; border-style: dashed; }
 .pm-fib .price-map-label    { color: #7C3AED; font-size: 10px; }
 
+/* 피보나치 겹침 강조 — σ 밴드 진입 구간이 피보나치 지지선과 일치할 때 */
+.pm-entry-fib .price-map-val  { color: #6D28D9; font-weight: 800; }
+.pm-entry-fib .price-map-line { background: linear-gradient(90deg, #2563EB, #7C3AED); height: 2px; opacity: 0.7; }
+.pm-entry-fib .price-map-label { color: #6D28D9; font-weight: 700; }
+.pm-fib-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(124, 58, 237, 0.12);
+  color: #7C3AED;
+  vertical-align: middle;
+  line-height: 1.6;
+}
+
 /* 신규/보유자 분기 카드 */
 .action-cards {
   display: grid;

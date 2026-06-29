@@ -3166,10 +3166,12 @@ function _populatePanelDetail(d, skipFourAxis, skipVerdict) {
 
   // 노무라式 인라인 (US 전용 — 탭 없이 자동 로드)
   const nmInline = document.getElementById('dp-nomura-inline');
-  if (nmInline) nmInline.style.display = currentMarket === 'US' ? '' : 'none';
+  if (nmInline) nmInline.style.display = '';
   _dpNomuraLoaded = false;
   _nmLoaded = false;
-  if (currentMarket === 'US' && d.Ticker) loadDpNomuraScore(d.Ticker);
+  const _nmBadgeEl = document.getElementById('dp-nomura-badge');
+  if (_nmBadgeEl) _nmBadgeEl.style.display = 'none';
+  if (d.Ticker) loadDpNomuraScore(d.Ticker);
 
   // 미드캡 알파 시그널 (SP400 전용)
   _renderMidcapDetail(d);
@@ -3520,22 +3522,22 @@ function _renderEntryVerdict(d) {
     const avg = (p1 * w1 + p2 * w2 + p3 * w3) / 100;
     const fp = v => fmtPrice(v);
 
+    const _splNums = ['①', '②', '③'];
     const tranche = (n, w, p, lbl, hi) =>
-      `<div class="ev-tr" ${hi ? `style="color:${color};font-weight:700"` : ''}>
-        <span class="ev-tr-n">${n}차</span>
-        <span class="ev-tr-bar"><span class="ev-tr-fill" style="width:${w}%;background:${hi ? color : 'var(--text-tertiary)'}"></span></span>
-        <span class="ev-tr-pct">${w}%</span>
-        <span class="ev-tr-price">${fp(p)}</span>
-        <span class="ev-tr-lbl">${lbl}</span>
+      `<div class="spl-row${hi ? ' spl-hi' : ''}">
+        <span class="spl-num">${_splNums[n-1]}</span>
+        <div class="spl-info"><span class="spl-price">${fp(p)}</span><span class="spl-delta">${lbl}</span></div>
+        <div class="spl-bar-wrap"><div class="spl-bar-fill" style="width:${w}%;background:${hi ? color : '#CBD5E1'}"></div></div>
+        <span class="spl-weight">${w}%</span>
       </div>`;
 
     splitHtml = `
-      <div class="ev-split">
-        <div class="ev-split-head">📊 분할매수 플랜 <span style="font-weight:400;color:var(--text-tertiary);font-size:10px;">ATR 기반 3회</span></div>
+      <div class="spl-panel">
+        <div class="spl-head">분할매수 플랜<span class="spl-sub">ATR 기반</span></div>
         ${tranche(1, w1, p1, '시장가', true)}
         ${tranche(2, w2, p2, '−' + d2.toFixed(1) + '%', false)}
         ${tranche(3, w3, p3, '−' + d3.toFixed(1) + '%', false)}
-        <div class="ev-split-foot">평균단가 <b>${fp(avg)}</b> · 최대 이격 <b>${d3.toFixed(1)}%</b></div>
+        <div class="spl-foot">평균단가 <b>${fp(avg)}</b> · 최대이격 <b>${d3.toFixed(1)}%</b></div>
       </div>`;
   }
 
@@ -3545,15 +3547,15 @@ function _renderEntryVerdict(d) {
     ...cons.map(t => `<span class="ev-pill ev-con">${esc(t)}</span>`)
   ].join('');
 
-  // ── 판단 포스터 렌더 (conv 단일 소스, 15단계) ──
-  let _pgCls, _pvWord, _pvReason, _pvBg, _tmWord, _tmSub;
-  // ticker + conv 기반 결정론적 선택 — 동일 종목은 재렌더 시에도 같은 문구 유지
+  // ── 판단 포스터 렌더 (conv 기반, 15단계) ──
+  _tmConv = conv;
+  let _pgCls, _pvWord, _pvReason, _pvBg;
   const _tickerHash = (d.Ticker || '').split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0);
   const _seed = Math.abs(_tickerHash * 1000 + Math.round(conv));
   const _pick = arr => arr[_seed % arr.length];
   if (conv >= 93) {
     _pgCls = 'dvp-green';
-    _pvWord   = _pick(['역대급', '인생 타이밍', '지금 당장', '올인각', '이게 자리다']);
+    _pvWord = _pick(['역대급', '인생 타이밍', '지금 당장', '올인각', '이게 자리다']);
     _pvReason = _pick([
       '지표·수급·모멘텀 삼박자 완벽<br>이런 자리 1년에 몇 번 안 옴<br>망설이면 두고두고 후회함',
       '차트 보고 눈물 날 뻔함<br>모든 조건 동시에 충족된 자리<br>지금 안 담으면 진짜 바보',
@@ -3561,11 +3563,9 @@ function _renderEntryVerdict(d) {
       '이런 신호 놓치면 후회함<br>볼수록 좋은 차트에 수급까지 터짐<br>비중 최대로 ㄱㄱ',
     ]);
     _pvBg = _pick(['인생각', '올인', '역대급']);
-    _tmWord = _pick(['🟢 인생 타이밍', '🟢 역대급', '🟢 지금 당장']);
-    _tmSub  = '인생 타이밍';
   } else if (conv >= 86) {
     _pgCls = 'dvp-green';
-    _pvWord   = _pick(['올인각', '풀매각', '슈팅각', '지금이야', '강력 매수']);
+    _pvWord = _pick(['올인각', '풀매각', '슈팅각', '지금이야', '강력 매수']);
     _pvReason = _pick([
       '지표 다 켜졌고 수급까지 터짐<br>이런 타이밍 자주 안 옴<br>지금 안 담으면 진짜 후회함',
       '차트 완벽하게 살아있음<br>추세 ㄹㅇ 강하고 모멘텀 최상<br>분할 말고 그냥 풀매각',
@@ -3573,11 +3573,9 @@ function _renderEntryVerdict(d) {
       '이거 지금 아니면 언제 사냐<br>모든 조건 충족된 자리임<br>소액이라도 반드시 담아봐',
     ]);
     _pvBg = _pick(['올인', '풀매', '슈팅']);
-    _tmWord = _pick(['🟢 올인각', '🟢 풀매각', '🟢 슈팅각']);
-    _tmSub  = '극강 타이밍';
   } else if (conv >= 79) {
     _pgCls = 'dvp-green';
-    _pvWord   = _pick(['풀매각', '적극 매수', '강하게 담아', '지금 담아', '줍줍각']);
+    _pvWord = _pick(['풀매각', '적극 매수', '강하게 담아', '지금 담아', '줍줍각']);
     _pvReason = _pick([
       '지금 안 담으면 후회할 수 있음<br>추세 강하고 수급도 뒷받침됨<br>비중 실어서 담아봐',
       '차트 ㄷㄷ하고 모멘텀 살아있음<br>수급 들어오는 게 확인됨<br>눌리면 추가 담기 각',
@@ -3585,11 +3583,9 @@ function _renderEntryVerdict(d) {
       '이거 지금 아니면 비싸게 사야 함<br>추세 우상향 확실하고 수급도 좋음<br>분할이라도 지금 시작해',
     ]);
     _pvBg = _pick(['풀매', '적극', '줍줍']);
-    _tmWord = _pick(['🟢 풀매각', '🟢 적극 매수', '🟢 줍줍각']);
-    _tmSub  = '강한 매수';
   } else if (conv >= 72) {
     _pgCls = 'dvp-green';
-    _pvWord   = _pick(['줍줍각', '담아가', '매수각', '나눠서 담아', '비중 실어']);
+    _pvWord = _pick(['줍줍각', '담아가', '매수각', '나눠서 담아', '비중 실어']);
     _pvReason = _pick([
       '지금 안 담으면 후회함<br>추세 좋고 수급도 받쳐주는 중<br>나눠서 조금씩 담아봐',
       '차트 ㄷㄷ함<br>수급 들어오고 모멘텀 살아있음<br>눌리면 분할 담기 각',
@@ -3597,11 +3593,9 @@ function _renderEntryVerdict(d) {
       '지표 켜져 있고 자리도 좋음<br>욕심 안 부리고 분할로 접근<br>생각보다 좋은 종목임',
     ]);
     _pvBg = _pick(['줍줍', '분할', '담기']);
-    _tmWord = _pick(['🟢 줍줍각', '🟢 담아가', '🟢 분할 ㄱㄱ']);
-    _tmSub  = '매수 추천';
   } else if (conv >= 65) {
     _pgCls = 'dvp-green';
-    _pvWord   = _pick(['분할 ㄱㄱ', '소량 진입', '슬금슬금', '조심스럽게', '나눠서']);
+    _pvWord = _pick(['분할 ㄱㄱ', '소량 진입', '슬금슬금', '조심스럽게', '나눠서']);
     _pvReason = _pick([
       '나쁘지 않은 자리긴 한데<br>확신이 100%는 아님<br>분할로 리스크 줄여서 접근',
       '긍정 지표 있지만 일부 애매함<br>풀매보단 소량 분할이 맞는 상황<br>더 좋아지면 추가 담기',
@@ -3609,11 +3603,9 @@ function _renderEntryVerdict(d) {
       '긍정적인 신호 있지만 리스크도 있음<br>작은 비중으로 먼저 확인해봐<br>차트 좋아지면 추가',
     ]);
     _pvBg = _pick(['소량', '분할', '조심']);
-    _tmWord = _pick(['🟢 소량 진입', '🟢 분할 ㄱㄱ', '🟢 슬금슬금']);
-    _tmSub  = '신중 매수';
   } else if (conv >= 58) {
     _pgCls = 'dvp-yellow';
-    _pvWord   = _pick(['테스트 담기', '발만 살짝', '소액만', '일단 찔러봐', '살짝만']);
+    _pvWord = _pick(['테스트 담기', '발만 살짝', '소액만', '일단 찔러봐', '살짝만']);
     _pvReason = _pick([
       '지표 일부 긍정적이지만 전부는 아님<br>소액으로 먼저 포지션 잡아봐<br>확인되면 비중 늘리는 방식',
       '긍정 신호 있는데 확신이 안 섬<br>물려도 감당 가능한 소액으로만<br>지켜보면서 추가 판단해',
@@ -3621,11 +3613,9 @@ function _renderEntryVerdict(d) {
       '애매하긴 한데 아주 나쁘진 않음<br>발만 살짝 담가서 흐름 봐봐<br>좋아지면 그때 비중 추가',
     ]);
     _pvBg = _pick(['테스트', '소액', '찔러봐']);
-    _tmWord = _pick(['🟡 테스트 담기', '🟡 소액만', '🟡 발만 살짝']);
-    _tmSub  = '테스트 진입';
   } else if (conv >= 51) {
     _pgCls = 'dvp-yellow';
-    _pvWord   = _pick(['긍정 눈팅', '좀 더 봐봐', '시그널 대기', '거의 다 왔어', '조금만 기다려']);
+    _pvWord = _pick(['긍정 눈팅', '좀 더 봐봐', '시그널 대기', '거의 다 왔어', '조금만 기다려']);
     _pvReason = _pick([
       '긍정적인 신호 보이긴 하는데<br>아직 확실히 켜진 건 아님<br>좀 더 지켜보다가 들어가봐',
       '방향성은 긍정적인데 타이밍이 아직<br>조금만 더 기다리면 좋은 자리 나옴<br>서두르지 말고 시그널 확인해',
@@ -3633,11 +3623,9 @@ function _renderEntryVerdict(d) {
       '긍정 지표 늘어나는 중인데<br>아직 매수 확신까지는 아님<br>좀 더 보다가 진입 타이밍 잡아봐',
     ]);
     _pvBg = _pick(['대기', '시그널', '곧이야']);
-    _tmWord = _pick(['🟡 긍정 눈팅', '🟡 좀 더 봐봐', '🟡 시그널 대기']);
-    _tmSub  = '긍정 관망';
   } else if (conv >= 44) {
     _pgCls = 'dvp-yellow';
-    _pvWord   = _pick(['눈팅각', '반반임', '모르겠음', '저울질 중', '중립']);
+    _pvWord = _pick(['눈팅각', '반반임', '모르겠음', '저울질 중', '중립']);
     _pvReason = _pick([
       '좋은 것도 있고 안 좋은 것도 있음<br>확신이 안 서는 자리<br>더 좋은 시그널 나오면 그때 대응',
       '종목 자체는 나쁘지 않은데<br>타이밍이 살짝 애매함<br>좀 더 내려오면 그때 담자',
@@ -3645,11 +3633,9 @@ function _renderEntryVerdict(d) {
       '확신이 안 서는 구간<br>섣불리 들어갔다가 멘탈 털릴 수 있음<br>좀 더 지켜보면서 판단해',
     ]);
     _pvBg = _pick(['중립', '눈팅', '저울질']);
-    _tmWord = _pick(['🟡 눈팅각', '🟡 반반임', '🟡 중립']);
-    _tmSub  = '중립 관망';
   } else if (conv >= 37) {
     _pgCls = 'dvp-yellow';
-    _pvWord   = _pick(['관망각', '기다려봐', '아직은 아냐', '타이밍 아님', '좀 더 기다려']);
+    _pvWord = _pick(['관망각', '기다려봐', '아직은 아냐', '타이밍 아님', '좀 더 기다려']);
     _pvReason = _pick([
       '좋긴 한데 지금 들어가면 물릴 수 있음<br>조금만 더 눌리면 그때 담아봐<br>지금은 관망각',
       '부정 신호 하나둘씩 켜지는 중<br>지금 들어가기엔 타이밍이 안 좋음<br>좀 더 기다려봐',
@@ -3657,11 +3643,9 @@ function _renderEntryVerdict(d) {
       '나쁜 종목은 아닌데<br>지금 들어가기엔 리스크가 있음<br>조금 더 내려오면 담자',
     ]);
     _pvBg = _pick(['관망', '대기', '기다려']);
-    _tmWord = _pick(['🟡 관망각', '🟡 기다려봐', '🟡 타이밍 아님']);
-    _tmSub  = '소극적 관망';
   } else if (conv >= 30) {
     _pgCls = 'dvp-red';
-    _pvWord   = _pick(['고점 주의', '아직 일러', '더 눌려야', '서두르지 마', '대기각']);
+    _pvWord = _pick(['고점 주의', '아직 일러', '더 눌려야', '서두르지 마', '대기각']);
     _pvReason = _pick([
       '살짝 고점 느낌 남<br>지금 들어가면 물릴 수 있음<br>더 내려오면 그때 검토해봐',
       '지금 들어가기엔 부담스러운 자리<br>좀 더 눌려야 매력 있는 가격 됨<br>서두르지 마셈',
@@ -3669,11 +3653,9 @@ function _renderEntryVerdict(d) {
       '차트가 부담스러운 구간<br>수급 빠지기 시작하는 느낌<br>여기서 손댔다가 물리면 고생함',
     ]);
     _pvBg = _pick(['고점', '대기', '주의']);
-    _tmWord = _pick(['🟠 고점 주의', '🟠 아직 일러', '🟠 더 눌려야']);
-    _tmSub  = '고점 주의';
   } else if (conv >= 23) {
     _pgCls = 'dvp-red';
-    _pvWord   = _pick(['진입 부담', '손 빼봐', '위험한 자리', '뇌동 주의', '패스 고려']);
+    _pvWord = _pick(['진입 부담', '손 빼봐', '위험한 자리', '뇌동 주의', '패스 고려']);
     _pvReason = _pick([
       '지금 들어가면 물릴 각도임<br>지표들 대부분 안 좋은 신호 보내는 중<br>관심종목만 넣고 손 빼셈',
       '차트 안 좋고 수급도 빠지는 중<br>지금 들어가는 건 뇌동매매임<br>더 내려오면 그때 다시 검토',
@@ -3681,11 +3663,9 @@ function _renderEntryVerdict(d) {
       '지금 자리는 진입하면 안 됨<br>손절라인도 애매하고 지지도 약함<br>완전히 빠질 때까지 기다려',
     ]);
     _pvBg = _pick(['부담', '주의', '패스']);
-    _tmWord = _pick(['🟠 진입 부담', '🟠 손 빼봐', '🟠 뇌동 주의']);
-    _tmSub  = '진입 부담';
   } else if (conv >= 16) {
     _pgCls = 'dvp-red';
-    _pvWord   = _pick(['강한 경고', '진입 금물', '손 빼셈', '위험 구간', '절대 비추']);
+    _pvWord = _pick(['강한 경고', '진입 금물', '손 빼셈', '위험 구간', '절대 비추']);
     _pvReason = _pick([
       '지금 들어가면 높은 확률로 물림<br>지표들이 전부 경고 보내는 중<br>관심만 해두고 절대 손 대지 마',
       '차트 안 좋고 수급도 완전 빠지는 중<br>지금 들어가면 뇌동매매 확정<br>더 내려가는 거 구경만 해',
@@ -3693,11 +3673,9 @@ function _renderEntryVerdict(d) {
       '지표 전반적으로 매우 안 좋음<br>손절라인 없는 진입은 자살행위<br>절대 추격매수 금지',
     ]);
     _pvBg = _pick(['경고', '금물', '위험']);
-    _tmWord = _pick(['🟠 강한 경고', '🟠 진입 금물', '🟠 손 빼셈']);
-    _tmSub  = '강한 경고';
   } else if (conv >= 10) {
     _pgCls = 'dvp-red';
-    _pvWord   = _pick(['패스각', '손절각', '도망쳐', '버려', '손 빼셈']);
+    _pvWord = _pick(['패스각', '손절각', '도망쳐', '버려', '손 빼셈']);
     _pvReason = _pick([
       '지금 들어가면 거의 물릴 각도임<br>지표들이 다 안 좋은 신호<br>관심만 해두고 절대 손대지 마',
       '차트 개못생김 솔직히<br>수급 빠지고 모멘텀도 죽었음<br>그냥 지켜만 봐',
@@ -3705,11 +3683,9 @@ function _renderEntryVerdict(d) {
       '지금 들어가면 뇌동매매임<br>더 좋은 자리 나올 때까지 패스<br>절대 추격매수 금지',
     ]);
     _pvBg = _pick(['패스', '손절', '회피']);
-    _tmWord = _pick(['🔴 패스각', '🔴 손절각', '🔴 도망쳐']);
-    _tmSub  = '강력 회피';
   } else if (conv >= 5) {
     _pgCls = 'dvp-red';
-    _pvWord   = _pick(['탈출각', '청산각', '손절 검토', '빠져나와', '들고 있으면 위험']);
+    _pvWord = _pick(['탈출각', '청산각', '손절 검토', '빠져나와', '들고 있으면 위험']);
     _pvReason = _pick([
       '이미 갖고 있으면 탈출 검토해야 함<br>지표 전부 최악 신호<br>손절이 장기 버티기보다 나음',
       '차트 완전히 망가진 상황<br>수급 없고 모멘텀 바닥<br>빠르게 나오는 게 맞음',
@@ -3717,11 +3693,9 @@ function _renderEntryVerdict(d) {
       '모든 지표 바닥 신호<br>물타기는 절대 안 됨<br>손실 확정하고 나오는 게 현명함',
     ]);
     _pvBg = _pick(['탈출', '청산', '손절']);
-    _tmWord = _pick(['🔴 탈출각', '🔴 청산각', '🔴 손절 검토']);
-    _tmSub  = '탈출 권고';
   } else {
     _pgCls = 'dvp-red';
-    _pvWord   = _pick(['깡통 주의', '건드리지 마', '최고 위험', '절대 금지', '폭탄이야']);
+    _pvWord = _pick(['깡통 주의', '건드리지 마', '최고 위험', '절대 금지', '폭탄이야']);
     _pvReason = _pick([
       '이거 손대면 진짜 깡통 각도임<br>지표 전부 최악 중에 최악<br>존재 자체를 잊어버려',
       '차트 역대급으로 못생겼음<br>수급 제로에 모멘텀 나락<br>절대 건드리지 마',
@@ -3729,8 +3703,6 @@ function _renderEntryVerdict(d) {
       '지금 들어가면 깡통 확정에 가까움<br>어떤 이유로도 진입 금지<br>이거 갖고 있으면 지금 당장 팔아',
     ]);
     _pvBg = _pick(['깡통', '절대금지', '최위험']);
-    _tmWord = _pick(['🔴 깡통 주의', '🔴 절대 금지', '🔴 건드리지 마']);
-    _tmSub  = '최고 위험';
   }
 
   const _vpEl = document.getElementById('dp-verdict-poster');
@@ -3738,6 +3710,140 @@ function _renderEntryVerdict(d) {
     _vpEl.style.display = '';
     _vpEl.className = `dp-verdict-poster ${_pgCls}`;
     _vpEl.innerHTML = `<div class="dvp-main"><div class="dvp-eyebrow-row"><div class="dvp-eyebrow">살까? 말까?</div><div class="dvp-conf"><div class="dvp-conf-num">${conv}<span class="dvp-conf-pct">%</span></div><div class="dvp-conf-lbl">확신도</div></div></div><div class="dvp-word">${_pvWord}</div><div class="dvp-reason">${_pvReason}</div></div><div class="dvp-bg">${_pvBg}</div>`;
+  }
+
+  // ── 데스크탑 히어로 배너 ──
+  const _dtEl = document.getElementById('dp-hero-banner-dt');
+  if (_dtEl) {
+    _dtEl.className = `dp-hero-banner-dt ${_pgCls}`;
+    const _dayChg = d.DayChg != null ? Number(d.DayChg) : null;
+    const _chgStr = _dayChg != null
+      ? (_dayChg >= 0 ? `▲ ${_dayChg.toFixed(2)}%` : `▼ ${Math.abs(_dayChg).toFixed(2)}%`)
+      : '';
+    const _chgClr = _dayChg != null
+      ? (_dayChg >= 0 ? 'rgba(255,200,180,.95)' : 'rgba(180,220,255,.95)')
+      : 'rgba(255,255,255,.7)';
+    const _rs = d.RSRating != null ? Number(d.RSRating) : null;
+    const _rsLbl = _rs != null ? (_rs >= 90 ? '주도주' : _rs >= 70 ? '강세' : _rs >= 50 ? '중립' : '약세') : '';
+    _dtEl.innerHTML = `
+      <div class="dhb-verdict">
+        <div class="dhb-eye">살까? 말까?</div>
+        <div class="dhb-word">${_pvWord}</div>
+      </div>
+      <div class="dhb-reason">${_pvReason}</div>
+      <div class="dhb-meta">
+        <div class="dhb-meta-cell">
+          <div class="dhb-meta-lbl">확신도</div>
+          <div class="dhb-meta-val">${conv}<span class="dhb-meta-pct">%</span></div>
+        </div>
+        ${price != null ? `<div class="dhb-meta-cell">
+          <div class="dhb-meta-lbl">현재가</div>
+          <div class="dhb-meta-val dhb-meta-price">${fmtPrice(price)}</div>
+          ${_chgStr ? `<div class="dhb-meta-sub" style="color:${_chgClr}">${_chgStr}</div>` : ''}
+        </div>` : ''}
+        ${_rs != null ? `<div class="dhb-meta-cell">
+          <div class="dhb-meta-lbl">RS 등급</div>
+          <div class="dhb-meta-val">${_rs}</div>
+          <div class="dhb-meta-sub">${_rsLbl}</div>
+        </div>` : ''}
+      </div>
+      <div class="dvp-bg">${_pvBg}</div>`;
+  }
+
+  // ── 타이밍 계산 세부내역 HTML ──
+  const _calcTRows = [];
+  if (bf != null) {
+    const _d = bf >= 60 ? 15 : bf >= 40 ? 8 : bf >= 25 ? 3 : 0;
+    if (_d) _calcTRows.push({lbl: `저점매수 신호 (BF ${Math.round(bf)}/100)`, delta: _d,
+      why: bf >= 60
+        ? `가치(40점)·기술(35점)·수급(25점) 3축 합산 ${Math.round(bf)}점 → 60+ 구간은 역사적 단기 반등 확률이 통계적으로 유의미하게 높아요.`
+        : bf >= 40
+        ? `3축 합산 ${Math.round(bf)}점. 40–59 구간: 신호 감지됐지만 복수 지표 미충족 — 추가 확인 권장.`
+        : `3축 합산 ${Math.round(bf)}점. 25–39 초기 신호: 단일 축만 충족, 섣부른 진입보다 모니터링 단계.`});
+  }
+  if (es != null) {
+    const _d = es >= 70 ? 15 : es >= 50 ? 8 : es < 30 ? -10 : 0;
+    if (_d) _calcTRows.push({lbl: `진입 타이밍 점수 (${Math.round(es)}/100)`, delta: _d,
+      why: es >= 70
+        ? `RSI·MACD·BB·추세·수급 5개 축 가중 합산 ${Math.round(es)}점. 70+ = 기술 지표 다수 동시 충족, 진입 적기 신호.`
+        : es >= 50
+        ? `가중 합산 ${Math.round(es)}점. 50–69 = 일부 지표 긍정적이나 전부 켜지지 않음 — 분할 진입 권장.`
+        : `가중 합산 ${Math.round(es)}점. 30 미만 = RSI 과매수·추세 역행 등 부정 지표 다수 → 진입 시 손실 확률 상승.`});
+  }
+  if (ts != null) {
+    const _d = ts >= 70 ? 12 : ts >= 55 ? 5 : ts < 40 ? -8 : 0;
+    if (_d) _calcTRows.push({lbl: `종합점수 (${Math.round(ts)}/100)`, delta: _d,
+      why: ts >= 70
+        ? `Piotroski F-Score·Altman Z·모멘텀·수급 종합 ${Math.round(ts)}점 → 상위 20–30% 구간, 펀더멘털 우량.`
+        : ts >= 55
+        ? `종합 ${Math.round(ts)}점 → 평균 이상 구간. 결정적 약점 없으나 탁월하지도 않음.`
+        : `종합 ${Math.round(ts)}점 → 하위 40% 구간. 재무·기술 중 1개 이상 주요 지표 부적합.`});
+  }
+  if (gz >= 70) _calcTRows.push({lbl: `공탐지수 극탐욕 (${gz}/100)`, delta: -15,
+    why: `CNN Fear & Greed ${gz}점 = 극탐욕 구간(70+). 이 구간 진입 후 S&P 500 30일 평균 수익률은 역사적으로 음(-)으로 기울어져요.`});
+  else if (gz >= 40) _calcTRows.push({lbl: `공탐지수 탐욕 (${gz}/100)`, delta: -8,
+    why: `CNN Fear & Greed ${gz}점 = 탐욕 구간(40–69). 시장 전체 리스크 프리미엄이 낮아진 상태 — 개별 종목도 조정 시 동반 하락 가능성.`});
+  const _mddV = ep.mdd_current;
+  if (_mddV != null && _mddV < -25) _calcTRows.push({lbl: `고낙폭 (고점 대비 ${_mddV.toFixed(0)}%)`, delta: -8,
+    why: `현재 낙폭 ${_mddV.toFixed(0)}% < -25%p 구간. 저점매수 신호와 별개로, 낙폭 -25% 이상 종목은 단기 추가 하락 진입이 빈번해요.`});
+  const _timingCalcHtml =
+    `<div class="gmm-calc-desc">확신도 = 기준 50점 + 아래 신호 합산. 각 신호가 <strong>왜</strong> 더하거나 빼는지 수치 근거를 확인하세요.</div>` +
+    `<div class="gmm-calc-row"><span class="gmm-calc-lbl">기준점<span class="gmm-calc-why">어떤 신호도 없을 때의 중립값. 완전 랜덤 진입 시 이론적 기댓값 50%에 대응해요.</span></span><span class="gmm-calc-base">50점</span></div>` +
+    _calcTRows.map(r => `<div class="gmm-calc-row"><span class="gmm-calc-lbl">${r.lbl}${r.why ? `<span class="gmm-calc-why">${r.why}</span>` : ''}</span><span class="gmm-calc-delta ${r.delta > 0 ? 'pos' : 'neg'}">${r.delta > 0 ? '+' : ''}${r.delta}점</span></div>`).join('') +
+    `<div class="gmm-calc-row gmm-calc-total"><span class="gmm-calc-lbl">최종 타이밍</span><span class="gmm-calc-result">${conv}%</span></div>`;
+
+  // ── 산점도 매트릭스 위젯 (타이밍 × 펀더멘털) ──
+  const _mmEl = document.getElementById('dp-matrix-mini');
+  if (_mmEl) {
+    _mmEl.innerHTML = `
+<div class="gmm-wrap">
+  <div class="gmm-field-col">
+    <div class="gmm-field-caption">↑ 펀더멘털</div>
+    <div class="gmm-field">
+      <span class="gmm-ql gmm-ql-tl" id="tm-q-tl">기다려</span>
+      <span class="gmm-ql gmm-ql-tr" id="tm-q-tr">강력매수</span>
+      <span class="gmm-ql gmm-ql-bl" id="tm-q-bl">패스</span>
+      <span class="gmm-ql gmm-ql-br" id="tm-q-br">모멘텀</span>
+      <div class="gmm-ch-h"></div>
+      <div class="gmm-ch-v"></div>
+      <div class="gmm-dot-wrap" id="tm-dot" style="left:${conv}%;bottom:50%">
+        <div class="gmm-dot-inner"></div>
+      </div>
+    </div>
+    <div class="gmm-field-xax">← 타이밍 →</div>
+  </div>
+  <div class="gmm-score-col">
+    <div class="gmm-verdict-row">
+      <span class="tm-verdict-pill" id="tm-verdict-pill"></span>
+    </div>
+    <div class="gmm-bars">
+      <div class="gmm-bar-row">
+        <span class="gmm-bar-lbl">타이밍</span>
+        <div class="gmm-bar-track"><div class="gmm-bar-fill" style="width:${conv}%;background:${color}"></div></div>
+        <span class="gmm-bar-val" style="color:${color}">${conv}%</span>
+      </div>
+      <div class="gmm-bar-row">
+        <span class="gmm-bar-lbl">펀더멘털</span>
+        <div class="gmm-bar-track"><div id="gmm-fund-fill" class="gmm-bar-fill" style="width:0%;background:#CBD5E1"></div></div>
+        <span id="gmm-fund-val" class="gmm-bar-val" style="color:#94A3B8">—</span>
+      </div>
+    </div>
+    ${pills ? `<div class="ev-pills gmm-pills">${pills}</div>` : ''}
+  </div>
+</div>
+<div class="gmm-calc-wrap">
+  <div class="gmm-calc-section">
+    <div class="gmm-calc-title">⏱ 타이밍 계산 방식</div>
+    ${_timingCalcHtml}
+  </div>
+  <div class="gmm-calc-section" id="gmm-fund-calc">
+    <div class="gmm-calc-title">📊 펀더멘털 계산 방식</div>
+    <div id="gmm-fund-calc-rows">
+      <div class="gmm-calc-row"><span class="gmm-calc-lbl" style="opacity:.5">노무라式 분석 로딩 중…</span></div>
+    </div>
+  </div>
+</div>`;
+    _updateMatrixQuadrant(conv, null);
   }
   // ── 렌더 (entry-verdict 카드는 내부 데이터 보존용, UI 미노출) ──
   card.style.display = 'none';
@@ -4063,6 +4169,14 @@ function _renderPriceLevels(d) {
   const ents = (vb && vb.entries) || [];
   const kLabel = i => (ents[i] != null ? ents[i].k.toFixed(1) + 'σ' : '');
 
+  // 겹침 맵: entry_idx → fib_label
+  const fibOverlapMap = {};
+  if (Array.isArray(levels.fib_overlaps)) {
+    for (const ov of levels.fib_overlaps) {
+      fibOverlapMap[ov.entry_idx] = ov.fib_label;
+    }
+  }
+
   let html = '<div class="mece-inner">';
   html += '<div class="mece-header"><span class="mece-title">가격대별 대응 전략</span><span class="mece-badge">참고용 시뮬레이션</span></div>';
 
@@ -4071,12 +4185,20 @@ function _renderPriceLevels(d) {
   if (levels.target_52w_high) pricePoints.push({ price: levels.target_52w_high, label: '52주 고가', cls: 'pm-target' });
   if (levels.target_analyst) pricePoints.push({ price: levels.target_analyst, label: '애널리스트 목표가', cls: 'pm-target' });
   pricePoints.push({ price: levels.price, label: '현재가', cls: 'pm-current' });
-  pricePoints.push({ price: levels.entry_1, label: `1차 (${kLabel(0)})`, cls: 'pm-entry' });
-  pricePoints.push({ price: levels.entry_2, label: `2차 (${kLabel(1)})`, cls: 'pm-entry' });
-  pricePoints.push({ price: levels.entry_3, label: `3차 (${kLabel(2)})`, cls: 'pm-entry' });
+  const entryDefs = [
+    { price: levels.entry_1, label: `1차 (${kLabel(0)})`, idx: 0 },
+    { price: levels.entry_2, label: `2차 (${kLabel(1)})`, idx: 1 },
+    { price: levels.entry_3, label: `3차 (${kLabel(2)})`, idx: 2 },
+  ];
+  for (const e of entryDefs) {
+    const fibHit = fibOverlapMap[e.idx];
+    const extraCls = fibHit ? ' pm-entry-fib' : '';
+    const fibBadge = fibHit ? ` <span class="pm-fib-badge">Fib ${fibHit}</span>` : '';
+    pricePoints.push({ price: e.price, label: e.label + fibBadge, cls: 'pm-entry' + extraCls });
+  }
   pricePoints.push({ price: levels.stop_loss, label: `손절 (${vb ? vb.stop_k.toFixed(1) + 'σ' : ''})`, cls: 'pm-stop' });
 
-  // 피보나치 추가
+  // 피보나치 추가 (겹친 항목은 entry에 이미 배지로 표시되므로 별도 행 유지)
   if (levels.fib_382) pricePoints.push({ price: levels.fib_382, label: 'Fib 38.2%', cls: 'pm-fib' });
   if (levels.fib_500) pricePoints.push({ price: levels.fib_500, label: 'Fib 50%', cls: 'pm-fib' });
   if (levels.fib_618) pricePoints.push({ price: levels.fib_618, label: 'Fib 61.8%', cls: 'pm-fib' });
@@ -4089,7 +4211,7 @@ function _renderPriceLevels(d) {
     html += `<div class="price-map-row ${pt.cls}">`;
     html += `<span class="price-map-val">${fmtPrice(pt.price)}</span>`;
     html += `<span class="price-map-line"></span>`;
-    html += `<span class="price-map-label">${esc(pt.label)}${pt.cls === 'pm-current' ? ' *' : ''}</span>`;
+    html += `<span class="price-map-label">${pt.label}${pt.cls.startsWith('pm-current') ? ' *' : ''}</span>`;
     html += `</div>`;
   }
   html += `</div>`;
@@ -6688,6 +6810,94 @@ document.addEventListener('DOMContentLoaded', loadWsbWidget);
 
 // ── 노무라式 탭 ──────────────────────────────────────────────────────────────
 
+function _updateMatrixFundamental(nmScore) {
+  const fColor = nmScore >= 70 ? '#16A34A' : nmScore >= 50 ? '#D97706' : '#EF4444';
+  const _fFill = document.getElementById('gmm-fund-fill');
+  if (_fFill) { _fFill.style.width = nmScore + '%'; _fFill.style.background = fColor; }
+  const _fVal = document.getElementById('gmm-fund-val');
+  if (_fVal) { _fVal.textContent = nmScore; _fVal.style.color = fColor; }
+  const _dot = document.getElementById('tm-dot');
+  if (_dot) _dot.style.bottom = nmScore + '%';
+  _updateMatrixQuadrant(_tmConv, nmScore);
+}
+
+function _updateMatrixQuadrant(conv, nmScore) {
+  // conv >= 65 = 포스터 "소량 진입" 이상 (타이밍 긍정 판단)
+  // conv 5단계 × nmScore 3단계 = 15가지 감성 라벨
+  // convTier: A(≥86) / B(≥72) / C(≥58) / D(≥44) / E(<44)
+  // nmTier  : H(≥70) / M(≥50) / L(<50)
+  const LABELS = {
+    A: { H: ['올인각',                   'tm-q-buy',      '#16A34A'],
+         M: ['올인각',                   'tm-q-buy',      '#16A34A'],
+         L: ['차트만 터짐',              'tm-q-momentum', '#D97706'] },
+    B: { H: ['줍줍각',                   'tm-q-buy',      '#16A34A'],
+         M: ['담아가',                   'tm-q-buy',      '#16A34A'],
+         L: ['단기 모멘텀',              'tm-q-momentum', '#D97706'] },
+    C: { H: ['기업 좋고 시그널 대기',   'tm-q-wait',     '#2563EB'],
+         M: ['살짝 찔러봐',             'tm-q-wait',     '#2563EB'],
+         L: ['시그널 대기',             'tm-q-momentum', '#D97706'] },
+    D: { H: ['좋은 기업 · 기다려',      'tm-q-wait',     '#2563EB'],
+         M: ['눈팅각',                   'tm-q-momentum', '#D97706'],
+         L: ['관망',                     'tm-q-momentum', '#D97706'] },
+    E: { H: ['좋은 기업 · 많이 기다려', 'tm-q-wait',     '#2563EB'],
+         M: ['보류',                     'tm-q-pass',     '#6b7280'],
+         L: ['패스',                     'tm-q-pass',     '#6b7280'] },
+  };
+
+  const convTier = conv >= 86 ? 'A' : conv >= 72 ? 'B' : conv >= 58 ? 'C' : conv >= 44 ? 'D' : 'E';
+  const nmTier   = nmScore == null ? null : nmScore >= 70 ? 'H' : nmScore >= 50 ? 'M' : 'L';
+
+  let qLabel, qClass, qColor;
+  if (nmTier === null) {
+    // 펀더멘털 미확정: conv만으로 감성 라벨
+    if      (conv >= 86) { qLabel = '올인각';      qClass = 'tm-q-buy';      qColor = '#16A34A'; }
+    else if (conv >= 72) { qLabel = '줍줍각';      qClass = 'tm-q-buy';      qColor = '#16A34A'; }
+    else if (conv >= 58) { qLabel = '시그널 대기'; qClass = 'tm-q-wait';     qColor = '#2563EB'; }
+    else if (conv >= 44) { qLabel = '눈팅각';      qClass = 'tm-q-momentum'; qColor = '#D97706'; }
+    else                 { qLabel = '보류';         qClass = 'tm-q-pass';     qColor = '#6b7280'; }
+  } else {
+    [qLabel, qClass, qColor] = LABELS[convTier][nmTier];
+  }
+
+  ['tl','tr','bl','br'].forEach(q => {
+    const el = document.getElementById('tm-q-' + q);
+    if (el) el.classList.remove('tm-active');
+  });
+
+  let activeQ;
+  if (nmTier === null) {
+    if      (conv >= 58) activeQ = 'tr';
+    else if (conv >= 42) activeQ = 'br';
+    else                 activeQ = 'bl';
+  } else {
+    const qX = conv >= 65, qY = nmScore >= 50;
+    if      (qX && qY)  activeQ = 'tr';
+    else if (!qX && qY) activeQ = 'tl';
+    else if (qX && !qY) activeQ = 'br';
+    else                activeQ = 'bl';
+  }
+
+  const activeEl = document.getElementById('tm-q-' + activeQ);
+  if (activeEl) activeEl.classList.add('tm-active');
+
+  const pillEl = document.getElementById('tm-verdict-pill');
+  if (pillEl) {
+    pillEl.textContent = qLabel;
+    pillEl.className = 'tm-verdict-pill ' + qClass;
+  }
+
+
+
+  const dot = document.getElementById('tm-dot');
+  if (dot) {
+    dot.style.borderColor = qColor;
+    dot.style.boxShadow = '0 0 0 3px ' + qColor + '33, 0 2px 8px rgba(0,0,0,.18)';
+    const dotIn = dot.querySelector('.gmm-dot-inner');
+    if (dotIn) dotIn.style.background = qColor;
+  }
+}
+
+let _tmConv = 50;
 let _nmLoaded = false;
 
 async function loadNomuraScore(ticker) {
@@ -6757,6 +6967,47 @@ function _renderNomuraTKScore(d) {
         </span>
       </div>
     </div>`;
+  if (d.quantitative_score != null) _updateMatrixFundamental(Number(d.quantitative_score));
+
+  // ── 펀더멘털 계산 세부내역 ──
+  const _fcEl = document.getElementById('gmm-fund-calc-rows');
+  const _bd = d.score_breakdown;
+  if (_fcEl && _bd) {
+    const _isKR = !!d.is_kr;
+    const _fRows = [];
+    if (_isKR) {
+      if (_bd.piotroski_contribution != null) _fRows.push({lbl: `Piotroski F-Score (${d.piotroski ?? '?'}/9) — 재무건전성`, delta: _bd.piotroski_contribution, max: 40});
+      if (_bd.altman_z_contribution  != null) _fRows.push({lbl: `Altman Z-Score ${d.altman_z != null ? '(' + Number(d.altman_z).toFixed(1) + ')' : ''} — 파산위험`, delta: _bd.altman_z_contribution, max: 20});
+      if (_bd.beneish_contribution   != null) _fRows.push({lbl: `Beneish M-Score ${d.beneish_m != null ? '(' + Number(d.beneish_m).toFixed(2) + ')' : ''} — 이익조작`, delta: _bd.beneish_contribution, max: 10});
+      if (_bd.momentum_1m_contribution != null) _fRows.push({lbl: `1개월 수익률 (${_bd.rev_1m != null ? (_bd.rev_1m >= 0 ? '+' : '') + _bd.rev_1m + '%' : '?'}) — 모멘텀`, delta: _bd.momentum_1m_contribution, max: 20});
+      if (_bd.inst_contribution      != null) _fRows.push({lbl: `기관/외국인 수급 — 5일 순매수`, delta: _bd.inst_contribution, max: 10});
+    } else if (_bd.is_fallback) {
+      if (_bd.piotroski_contribution != null) _fRows.push({lbl: `Piotroski F-Score (${d.piotroski ?? '?'}/9) — 재무건전성`, delta: _bd.piotroski_contribution, max: 40});
+      if (_bd.altman_z_contribution  != null) _fRows.push({lbl: `Altman Z-Score ${d.altman_z != null ? '(' + Number(d.altman_z).toFixed(1) + ')' : ''} — 파산위험`, delta: _bd.altman_z_contribution, max: 30});
+      if (_bd.beneish_contribution   != null) _fRows.push({lbl: `Beneish M-Score ${d.beneish_m != null ? '(' + Number(d.beneish_m).toFixed(2) + ')' : ''} — 이익조작`, delta: _bd.beneish_contribution, max: 15});
+      if (_bd.momentum_1m_contribution != null) _fRows.push({lbl: `1개월 수익률 (${_bd.rev_1m != null ? (_bd.rev_1m >= 0 ? '+' : '') + _bd.rev_1m + '%' : '?'}) — 모멘텀`, delta: _bd.momentum_1m_contribution, max: 15});
+    } else {
+      if (_bd.tk_contribution != null) _fRows.push({lbl: `TradingKey 종합 (${Math.round(_bd.tk_overall ?? 0)}/100)`, delta: _bd.tk_contribution, max: 80});
+      if (_bd.piotroski_contribution != null) _fRows.push({lbl: `Piotroski F-Score (${d.piotroski ?? '?'}/9) — 재무건전성`, delta: _bd.piotroski_contribution, max: 10});
+      if (_bd.qoq_contribution != null) _fRows.push({lbl: `기관 QoQ 수급 — 분기 변화`, delta: _bd.qoq_contribution, max: 4});
+      if (_bd.momentum_1m_contribution != null) _fRows.push({lbl: `1개월 모멘텀 (${_bd.rev_1m != null ? (_bd.rev_1m >= 0 ? '+' : '') + _bd.rev_1m + '%' : '?'})`, delta: _bd.momentum_1m_contribution, max: 6});
+    }
+    const _fDesc = _isKR
+      ? 'Piotroski(40) + Altman Z(20) + Beneish M(10) + 모멘텀(20) + 수급(10) = 100점 만점'
+      : _bd.is_fallback
+        ? 'TradingKey 집계 불가 → yfinance 재무 기반: Piotroski(40) + AltmanZ(30) + Beneish(15) + 모멘텀(15)'
+        : 'TradingKey(80) + Piotroski(10) + 수급(4) + 모멘텀(6) = 100점 만점';
+    const _tkUnavailNote = '';
+    _fcEl.innerHTML =
+      `<div class="gmm-calc-desc">${_fDesc}</div>` +
+      _tkUnavailNote +
+      _fRows.map(r => `<div class="gmm-calc-row">
+        <span class="gmm-calc-lbl">${r.lbl}</span>
+        <span class="gmm-calc-sub">/ ${r.max}점</span>
+        <span class="gmm-calc-delta ${r.delta > 0 ? 'pos' : 'zero'}">${r.delta > 0 ? '+' : ''}${r.delta}점</span>
+      </div>`).join('') +
+      `<div class="gmm-calc-row gmm-calc-total"><span class="gmm-calc-lbl">펀더멘털 점수</span><span class="gmm-calc-result">${d.quantitative_score}점</span></div>`;
+  }
 }
 
 function _nmGaugeSVG(score, rating) {
@@ -6930,6 +7181,22 @@ function _initNomuraInstitutionAccordion(ticker) {
   });
 }
 
+function _ffRangeBar(label, minPct, maxPct, cpPct, tag) {
+  const lo = (Math.max(0, Math.min(1, minPct)) * 100).toFixed(1);
+  const wi = (Math.max(0, Math.min(1, maxPct - minPct)) * 100).toFixed(1);
+  const cpHtml = cpPct != null
+    ? `<div class="ff-current" style="left:${(Math.max(0, Math.min(1, cpPct)) * 100).toFixed(1)}%"></div>`
+    : '';
+  return `<div class="ff-row">
+    <span class="ff-label">${esc(label)}</span>
+    <div class="ff-bar-plain">
+      <div class="ff-range" style="left:${lo}%;width:${wi}%"></div>
+      ${cpHtml}
+    </div>
+    <span class="ff-tag" style="width:auto;min-width:44px">${esc(tag||'')}</span>
+  </div>`;
+}
+
 function _ffBar(label, pct, tag) {
   const safePct = Math.max(0, Math.min(1, pct || 0));
   return `<div class="ff-row">
@@ -6956,10 +7223,44 @@ function _initNomuraFootballField(ticker) {
       const json = await res.json();
       if (!res.ok || json.status !== 'ok') throw new Error(json.message || 'error');
       const d = json.data;
-      let html = '<div style="margin-top:4px;">';
+      let html = '';
+
+      // ── Football Field (가격 범위 차트) ──────────────────────────────
+      const ff = d.football_field;
+      const cp = d.current_price;
+      if (ff && ff.length > 0) {
+        const allMins = ff.map(x => x.min_price);
+        const allMaxs = ff.map(x => x.max_price);
+        const gMin = Math.min(...allMins);
+        const gMax = Math.max(...allMaxs);
+        const pad  = (gMax - gMin) * 0.1 || 1;
+        const axMin = gMin - pad;
+        const axMax = gMax + pad;
+        const axSpan = axMax - axMin;
+        const norm = v => (v - axMin) / axSpan;
+        const cpPct = cp != null ? norm(cp) : null;
+
+        html += '<div style="margin-bottom:2px;font-size:10px;color:var(--text-secondary);font-weight:600;">Football Field (가격 범위)</div>';
+        for (const item of ff) {
+          const lo = norm(item.min_price);
+          const hi = norm(item.max_price);
+          const tag = item.min_price >= 1000
+            ? `${Math.round(item.min_price).toLocaleString()}~${Math.round(item.max_price).toLocaleString()}`
+            : `${item.min_price.toFixed(0)}~${item.max_price.toFixed(0)}`;
+          html += _ffRangeBar(item.method, lo, hi, cpPct, tag);
+        }
+        if (cp != null) {
+          html += `<div style="font-size:9px;color:#facc15;text-align:right;margin-top:-4px;padding-right:2px;">▲ 현재가 ${cp >= 1000 ? Math.round(cp).toLocaleString() : cp.toFixed(2)}</div>`;
+        }
+        html += '<div style="border-top:1px solid var(--border-color);margin:8px 0 6px;"></div>';
+      }
+
+      // ── 재무 건전성 게이지 ───────────────────────────────────────────
+      html += '<div style="font-size:10px;color:var(--text-secondary);font-weight:600;margin-bottom:4px;">재무 건전성</div>';
+      html += '<div style="margin-top:2px;">';
 
       // 1) 노무라式 종합 점수
-      const scorePct = (d.quantitative_score || 0) / 100;
+      const scorePct = 1 - (d.quantitative_score || 0) / 100; // 축: ← 긍정 | 부정 → (높은 점수 = 짧은 바)
       const scoreTag = d.quantitative_score >= 75 ? '고품질' : d.quantitative_score >= 55 ? '보통' : '저품질';
       html += _ffBar('노무라式 점수', scorePct, scoreTag);
 
@@ -6972,7 +7273,7 @@ function _initNomuraFootballField(ticker) {
 
       // 3) Piotroski F-Score
       if (d.piotroski != null) {
-        const pioPct = d.piotroski / 9;
+        const pioPct = 1 - d.piotroski / 9; // 동일 축 반전: F9 = 가장 짧은 바
         const pioTag = `F${d.piotroski}`;
         html += _ffBar('Piotroski F-Score', pioPct, pioTag);
       }
@@ -6986,6 +7287,28 @@ function _initNomuraFootballField(ticker) {
 
       html += '</div>';
       html += '<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-tertiary);margin-top:4px;padding:0 2px;"><span>← 긍정</span><span>부정 →</span></div>';
+
+      // 밸류에이션 멀티플 테이블
+      const vm = d.valuation_multiples;
+      if (vm && Object.values(vm).some(v => v != null)) {
+        html += '<div style="margin-top:8px;border-top:1px solid var(--border-color);padding-top:6px;">';
+        html += '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;font-weight:600;">밸류에이션 멀티플</div>';
+        html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:2px 8px;">';
+        const fmtMul = (k, v, isRoe) => {
+          if (v == null) return '';
+          const disp = isRoe ? (v * 100).toFixed(1) + '%' : v.toFixed(1) + 'x';
+          return `<div style="display:flex;justify-content:space-between;font-size:10px;padding:1px 0;">
+            <span style="color:var(--text-tertiary)">${esc(k)}</span>
+            <span style="color:var(--text-primary);font-weight:500">${disp}</span>
+          </div>`;
+        };
+        html += fmtMul('PER',       vm['PER'],       false);
+        html += fmtMul('PBR',       vm['PBR'],       false);
+        html += fmtMul('EV/EBITDA', vm['EV/EBITDA'], false);
+        html += fmtMul('ROE',       vm['ROE'],       true);
+        html += '</div></div>';
+      }
+
       body.innerHTML = html;
     } catch (e) {
       body.innerHTML = `<div class="nm-placeholder">Football Field 로드 실패: ${esc(e.message)}</div>`;

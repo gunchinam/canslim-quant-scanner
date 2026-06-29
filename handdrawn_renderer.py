@@ -309,10 +309,10 @@ class HandDrawnChartRenderer:
                     fib_text = "\n".join(lines)
                     _ffs = max(7, int(fs_tick * 0.80))
                     ax_price.text(
-                        0.995, 0.97, fib_text,
+                        0.995, 0.50, fib_text,
                         transform=ax_price.transAxes,
                         fontsize=_ffs, color="#888888",
-                        va="top", ha="right",
+                        va="center", ha="right",
                         fontfamily=KFONT or "DejaVu Sans",
                         linespacing=1.5,
                         bbox=dict(boxstyle="round,pad=0.3", facecolor="white",

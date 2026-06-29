@@ -5881,3 +5881,44 @@ details[open] .nm-acc-chevron { transform: rotate(180deg); }
   color: #fff;
   box-shadow: 0 1px 4px rgba(0,0,0,0.25);
 }
+
+/* ── 모바일 UX 자기개선 패치 ──────────────────────────────────── */
+
+/* 1. 드로어 애니메이션: scale → 슬라이드업 (모바일 전용) */
+@media (max-width: 768px) {
+  .detail-panel {
+    transform: translateY(40px);
+    transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .detail-panel.open {
+    transform: translateY(0);
+  }
+
+  /* 2. 드로어 헤더·섹션네비 패딩 축소 */
+  .dp-header { padding: 0 12px; gap: 8px; }
+  .dp-section-nav { padding: 0 4px; }
+
+  /* 3. 드로어 카드 측면 여백 20px → 12px */
+  .detail-panel .card { margin-left: 12px; margin-right: 12px; }
+  #dp-investor-card, #dp-midcap-card { margin: 8px 12px; }
+  .dp-moat-card, .dp-peers-card, .dp-segments-card,
+  .dp-earnings-card, .dp-consensus-card,
+  .mece-card { margin-left: 12px; margin-right: 12px; }
+
+  /* 4. iPhone safe area — 홈 인디케이터 영역 확보 */
+  .detail-panel { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .disclaimer-band {
+    padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* 5. 경쟁사 테이블 가로 스크롤 보장 */
+  .dp-peers-tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+
+/* 6. 소형폰(≤480px): 4축 차트 더 높게 + 섹션버튼 컴팩트 */
+@media (max-width: 480px) {
+  .dp-hd-chart-wrap { aspect-ratio: 4 / 3; }
+  .dp-section-btn { padding: 8px 10px; font-size: 12px; }
+  .dp-name { font-size: 15px; }
+  .dp-score-num { font-size: 36px; }
+}

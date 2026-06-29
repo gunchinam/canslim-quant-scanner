@@ -5506,7 +5506,7 @@ a.news-card-title:hover { color: var(--brand); }
 /* ── 드로어 핸드드로잉 차트 ─────────────────────────────── */
 .dp-hd-chart-wrap {
   position: relative;
-  width: 90%;
+  width: 100%;
   margin: 0 auto;
   aspect-ratio: 6 / 5;
   overflow: hidden;
@@ -5532,11 +5532,9 @@ a.news-card-title:hover { color: var(--brand); }
   opacity: 0;
   border-bottom: 1px solid var(--border);
   transition: opacity 150ms ease;
-  transform: scale(0.95);
-  transform-origin: center center;
 }
 #dp-hd-chart.is-loaded {
-  opacity: 0.92;
+  opacity: 1;
 }
 
 /* ── 변동성 분할매수 (volband) ───────────────────────────────────── */

@@ -290,34 +290,69 @@ class HandDrawnChartRenderer:
                 t.set_color("#444")
             plt.setp(ax_price.get_xticklabels(), visible=False)
 
-            # ── ⑤ Fibonacci 텍스트 박스 (가격 패널 우측 상단) ──────
+            # ── ⑤ Fibonacci 텍스트 박스 (가격 패널 우측 중간, 다색) ──────
             if self._show_fib and len(self.hist) > 1:
                 try:
+                    from matplotlib.patches import FancyBboxPatch
                     h_max = self.hist["High"].max()
                     h_min = self.hist["Low"].min()
                     fib_levels = [0.236, 0.382, 0.5, 0.618, 0.786]
                     fib_sym    = {0.236: "23%", 0.382: "38%", 0.5: "50%",
                                   0.618: "62%", 0.786: "79%"}
+                    key_lvls   = {0.382, 0.5, 0.618}
+
                     def _fmt_fib(p):
                         if p >= 1000: return f"{p:,.0f}"
                         if p >= 10:   return f"{p:,.1f}"
                         return f"{p:,.2f}"
-                    lines = ["Fib(120d)"] + [
-                        f"{fib_sym[lvl]}  {_fmt_fib(h_min + (h_max - h_min) * lvl)}"
-                        for lvl in fib_levels
-                    ]
-                    fib_text = "\n".join(lines)
-                    _ffs = max(7, int(fs_tick * 0.80))
-                    ax_price.text(
-                        0.995, 0.50, fib_text,
+
+                    _ffs   = max(7, int(fs_tick * 0.80))
+                    _ffs_h = max(8, int(fs_tick * 0.90))
+                    line_dy = 0.048  # 줄 간격 (axes 좌표)
+
+                    y_header = 0.50 + (len(fib_levels) / 2) * line_dy
+                    y_levels = [y_header - (i + 1) * line_dy
+                                for i in range(len(fib_levels))]
+
+                    # 배경 박스
+                    pad_x, pad_y = 0.006, 0.014
+                    box_x = 0.772
+                    box_w = 0.224
+                    box_y = y_levels[-1] - pad_y
+                    box_h = (y_header - y_levels[-1]) + 2 * pad_y
+                    rect = FancyBboxPatch(
+                        (box_x, box_y), box_w, box_h,
+                        boxstyle="round,pad=0.01",
                         transform=ax_price.transAxes,
-                        fontsize=_ffs, color="#888888",
-                        va="center", ha="right",
-                        fontfamily=KFONT or "DejaVu Sans",
-                        linespacing=1.5,
-                        bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
-                                  alpha=0.75, edgecolor="#dddddd", linewidth=0.5),
+                        facecolor="white", edgecolor="#cccccc",
+                        linewidth=0.5, alpha=0.88, zorder=4, clip_on=False,
                     )
+                    ax_price.add_patch(rect)
+
+                    # 헤더
+                    ax_price.text(
+                        0.993, y_header, "● Fib(120d)",
+                        transform=ax_price.transAxes,
+                        fontsize=_ffs_h, color="#333333", fontweight="bold",
+                        va="center", ha="right",
+                        fontfamily=KFONT or "DejaVu Sans", zorder=5,
+                    )
+
+                    # 레벨 (핵심 3개 보라색+굵게, 나머지 연회색)
+                    for i, lvl in enumerate(fib_levels):
+                        is_key = lvl in key_lvls
+                        price  = h_min + (h_max - h_min) * lvl
+                        prefix = "→ " if is_key else "   "
+                        text   = f"{prefix}{fib_sym[lvl]}  {_fmt_fib(price)}"
+                        ax_price.text(
+                            0.993, y_levels[i], text,
+                            transform=ax_price.transAxes,
+                            fontsize=_ffs,
+                            color="#5B5EA6" if is_key else "#AAAAAA",
+                            fontweight="bold" if is_key else "normal",
+                            va="center", ha="right",
+                            fontfamily=KFONT or "DejaVu Sans", zorder=5,
+                        )
                 except Exception:
                     pass
 

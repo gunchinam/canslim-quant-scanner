@@ -141,6 +141,60 @@ def _parse_performance(raw: dict) -> dict:
     }
 
 
+def _get_yf_institutional_fallback(ticker: str) -> dict | None:
+    """TradingKey 불가 시 yfinance로 기관 보유 데이터 수집."""
+    try:
+        import yfinance as yf
+        t = yf.Ticker(ticker)
+        info = t.info
+        pct_raw = info.get("heldPercentInstitutions")
+        if pct_raw is None:
+            return None
+        holding_pct = round(float(pct_raw) * 100, 2)
+
+        top_holder, top_holder_pct = "", 0.0
+        try:
+            ih = t.institutional_holders
+            if ih is not None and not ih.empty:
+                row = ih.iloc[0]
+                top_holder = str(row.get("Holder") or "")
+                raw_pct = row.get("% Out") or row.get("pctHeld") or 0
+                top_holder_pct = round(float(raw_pct) * 100, 2)
+        except Exception:
+            pass
+
+        _empty_score = {k: 0 for k in ("overall", "valuation", "growth", "profitability",
+                                        "momentum", "risk", "industry_rank", "industry_total",
+                                        "overall_rank", "overall_total")}
+        _empty_score["sector_percentile"] = 0.0
+        data = {
+            "score":         _empty_score,
+            "institutional": {
+                "confidence_score": 0.0,
+                "holding_pct":      holding_pct,
+                "holding_qoq":      0.0,
+                "top_holder":       top_holder,
+                "top_holder_pct":   top_holder_pct,
+                "top_holder_chg":   0.0,
+            },
+            "analyst":        {"consensus": "", "target_price": 0.0, "upside_pct": 0.0,
+                               "analyst_count": 0, "buy_count": 0, "hold_count": 0, "sell_count": 0},
+            "valuation":      {"pe_ttm": 0.0, "pe_dynamic": 0.0, "pe_static": 0.0,
+                               "pb": 0.0, "eps_ttm": 0.0, "market_cap": 0.0},
+            "fundamentals":   {"roe": 0.0, "roa": 0.0, "gross_margin": 0.0,
+                               "net_profit": 0.0, "dividend_yield": 0.0, "payout_ratio": 0.0},
+            "risk_technical": {},
+            "performance":    {},
+            "_cached_at":     time.time(),
+            "_source":        "yfinance_fallback",
+        }
+        _cache[ticker] = (data, time.time())
+        return data
+    except Exception as e:
+        logger.debug("yfinance institutional fallback failed for %s: %s", ticker, e)
+        return None
+
+
 def get_tradingkey_data(ticker: str) -> dict | None:
     if is_kr_ticker(ticker):
         return None
@@ -154,7 +208,7 @@ def get_tradingkey_data(ticker: str) -> dict | None:
         return data
     except Exception as e:
         logger.warning(f"TradingKey fetch failed for {ticker}: {e}")
-        return None
+        return _get_yf_institutional_fallback(ticker)
 
 
 def get_score(ticker: str) -> dict | None:

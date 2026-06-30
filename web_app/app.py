@@ -1929,6 +1929,13 @@ def api_ticker(ticker: str):
         except Exception as _rse:
             logging.debug("RSBucket enrichment failed: %s", _rse)
 
+        # KR 실시간 가격 동기화 — 스캔과 동일하게 네이버 실시간 가격 반영
+        if market_arg == "KR":
+            try:
+                _override_kr_day_chg([result])
+            except Exception as _e:
+                logging.debug("api_ticker realtime price override failed: %s", _e)
+
         # ── 응답 캐시 저장 ──
         with _ticker_detail_cache_lock:
             if len(_ticker_detail_cache) >= _TICKER_DETAIL_MAX:
@@ -3018,9 +3025,11 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
 
             # Fib 레벨 계산 — 렌더러에서 뺀 뒤 payload로 전달
             _fib_levels = None
+            _fib_lookback = 50 if market == "US" else 120
             if hist is not None and len(hist) > 1:
-                _h_max = float(hist["High"].max())
-                _h_min = float(hist["Low"].min())
+                _fib_hist = hist.iloc[-_fib_lookback:]
+                _h_max = float(_fib_hist["High"].max())
+                _h_min = float(_fib_hist["Low"].min())
                 _fib_lvls = [
                     (0.236, "23%", False),
                     (0.382, "38%", True),
@@ -3071,6 +3080,7 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
         payload = {
             "chart": chart_b64,
             "fib_levels": _fib_levels,
+            "fib_period": _fib_lookback,
             "phase": rd["phase"],
             "signal_stars": rd["signal_stars"],
             "haiku": rd["haiku"],
@@ -3196,7 +3206,7 @@ def _warm_four_axis(ticker: str, market: str, timeframe: str = "default") -> Non
 
     드로어가 핸드드로잉 차트를 표시하므로 c1(차트 포함) 페이로드를 워밍한다.
     """
-    cache_key = f"v2:{ticker}:{market}:{timeframe}:c1"
+    cache_key = f"v5:{ticker}:{market}:{timeframe}:c1"
     with _four_axis_cache_lock:
         if cache_key in _four_axis_cache:
             return  # BG warm hit — move_to_end 호출 안 함 (cold entry가 hot으로 위장하는 것 방지)
@@ -3243,7 +3253,7 @@ def api_four_axis(ticker: str):
             logging.debug("silent except (app.py): %s", _e)
     timeframe = (request.args.get("timeframe") or "default").strip() or "default"
     want_chart = (request.args.get("chart", "1") != "0")  # 드로어는 chart=0 → 핸드드로잉 렌더 생략
-    cache_key = f"v2:{ticker}:{market}:{timeframe}:{'c1' if want_chart else 'c0'}"
+    cache_key = f"v5:{ticker}:{market}:{timeframe}:{'c1' if want_chart else 'c0'}"
     now = int(time.time())
     with _four_axis_cache_lock:
         cached = _four_axis_cache.get(cache_key)

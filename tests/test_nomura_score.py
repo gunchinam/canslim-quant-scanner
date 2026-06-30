@@ -192,8 +192,11 @@ def test_get_nomura_score_range(mock_yf, mock_tk):
     assert 0 <= result["quantitative_score"] <= 100
 
 
-def test_get_nomura_score_kr_returns_none():
-    assert nomura_score.get_nomura_score("005930.KS") is None
+def test_get_nomura_score_kr_returns_dict():
+    result = nomura_score.get_nomura_score("005930.KS")
+    assert result is not None
+    assert result.get("is_kr") is True
+    assert 0 <= result["quantitative_score"] <= 100
 
 
 # ── score_breakdown 필드 ──────────────────────────────────────────────────────

@@ -358,7 +358,16 @@ class HandDrawnChartRenderer:
                     f"{v/10000:.0f}만" if v >= 10000 else
                     f"{v:,.0f}" if v >= 1000 else
                     f"{v:,.1f}"))
-            fig.subplots_adjust(left=0.10, right=0.82, top=0.97, bottom=0.10, hspace=0.10)
+            fig_h_px = self.size[1] * self.dpi
+            fig_w_px = self.size[0] * self.dpi
+            # top: title font + pad(2pt) + 15px safety → always ≥15px clear
+            _top_px  = (fs_title / 72.0 + 2 / 72.0) * self.dpi + 15
+            _top_val = max(0.80, 1.0 - _top_px / fig_h_px)
+            # symmetric sides: ~5-char y-tick label width + 10px padding
+            _side_px   = fs_tick * 5 * 0.65 / 72.0 * self.dpi + 10
+            _side_frac = max(0.06, min(0.14, _side_px / fig_w_px))
+            fig.subplots_adjust(left=_side_frac, right=1.0 - _side_frac,
+                                top=_top_val, bottom=0.10, hspace=0.10)
 
             buf = io.BytesIO()
             fig.savefig(buf, format="png", dpi=self.dpi,

@@ -3791,13 +3791,40 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   flex-direction: column;
   gap: 1px;
 }
-.gmm-calc-why {
+.gmm-calc-info {
+  display: inline-block;
+  position: relative;
+  margin-left: 4px;
+  cursor: help;
   font-size: 9px;
-  font-weight: 400;
   color: var(--text-tertiary);
-  line-height: 1.3;
-  opacity: 0.85;
+  opacity: 0.55;
+  line-height: 1;
+  vertical-align: middle;
+  transition: opacity 0.15s;
 }
+.gmm-calc-info:hover { opacity: 1; }
+.gmm-calc-why {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: -6px;
+  width: 230px;
+  background: var(--popover, #ffffff);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--popover-foreground, #1D1D1F);
+  line-height: 1.55;
+  z-index: 200;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0,0,0,.18);
+}
+.gmm-calc-info:hover .gmm-calc-why { display: block; }
 .gmm-calc-base {
   font-size: 11px;
   font-weight: 700;
@@ -5507,9 +5534,6 @@ a.news-card-title:hover { color: var(--brand); }
 .dp-hd-chart-wrap {
   position: relative;
   width: 100%;
-  margin: 0 auto;
-  aspect-ratio: 6 / 5;
-  overflow: hidden;
   background: var(--card);
   border-top: 1px solid var(--border);
 }
@@ -5524,11 +5548,10 @@ a.news-card-title:hover { color: var(--brand); }
   50%       { opacity: 0.4; }
 }
 #dp-hd-chart {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  display: block;
+  width: 95%;
+  margin: 0 auto;
+  height: auto;
   opacity: 0;
   border-bottom: 1px solid var(--border);
   transition: opacity 150ms ease;
@@ -5933,7 +5956,7 @@ details[open] .nm-acc-chevron { transform: rotate(180deg); }
 
 /* 6. 소형폰(≤480px): 4축 차트 더 높게 + 섹션버튼 컴팩트 */
 @media (max-width: 480px) {
-  .dp-hd-chart-wrap { aspect-ratio: 6 / 5; width: 100%; }
+  .dp-hd-chart-wrap { width: 100%; }
   .dp-section-btn { padding: 8px 10px; font-size: 12px; }
   .dp-name { font-size: 15px; }
   .dp-score-num { font-size: 36px; }

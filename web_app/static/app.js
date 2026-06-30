@@ -2978,6 +2978,8 @@ function _clearPanelDetail() {
   if (_src) _src.style.display = 'none';
   const _tm = document.getElementById('dp-thermo-marker');
   if (_tm) _tm.style.left = '50%';
+  const _fc = document.getElementById('dp-fib-chips');
+  if (_fc) { _fc.style.display = 'none'; _fc.innerHTML = ''; }
   const _lb = document.getElementById('dp-leader-badge');
   if (_lb) _lb.style.display = 'none';
   const _el = document.getElementById('dp-link-external');
@@ -3005,6 +3007,15 @@ function _clearPanelDetail() {
   });
   const rg = document.getElementById('dp-risk-gauge');
   if (rg) rg.style.display = 'none';
+  // fouraxis 섹션 초기화 — 이전 종목 잔상 방지
+  const _fxLoading = document.getElementById('dp-fouraxis-loading');
+  const _fxHeader  = document.getElementById('dp-fouraxis-header');
+  const _fxObs     = document.getElementById('dp-fouraxis-obs');
+  const _fxErr     = document.getElementById('dp-fouraxis-error');
+  if (_fxLoading) _fxLoading.style.display = 'block';
+  if (_fxHeader)  _fxHeader.style.display  = 'none';
+  if (_fxObs)     _fxObs.style.display     = 'none';
+  if (_fxErr)     { _fxErr.style.display   = 'none'; _fxErr.textContent = ''; }
 }
 
 function _populatePanelDetail(d, skipFourAxis, skipVerdict) {
@@ -3718,7 +3729,7 @@ function _renderEntryVerdict(d) {
     _dtEl.className = `dp-hero-banner-dt ${_pgCls}`;
     const _dayChg = d.DayChg != null ? Number(d.DayChg) : null;
     const _chgStr = _dayChg != null
-      ? (_dayChg >= 0 ? `▲ ${_dayChg.toFixed(2)}%` : `▼ ${Math.abs(_dayChg).toFixed(2)}%`)
+      ? (_dayChg >= 0 ? `▲ ${(_dayChg * 100).toFixed(2)}%` : `▼ ${(Math.abs(_dayChg) * 100).toFixed(2)}%`)
       : '';
     const _chgClr = _dayChg != null
       ? (_dayChg >= 0 ? 'rgba(255,200,180,.95)' : 'rgba(180,220,255,.95)')
@@ -4824,6 +4835,8 @@ async function loadDpFourAxis(ticker) {
       _reasonsEl.innerHTML = _allItems.slice(0, 3).join('');
     }
 
+    _renderFibChips(d.fib_levels, 'dp-fib-chips', d.fib_period || 120);
+    _renderFibDcaPlan(d.fib_levels);
     header.style.display = 'block';
 
     const obs = d.key_observation || d.structured_analysis || '';
@@ -4894,23 +4907,55 @@ function switchTab(tabId) {
 }
 
 
-function _renderFibChips(fibLevels) {
-  const wrap = document.getElementById('fib-chips');
+function _renderFibChips(fibLevels, wrapId = 'fib-chips', period = 120) {
+  const wrap = document.getElementById(wrapId);
   if (!wrap) return;
   if (!fibLevels || !fibLevels.length) {
     wrap.style.display = 'none';
     return;
   }
-  wrap.innerHTML = '<span style="font-size:11px;font-weight:700;color:var(--text-secondary);white-space:nowrap;">Fib 120d</span>';
+  wrap.innerHTML = `<span style="font-size:12px;font-weight:700;color:var(--text-secondary);white-space:nowrap;">Fib ${period}d</span>`;
   fibLevels.forEach(f => {
     const chip = document.createElement('span');
-    chip.textContent = `${f.pct} ${f.price.toLocaleString()}`;
+    chip.textContent = `${f.pct} ${Math.ceil(f.price).toLocaleString()}`;
     chip.style.cssText = f.key
-      ? 'background:#ede9fe;color:#7c3aed;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;white-space:nowrap;'
-      : 'background:#f1f0ff;color:#aaa;border-radius:20px;padding:3px 10px;font-size:11px;white-space:nowrap;';
+      ? 'background:#ede9fe;color:#4c1d95;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;white-space:nowrap;border:1px solid #c4b5fd;'
+      : 'background:#f5f3ff;color:#5b21b6;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:500;white-space:nowrap;border:1px solid #ddd6fe;';
     wrap.appendChild(chip);
   });
   wrap.style.display = 'flex';
+}
+
+function _renderFibDcaPlan(fibLevels) {
+  const el = document.getElementById('dp-split-plan');
+  if (!el) return;
+  if (!fibLevels || !fibLevels.length) return;
+  const keyLevels = fibLevels.slice().sort((a, b) => b.price - a.price).slice(0, 3);
+  if (keyLevels.length < 2) return;
+  const currentPrice = _lastDetailData && _lastDetailData.Price != null
+    ? Number(_lastDetailData.Price) : null;
+  if (!currentPrice) return;
+  const fp = v => fmtPrice(v);
+  const weights = [30, 40, 30];
+  const nums = ['①', '②', '③'];
+  const rows = keyLevels.map((f, i) => {
+    const w = weights[i] || 33;
+    const d = ((f.price / currentPrice) - 1) * 100;
+    const dStr = d >= 0 ? `+${d.toFixed(1)}%` : `${d.toFixed(1)}%`;
+    return `<div class="spl-row${i === 0 ? ' spl-hi' : ''}">
+      <span class="spl-num">${nums[i]}</span>
+      <div class="spl-info"><span class="spl-price">${fp(f.price)}</span><span class="spl-delta">${f.pct} ${dStr}</span></div>
+      <div class="spl-bar-wrap"><div class="spl-bar-fill" style="width:${w}%;background:${i === 0 ? '#3182F6' : '#CBD5E1'}"></div></div>
+      <span class="spl-weight">${w}%</span>
+    </div>`;
+  }).join('');
+  const avg = keyLevels.reduce((s, f, i) => s + f.price * (weights[i] || 33), 0) / 100;
+  const maxD = Math.abs(((keyLevels[keyLevels.length - 1].price / currentPrice) - 1) * 100);
+  el.innerHTML = `<div class="spl-panel">
+    <div class="spl-head">분할매수 플랜<span class="spl-sub">Fib 기반</span></div>
+    ${rows}
+    <div class="spl-foot">평균단가 <b>${fp(avg)}</b> · 최대이격 <b>${maxD.toFixed(1)}%</b></div>
+  </div>`;
 }
 
 async function loadFourAxis(ticker) {
@@ -4919,13 +4964,13 @@ async function loadFourAxis(ticker) {
   const chartW  = document.getElementById('fouraxis-chart-wrap');
   if (!loading) return;
 
-  const cacheKey = `fouraxis:v2:${ticker}:${currentMarket}`;
+  const cacheKey = `fouraxis:v5:${ticker}:${currentMarket}`;
   const cached = _clientCache.get(cacheKey);
   if (cached) {
     document.getElementById('fouraxis-chart').src = 'data:image/png;base64,' + cached.chart;
     chartW.style.display = 'block';
     loading.style.display = 'none';
-    _renderFibChips(cached.fib_levels);
+    _renderFibChips(cached.fib_levels, 'fib-chips', cached.fib_period || 120);
     return;
   }
 
@@ -4945,7 +4990,7 @@ async function loadFourAxis(ticker) {
     _clientCache.set(cacheKey, d);
     document.getElementById('fouraxis-chart').src = 'data:image/png;base64,' + d.chart;
     chartW.style.display = 'block';
-    _renderFibChips(d.fib_levels);
+    _renderFibChips(d.fib_levels, 'fib-chips', d.fib_period || 120);
     _renderRsRating(d.rs_rating_data);
     _renderHeatSignal(d.heat_signal);
   } catch (e) {

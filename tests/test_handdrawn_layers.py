@@ -146,3 +146,26 @@ def test_fib_levels_payload_shape():
     assert fib_levels[4]["key"] is False
     for item in fib_levels:
         assert "pct" in item and "price" in item and "key" in item
+
+
+@pytest.mark.parametrize("width_px,height_px,dpi", [
+    (720,  600, 100),   # 기본 치수
+    (1140, 532, 100),   # 실제 서버 렌더 치수
+])
+def test_renderer_title_not_clipped(width_px, height_px, dpi):
+    """적응형 여백 회귀 방지 — 상단 8px에 제목 픽셀이 없어야 한다."""
+    from PIL import Image
+    from handdrawn_renderer import HandDrawnChartRenderer
+
+    hist = _make_hist(120)
+    r = HandDrawnChartRenderer(hist, _DummyResult(), ticker="SAMSUNG",
+                               width_px=width_px, height_px=height_px, dpi=dpi)
+    img = r.render()
+
+    arr = np.array(img.convert("RGB"))
+    top8 = arr[:8, :, :]
+    non_white = int(np.sum(np.any(top8 < 230, axis=2)))
+    assert non_white == 0, (
+        f"[{width_px}×{height_px}] 상단 8px에 비흰색 픽셀 {non_white}개 — "
+        "적응형 top 계산 오류"
+    )

@@ -12,6 +12,11 @@ SYMBOL_ALIASES: dict[str, str] = {
     "BRK.A": "BRK-A",
 }
 
+# KR 거래정지/상장폐지 종목 (012510.KS 형식)
+KR_HALTED: frozenset[str] = frozenset({
+    "012510.KS",  # 더존비즈온 — 거래정지
+})
+
 DELISTED: frozenset[str] = frozenset({
     "ATVI",  # MSFT 인수 완료 (2023-10)
     "TWTR",  # 비상장 전환 (2022-10)
@@ -49,14 +54,15 @@ def normalize_symbol(ticker: str) -> str:
 
 
 def is_delisted(ticker: str) -> bool:
-    """DELISTED 셋에 있으면 True. 대소문자 무관."""
+    """DELISTED 또는 KR_HALTED 셋에 있으면 True. 대소문자 무관."""
     if not ticker:
         return False
-    return str(ticker).strip().upper() in DELISTED
+    t = str(ticker).strip()
+    return t.upper() in DELISTED or t in KR_HALTED or t.upper() in KR_HALTED
 
 
 def filter_symbols(tickers: list[str]) -> list[str]:
-    """normalize + delisted 제거 + 중복 제거(순서 보존)."""
+    """normalize + delisted/거래정지 제거 + 중복 제거(순서 보존)."""
     out: list[str] = []
     for t in tickers:
         norm = normalize_symbol(t)

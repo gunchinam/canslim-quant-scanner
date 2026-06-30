@@ -1936,6 +1936,16 @@ def api_ticker(ticker: str):
             except Exception as _e:
                 logging.debug("api_ticker realtime price override failed: %s", _e)
 
+        # tradingkey 기관·애널리스트 데이터 주입 (US 종목만)
+        if market_arg != "KR":
+            try:
+                from tradingkey_api import get_tradingkey_data as _get_tk
+                _tk = _get_tk(ticker)
+                if _tk:
+                    result["tradingkey"] = _tk
+            except Exception as _tke:
+                logging.debug("tradingkey inject failed: %s", _tke)
+
         # ── 응답 캐시 저장 ──
         with _ticker_detail_cache_lock:
             if len(_ticker_detail_cache) >= _TICKER_DETAIL_MAX:

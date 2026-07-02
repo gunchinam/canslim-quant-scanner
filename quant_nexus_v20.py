@@ -6163,6 +6163,22 @@ class QuantNexusApp:
                 f_short_int, f_math, f_sentiment, f_cs_c, f_cs_a, f_cs_n, f_cs_s,
                 f_cs_l, f_cs_i, f_orb, f_nr7, f_bb_revert,
             ], dtype=np.float64)
+            # ── ScoreV2 팩터 기록 — 횡단면 표준화(score_v2.py)의 입력 ──
+            _factor_map = {k: round(float(v), 3) for k, v in zip(_SW_KEYS, _fv_arr)}
+            try:
+                _factor_map["st_rev_5d"] = round(
+                    -float(hist["Close"].iloc[-1] / hist["Close"].iloc[-6] - 1.0), 4
+                ) if len(hist) >= 6 else 0.0
+            except Exception:
+                _factor_map["st_rev_5d"] = 0.0
+            _factor_map["near_52w"] = round(1.0 - float(mom.get("dist_from_52w_high", 1.0)), 4)
+            _risk_flags: list = []
+            if earn["fail_safe_eps"]: _risk_flags.append("EPS_NEGATIVE")
+            if rs["fail_safe_rs"]:    _risk_flags.append("RS_LAGGARD")
+            if low_liquidity:         _risk_flags.append("LOW_LIQUIDITY")
+            if _dd_risk == "EXTREME": _risk_flags.append("MDD_EXTREME")
+            elif _dd_risk == "HIGH":  _risk_flags.append("MDD_HIGH")
+            if bear_cap_applied:      _risk_flags.append("BEAR_MARKET")
             if _is_holdco:
                 _holdco_wv = np.array([w.get(k, 0.0) for k in _SW_KEYS], dtype=np.float64)
                 _raw_b_arr = np.full(len(_SW_MODES), float(_holdco_wv @ _fv_arr))
@@ -6854,6 +6870,8 @@ class QuantNexusApp:
                 "ATRPercent":       atr["atr_percent"],
                 "Regime":           regime["regime"],
                 "TotalScore":       final,
+                "_Factors":         _factor_map,
+                "RiskFlags":        _risk_flags,
                 "Scores":           all_scores,
                 "Signal":           signal,
                 "Breakdown":        breakdown,

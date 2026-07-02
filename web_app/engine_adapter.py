@@ -294,14 +294,13 @@ def _attach_midcap_alpha(rows: list[dict]) -> None:
         mcap = r.get("_MarketCap") or 0
         vol_ratio = r.get("_VolRatio") or 1.0
         eps = r.get("_EPS")
-        moat = r.get("MoatBonus") or 0
 
         # 1) 승격 충족도: 시총 접근도 + 수익성 + RS 모멘텀
         sp500_floor = 18e9
         mcap_prox = min(40, max(0, (mcap / sp500_floor) * 40)) if mcap > 0 else 0
         profit = 30 if (eps is not None and eps > 0) else (10 if eps is None else 0)
         rs_part = min(15, rs / 100 * 15) if rs > 0 else 0
-        promo = min(100, round(mcap_prox + profit + rs_part + min(15, moat * 5)))
+        promo = min(100, round(mcap_prox + profit + rs_part))
 
         # 2) 매집 패턴: 거래량 배수 + 점수 기반 프록시
         if vol_ratio > 1.5 and ts > 55:

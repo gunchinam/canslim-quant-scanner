@@ -34,3 +34,16 @@ def test_moat_bonus_idempotent():
     assert rows[0]["TotalScore"] == 75.0
     _apply_moat_bonus(rows)  # 2회째 — 누적되면 안 됨
     assert rows[0]["TotalScore"] == 75.0, "MoatBonus 이중 가산"
+
+
+def test_midcap_alpha_no_moat_double_count():
+    """midcap_alpha promo에서 moat이 이중 반영되면 안 된다."""
+    from engine_adapter import _attach_midcap_alpha
+    base = {"Indices": ["SP400"], "TotalScore": 70, "RSRating": 80,
+            "_MarketCap": 9e9, "_VolRatio": 1.0, "_EPS": 1.0}
+    r_moat = dict(base, MoatBonus=3)
+    r_plain = dict(base, MoatBonus=0)
+    _attach_midcap_alpha([r_moat])
+    _attach_midcap_alpha([r_plain])
+    # moat 기여는 ts를 통해서만 — promo 직접 가산이 없어야 동일
+    assert r_moat["MidcapPromotion"] == r_plain["MidcapPromotion"], "moat 이중 반영"

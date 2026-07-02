@@ -63,3 +63,9 @@ def test_apply_score_v2_env_off():
         assert all(r["TotalScore"] == 50.0 for r in rows)
     finally:
         os.environ.pop("SCORE_V2", None)
+
+
+def test_engine_adapter_wires_score_v2():
+    with open("web_app/engine_adapter.py", encoding="utf-8") as f:
+        src = f.read()
+    assert src.count("apply_score_v2(results)") >= 2, "scan_sector/scan_all 양쪽 연결 필요"

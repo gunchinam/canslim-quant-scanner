@@ -719,6 +719,12 @@ class ScanAdapter:
         _attach_valuation_context(results)
         _attach_regime(results, self._market)  # 모듈1~4: 레짐 전환확률·OFI·리드래그 → RegimeEntryScore
         _attach_consecutive(results, self._market)
+        # ScoreV2 — 횡단면 표준화 점수 (성공/실패와 무관하게 스캔은 계속)
+        try:
+            from score_v2 import apply_score_v2
+            apply_score_v2(results)
+        except Exception as _sve:
+            logging.warning("score_v2 적용 실패 (legacy 점수 유지): %s", _sve)
         results.sort(key=_scan_sort_key, reverse=True)
         return results
 
@@ -760,6 +766,12 @@ class ScanAdapter:
         _attach_valuation_context(results)
         _attach_regime(results, self._market)  # 모듈1~4: 레짐 전환확률·OFI·리드래그 → RegimeEntryScore
         _attach_consecutive(results, self._market)
+        # ScoreV2 — 횡단면 표준화 점수 (성공/실패와 무관하게 스캔은 계속)
+        try:
+            from score_v2 import apply_score_v2
+            apply_score_v2(results)
+        except Exception as _sve:
+            logging.warning("score_v2 적용 실패 (legacy 점수 유지): %s", _sve)
         results.sort(key=_scan_sort_key, reverse=True)
         # forward IC 추적: BOTTLENECK_SNAPSHOT=1 일 때만 오늘 병목 등급 스냅샷 적재
         if os.environ.get("BOTTLENECK_SNAPSHOT") == "1":

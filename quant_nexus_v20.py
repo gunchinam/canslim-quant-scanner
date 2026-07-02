@@ -5309,7 +5309,7 @@ class QuantNexusApp:
                 fixed_name = self._resolve_display_name(ticker, cached.get("Name", ""))
                 if fixed_name and cached.get("Name") != fixed_name:
                     cached["Name"] = fixed_name
-                # 캐시 히트 시 DayChg 실시간 갱신 (장중 등락 역전 방지)
+                # 캐시 히트 시 Price/DayChg 실시간 갱신 (장중 가격 고착 방지)
                 # fast_info는 yfinance의 경량 API라 rate-limit 부담이 낮음
                 try:
                     if _YF_COOLDOWN["until"] <= time.time():
@@ -5320,6 +5320,7 @@ class QuantNexusApp:
                             _live_chg = (_rt - _pc) / _pc
                             cached["DayChg"] = _live_chg
                             cached["_DayChgPct"] = _live_chg * 100
+                            cached["Price"] = float(_rt)
                 except Exception:
                     pass
                 return cached

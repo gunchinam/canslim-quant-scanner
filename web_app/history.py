@@ -46,6 +46,41 @@ def _find_baseline(market: str, today: date) -> tuple[dict | None, date | None]:
     return None, None
 
 
+def _row_for_test(r: dict, rank: int = 1) -> dict:
+    """save_snapshot._row와 동일 로직 — 단위 테스트 접근용.
+
+    스냅샷 row 포맷을 생성: score, rank, entry, _PER, _PBR, regime_entry(선택),
+    regime_state(선택), ofi(선택), accum(선택), factors(선택), legacy(선택), flags(선택).
+    """
+    d = {
+        "score": round(float(r.get("TotalScore", 0) or 0), 1),
+        "rank": rank,
+        "entry": r.get("EntryStatus"),
+        "_PER": r.get("_PER"),
+        "_PBR": r.get("_PBR"),
+    }
+    # 레짐 모듈 필드 (있을 때만) — RegimeEntryScore forward 누적 비교용.
+    # 미설치/비활성 시 키 부재 → 기존 포맷과 100% 호환.
+    re_score = r.get("RegimeEntryScore")
+    if re_score is not None:
+        d["regime_entry"] = round(float(re_score), 2)
+        d["regime_state"] = r.get("RegimeState")
+        d["ofi"] = r.get("OFIScore")
+        d["accum"] = bool(r.get("Accumulation"))
+    # ScoreV2 검증용 필드 (있을 때만 — 기존 포맷 100% 호환).
+    # Task 10이 forward IC 검증 시 소비.
+    f = r.get("_Factors")
+    if isinstance(f, dict) and f:
+        d["factors"] = f
+    leg = r.get("_LegacyScore")
+    if leg is not None:
+        d["legacy"] = round(float(leg), 1)
+    flags = r.get("RiskFlags")
+    if flags:
+        d["flags"] = flags
+    return d
+
+
 def annotate_deltas(results: list[dict], market: str) -> list[dict]:
     """results 각 항목에 ScoreDelta / RankDelta / DeltaDays 필드 추가.
 
@@ -105,28 +140,10 @@ def save_snapshot(results: list[dict], market: str, universe: list[str] | set[st
     sorted_by_score = sorted(
         results, key=lambda x: x.get("TotalScore") or 0, reverse=True
     )
-    def _row(r: dict, rank: int) -> dict:
-        d = {
-            "score": round(float(r.get("TotalScore", 0) or 0), 1),
-            "rank": rank,
-            "entry": r.get("EntryStatus"),
-            "_PER": r.get("_PER"),
-            "_PBR": r.get("_PBR"),
-        }
-        # 레짐 모듈 필드 (있을 때만) — RegimeEntryScore forward 누적 비교용.
-        # 미설치/비활성 시 키 부재 → 기존 포맷과 100% 호환.
-        re_score = r.get("RegimeEntryScore")
-        if re_score is not None:
-            d["regime_entry"] = round(float(re_score), 2)
-            d["regime_state"] = r.get("RegimeState")
-            d["ofi"] = r.get("OFIScore")
-            d["accum"] = bool(r.get("Accumulation"))
-        return d
-
     snap = {}
     for i, r in enumerate(sorted_by_score):
         if r.get("Ticker"):
-            snap[r["Ticker"]] = _row(r, i + 1)
+            snap[r["Ticker"]] = _row_for_test(r, i + 1)
     if universe:
         for tkr in universe:
             if tkr and tkr not in snap:

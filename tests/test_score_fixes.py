@@ -57,3 +57,17 @@ def test_super_mult_constants_replace_dead_ones():
     for k in ('"SUPER_MULT_ACCEL"', '"SUPER_MULT_STRONG"',
               '"SUPER_MULT_HIGH52"', '"SUPER_MULT_FULL"', '"SUPER_MULT_PARTIAL"'):
         assert k in src, f"{k} 명명 상수 부재"
+
+
+def test_stale_penalty():
+    """스테일 캐시 점수 감쇄 — 하루당 3점, 최대 15점."""
+    import quant_nexus_v20 as qn
+    row = {"TotalScore": 80.0}
+    out = qn._apply_stale_penalty(dict(row), days_back=3)
+    assert out["TotalScore"] == 71.0          # 80 - 3*3
+    assert out["_RawTotalScore"] == 80.0
+    assert out["StaleDays"] == 3
+    out0 = qn._apply_stale_penalty(dict(row), days_back=0)
+    assert out0["TotalScore"] == 80.0 and out0["StaleDays"] == 0
+    out9 = qn._apply_stale_penalty(dict(row), days_back=9)
+    assert out9["TotalScore"] == 65.0          # min(15, 27) 캡

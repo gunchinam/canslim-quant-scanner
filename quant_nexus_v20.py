@@ -1707,6 +1707,16 @@ class DataCache:
                     pass
 
 
+def _apply_stale_penalty(row: dict, days_back: int) -> dict:
+    """스테일 캐시 점수 감쇄 — 하루당 3점, 최대 15점. 원본은 _RawTotalScore 보존."""
+    row["StaleDays"] = int(days_back)
+    ts = row.get("TotalScore")
+    if days_back > 0 and isinstance(ts, (int, float)):
+        row.setdefault("_RawTotalScore", float(ts))
+        row["TotalScore"] = max(0.0, float(ts) - min(15.0, 3.0 * days_back))
+    return row
+
+
 # ============================================================
 # 툴팁 클래스
 # ============================================================
@@ -5368,18 +5378,20 @@ class QuantNexusApp:
             if hist is None or hist.empty or len(hist) < 30:
                 # 오늘 날짜 키로 먼저 조회, 없으면 최대 7일 이전 키까지 lookback
                 stale = self.cache.get(strategy_key, max_age_minutes=60 * 24 * 30)
+                _stale_days = 0
                 if not stale:
                     for _days_back in range(1, 8):
                         _prev = (datetime.now() - timedelta(days=_days_back)).strftime("%Y%m%d")
                         _prev_key = f"{ticker}__{self._scan_strategy}__{_prev}"
                         stale = self.cache.get(_prev_key, max_age_minutes=60 * 24 * (_days_back + 1))
                         if stale:
+                            _stale_days = _days_back
                             break
                 if stale:
                     stale = dict(stale)
                     stale.setdefault("DataSource", "cache")
                     stale.setdefault("DataStatus", "STALE_CACHE")
-                    return stale
+                    return _apply_stale_penalty(stale, _stale_days)
                 if is_us:
                     try:
                         hist = _fetch_us_fallback_history(ticker)

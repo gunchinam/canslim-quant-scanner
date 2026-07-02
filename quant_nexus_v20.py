@@ -685,6 +685,8 @@ CANSLIM = {
     "SCORE_CEIL_MOMENTUM_OVERRIDE": 70,  # 극강 모멘텀 종목 FailSafe 완화 천장
     "SUPER_MULT_MIN":    1.20,   # 슈퍼 그로스 최소 승수
     "SUPER_MULT_MAX":    1.50,   # 슈퍼 그로스 최대 승수
+    "DD_MULT_EXTREME":   0.65,   # MDD 극단 낙폭 감쇄 승수 (STEP 10.6 / 5전략 루프 공용)
+    "DD_MULT_HIGH":      0.80,   # MDD 고위험 낙폭 감쇄 승수
     "BEAR_CAP":          0.50,   # M: Bear 시장 점수 상한 비율
 }
 
@@ -6126,11 +6128,11 @@ class QuantNexusApp:
             # EXTREME MDD → ×0.65, HIGH → ×0.80 (가중합과 독립적인 하드 게이트)
             _dd_risk = dd.get("risk", "NORMAL")
             if _dd_risk == "EXTREME":
-                final *= 0.65
-                canslim_tags.append(f"[DD⚠️] MDD {dd['current_dd']:.0%} 극단적 낙폭 → ×0.65 감쇄")
+                final *= CANSLIM["DD_MULT_EXTREME"]
+                canslim_tags.append(f"[DD⚠️] MDD {dd['current_dd']:.0%} 극단적 낙폭 → ×{CANSLIM['DD_MULT_EXTREME']} 감쇄")
             elif _dd_risk == "HIGH":
-                final *= 0.80
-                canslim_tags.append(f"[DD⚠️] MDD {dd['current_dd']:.0%} 고위험 낙폭 → ×0.80 감쇄")
+                final *= CANSLIM["DD_MULT_HIGH"]
+                canslim_tags.append(f"[DD⚠️] MDD {dd['current_dd']:.0%} 고위험 낙폭 → ×{CANSLIM['DD_MULT_HIGH']} 감쇄")
 
             # ════════════════════════════════════════════════════════════
             # STEP 10.7 — 전략 통합 점수 (5개 전략 동시 산출)
@@ -6181,6 +6183,12 @@ class QuantNexusApp:
                 _f = max(0.0, min(100.0, _va["adj_score"]))
                 if low_liquidity:
                     _f = min(_f, 55.0)
+                # 드로다운 게이트 — STEP 10.6과 동일 감쇄를 5전략 경로에도 적용
+                # (composite가 final을 덮어써 STEP 10.6이 무효화되던 버그 수정)
+                if _dd_risk == "EXTREME":
+                    _f *= CANSLIM["DD_MULT_EXTREME"]
+                elif _dd_risk == "HIGH":
+                    _f *= CANSLIM["DD_MULT_HIGH"]
                 all_scores[_mode] = round(_f, 1)
 
             # 5개 전략을 통합한 복합 점수 (단일 표시용)

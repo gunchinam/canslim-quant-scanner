@@ -47,3 +47,13 @@ def test_midcap_alpha_no_moat_double_count():
     _attach_midcap_alpha([r_plain])
     # moat 기여는 ts를 통해서만 — promo 직접 가산이 없어야 동일
     assert r_moat["MidcapPromotion"] == r_plain["MidcapPromotion"], "moat 이중 반영"
+
+
+def test_super_mult_constants_replace_dead_ones():
+    """슈퍼그로스 승수 명명 상수화: 죽은 SUPER_MULT_MIN/MAX 제거 + 5개 상수 추가."""
+    src = _src()
+    assert '"SUPER_MULT_MIN"' not in src, "죽은 상수 잔존"
+    assert '"SUPER_MULT_MAX"' not in src
+    for k in ('"SUPER_MULT_ACCEL"', '"SUPER_MULT_STRONG"',
+              '"SUPER_MULT_HIGH52"', '"SUPER_MULT_FULL"', '"SUPER_MULT_PARTIAL"'):
+        assert k in src, f"{k} 명명 상수 부재"

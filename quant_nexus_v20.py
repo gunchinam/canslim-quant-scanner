@@ -683,8 +683,11 @@ CANSLIM = {
     "RS_LAGGARD_MAX":    40,     # L: 낙오주 RS Rating 상한
     "SCORE_CEIL_LAGGARD":50,     # Fail-Safe: 낙오주 점수 천장
     "SCORE_CEIL_MOMENTUM_OVERRIDE": 70,  # 극강 모멘텀 종목 FailSafe 완화 천장
-    "SUPER_MULT_MIN":    1.20,   # 슈퍼 그로스 최소 승수
-    "SUPER_MULT_MAX":    1.50,   # 슈퍼 그로스 최대 승수
+    "SUPER_MULT_ACCEL":   1.18,  # C+A+L 완전충족 + EPS 가속
+    "SUPER_MULT_STRONG":  1.14,  # C+A+L 완전충족 + EPS 강한 성장
+    "SUPER_MULT_HIGH52":  1.10,  # C+A+L 완전충족 + 신고가·거래량 확인
+    "SUPER_MULT_FULL":    1.07,  # C+A+L 완전충족 (기타)
+    "SUPER_MULT_PARTIAL": 1.05,  # 2/3 충족
     "DD_MULT_EXTREME":   0.65,   # MDD 극단 낙폭 감쇄 승수 (STEP 10.6 / 5전략 루프 공용)
     "DD_MULT_HIGH":      0.80,   # MDD 고위험 낙폭 감쇄 승수
     "BEAR_CAP":          0.50,   # M: Bear 시장 점수 상한 비율
@@ -6089,13 +6092,13 @@ class QuantNexusApp:
             if not fail_safe_triggered and not bear_cap_applied:
                 if fulfilled == 3:
                     if earn["eps_acceleration"]:
-                        super_mult = 1.18
+                        super_mult = CANSLIM["SUPER_MULT_ACCEL"]
                     elif earn["eps_growth"] >= CANSLIM["EPS_STRONG"]:
-                        super_mult = 1.14
+                        super_mult = CANSLIM["SUPER_MULT_STRONG"]
                     elif mom["near_52w_high"] and vol_a["s_confirmed"]:
-                        super_mult = 1.10
+                        super_mult = CANSLIM["SUPER_MULT_HIGH52"]
                     else:
-                        super_mult = 1.07
+                        super_mult = CANSLIM["SUPER_MULT_FULL"]
                     canslim_tags.append(
                         f"⭐ SUPER GROWTH MULTIPLIER × {super_mult:.2f}"
                         f"  (C={'✅' if super_growth_criteria['C'] else '❌'}"
@@ -6103,7 +6106,7 @@ class QuantNexusApp:
                         f" L={'✅' if super_growth_criteria['L'] else '❌'})"
                     )
                 elif fulfilled == 2:
-                    super_mult = 1.05
+                    super_mult = CANSLIM["SUPER_MULT_PARTIAL"]
                     canslim_tags.append(
                         f"[Partial] 2/3 CAN SLIM 조건 충족 × {super_mult:.2f}"
                     )

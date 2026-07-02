@@ -1,5 +1,9 @@
 """Phase A 버그 수정 검증 — 네트워크 없이 코드 구조/함수 단위 검증."""
 import re
+import sys
+import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "web_app"))
 
 
 def _src():
@@ -20,3 +24,13 @@ def test_dd_gate_applied_inside_strategy_loop():
     loop_end = src.index("all_scores[_mode] = round(_f, 1)")
     loop_body = src[loop_start:loop_end]
     assert "_dd_risk" in loop_body, "5전략 루프에 드로다운 게이트 미적용 (composite가 STEP10.6을 덮어씀)"
+
+
+def test_moat_bonus_idempotent():
+    """MoatBonus가 여러 경로에서 호출되어도 1회만 가산되어야 한다."""
+    from app import _apply_moat_bonus
+    rows = [{"Ticker": "T", "TotalScore": 70.0, "MoatBonus": 5}]
+    _apply_moat_bonus(rows)
+    assert rows[0]["TotalScore"] == 75.0
+    _apply_moat_bonus(rows)  # 2회째 — 누적되면 안 됨
+    assert rows[0]["TotalScore"] == 75.0, "MoatBonus 이중 가산"

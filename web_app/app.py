@@ -198,11 +198,15 @@ _ENTRY_PLAN_KEEP: frozenset = frozenset({
 _MOAT_DATA_STRIP: frozenset = frozenset({"scores", "evidence_source", "story_risk"})
 
 def _apply_moat_bonus(rows: list) -> None:
-    """MoatBonus를 TotalScore에 반영한다. 모든 캐시 저장 경로에서 호출."""
+    """MoatBonus를 TotalScore에 반영한다. 모든 캐시 저장 경로에서 호출.
+    _MoatApplied 마커로 멱등 보장 — 같은 리스트가 여러 경로를 거쳐도 1회만 가산."""
     for r in rows:
+        if not isinstance(r, dict) or r.get("_MoatApplied"):
+            continue
         bonus = r.get("MoatBonus", 0)
         if bonus and isinstance(r.get("TotalScore"), (int, float)):
             r["TotalScore"] = min(100.0, r["TotalScore"] + bonus)
+            r["_MoatApplied"] = True
 
 
 def _strip_heavy(rows: list) -> list:
@@ -453,6 +457,7 @@ def _annotate_moats(results: list, force: bool = False):
                 r.pop("Moat", None)
                 r.pop("MoatCategory", None)
                 r.pop("MoatData", None)
+                r.pop("_MoatApplied", None)
     _moat_annotate(results)
     return results
 

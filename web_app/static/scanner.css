@@ -4066,6 +4066,77 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 }
 .spl-foot b { color: #334155; font-weight: 700; }
 
+/* ── Verdict Card (종합 판정 카드) ──────────────────────────────
+   spl-panel과 동일한 톤(흰 배경 · 12px 라운드 · #E2E8F0 보더)을 유지하되
+   판정 색상(BUY/SPLIT/WAIT/AVOID/HOLD)을 좌측 보더 + 뱃지로 강조한다. */
+.vc-card {
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-left: 4px solid;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 0 20px 12px;
+}
+.vc-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.vc-badge {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+.vc-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1E293B;
+  flex: 1 1 auto;
+}
+.vc-conf {
+  font-size: 11px;
+  font-weight: 500;
+  color: #94A3B8;
+  background: #F1F5F9;
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+.vc-reasons {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.vc-reason {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.5;
+}
+.vc-reason::before {
+  content: '· ';
+  color: #94A3B8;
+}
+.vc-trigger {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #F1F5F9;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3182F6;
+  cursor: pointer;
+}
+.vc-trigger:not([data-vc-scroll]) {
+  color: #64748B;
+  cursor: default;
+}
+
 /* ── Desktop Layout (≥768px) ────────────────────────────────── */
 @media (min-width: 768px) {
   /* swap poster → banner */

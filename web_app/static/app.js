@@ -668,6 +668,12 @@ async function runScan() {
     }
     _runScanAttempt = 0;  // 성공 시 카운터 리셋
     _warmingRetries = 0;
+    // 커버리지 경고 — 유니버스 대비 응답 종목이 크게 부족하면 배너 표시
+    // (데이터 갱신 지연으로 종목이 조용히 빠지는 것을 사용자에게 알림)
+    if (!reqSector) {
+      const _uni = Number(res.headers.get('X-Universe-Count') || 0);
+      _renderCoverageWarning(allStocks.length, _uni, reqMarket);
+    }
     // localStorage에 저장 — 다음 로드 시 서버 워밍 전 즉시 표시용
     try { localStorage.setItem(_lsCacheKey, JSON.stringify(allStocks)); } catch {}
     _refreshFilteredView();
@@ -691,6 +697,19 @@ async function runScan() {
       stopScanLoading();
       if (btn) btn.disabled = false;
     }
+  }
+}
+
+// 커버리지 경고 배너 — 유니버스 대비 표시 종목이 80% 미만이면 알림
+function _renderCoverageWarning(count, universe, market) {
+  const el = document.getElementById('coverage-warning-banner');
+  if (!el) return;
+  if (universe > 0 && count < universe * 0.8) {
+    const missing = universe - count;
+    el.innerHTML = `<div style="margin:4px 12px;padding:8px 12px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;font-size:13px;color:#664d03;">⚠️ ${esc(market)} 종목 <b>${missing}개</b>가 데이터 갱신 지연으로 표시되지 않고 있어요 (${count}/${universe}). 서버가 자동으로 다시 수집 중입니다.</div>`;
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
   }
 }
 
@@ -1662,6 +1681,7 @@ function renderStockRow(stock, rank) {
   if (stock.LowLiquidity) risks.push('<span class="risk-badge risk-badge-liq" title="거래대금 부족 — 유동성이 낮아 매매 시 주의">유동성↓</span>');
   if (stock.FailSafe)     risks.push('<span class="risk-badge risk-badge-fail" title="안전장치 발동 — EPS 적자 또는 RS 40 미만으로 점수 상한 제한">' + (stock._fail_eps ? 'EPS적자' : '안전장치') + '</span>');
   if (stock.BearCap)      risks.push('<span class="risk-badge risk-badge-bear" title="하락장 상한 발동 — 하락장으로 점수 50점 상한 제한">하락장↓</span>');
+  if ((stock.StaleDays ?? 0) >= 2) risks.push(`<span class="risk-badge risk-badge-stale" title="${stock.StaleDays}일 전 데이터 — 최신 수집이 지연돼 이전 분석을 표시 중 (하루 3점 감쇄 적용)">${stock.StaleDays}일전</span>`);
   if (risks.length) riskHtml = `<div class="risk-badges">${risks.join('')}</div>`;
 
   // 증권사 컨센서스 목표가 HTML (IIFE 제거 — 500+ 종목 렌더 시 함수 생성 오버헤드 제거)
@@ -4939,16 +4959,22 @@ function _renderFibDcaPlan(fibLevels) {
   const el = document.getElementById('dp-split-plan');
   if (!el) return;
   if (!fibLevels || !fibLevels.length) return;
-  const keyLevels = fibLevels.slice().sort((a, b) => b.price - a.price).slice(0, 3);
-  if (keyLevels.length < 2) return;
   const currentPrice = _lastDetailData && _lastDetailData.Price != null
     ? Number(_lastDetailData.Price) : null;
   if (!currentPrice) return;
+  // 현재가보다 낮은(=아직 도달하지 않은) 레벨만 매수 후보로 삼는다.
+  // 필터링 없이 상위 3개를 고르면 현재가가 이미 하회한 레벨도 매수 목표로 나오는 문제가 있었다.
+  const keyLevels = fibLevels
+    .filter(f => f.price < currentPrice)
+    .sort((a, b) => b.price - a.price)
+    .slice(0, 3);
+  if (keyLevels.length < 2) return;
   const fp = v => fmtPrice(v);
-  const weights = [30, 40, 30];
+  const weightSets = { 2: [40, 60], 3: [30, 40, 30] };
+  const weights = weightSets[keyLevels.length];
   const nums = ['①', '②', '③'];
   const rows = keyLevels.map((f, i) => {
-    const w = weights[i] || 33;
+    const w = weights[i];
     const d = ((f.price / currentPrice) - 1) * 100;
     const dStr = d >= 0 ? `+${d.toFixed(1)}%` : `${d.toFixed(1)}%`;
     return `<div class="spl-row${i === 0 ? ' spl-hi' : ''}">
@@ -4958,7 +4984,8 @@ function _renderFibDcaPlan(fibLevels) {
       <span class="spl-weight">${w}%</span>
     </div>`;
   }).join('');
-  const avg = keyLevels.reduce((s, f, i) => s + f.price * (weights[i] || 33), 0) / 100;
+  const wSum = weights.reduce((a, b) => a + b, 0);
+  const avg = keyLevels.reduce((s, f, i) => s + f.price * weights[i], 0) / wSum;
   const maxD = Math.abs(((keyLevels[keyLevels.length - 1].price / currentPrice) - 1) * 100);
   el.innerHTML = `<div class="spl-panel">
     <div class="spl-head">분할매수 플랜<span class="spl-sub">Fib 기반</span></div>

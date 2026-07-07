@@ -1,15 +1,19 @@
-"""score_v2.py — 횡단면 표준화 점수 (Barra/Grinold-Kahn 스타일)
+"""score_v2.py — 횡단면 표준화 순위 (Barra/Grinold-Kahn 스타일)
 
-팩터별 winsorize(MAD ±3σ) → 횡단면 z-score → 가중합 → 백분위(0~100).
-게이트(적자·저유동성·MDD·약세장)는 점수 변조 대신 RiskFlags 기반 시그널 강등.
-시장 전역 승수(VIX·매크로·BearCap)는 순위를 못 바꾸므로 점수에서 제외.
+팩터별 winsorize(MAD ±3σ) → 횡단면 z-score → 가중합 → 백분위(0~100)를
+RankPct 필드로 병기한다. TotalScore/Signal(절대 품질 축)은 건드리지 않는다
+— 백분위가 TotalScore를 덮어쓰면 시그널 사다리·등급·임계값이 전부 고정
+비율 컷으로 변질되고 캡/감쇄 패치가 무력화되기 때문 (2026-07-07 이원화).
 
-env SCORE_V2=0 → no-op (legacy TotalScore 유지, 원클릭 롤백).
+- TotalScore: legacy 절대 점수 (판단 축 — "오늘 살까?")
+- RankPct:    오늘 유니버스 내 순위 백분위 (탐색 축 — "무엇부터 볼까?")
+- _LegacyScore: 스냅샷 legacy 계열 연속성 유지용 (forward IC ablation)
+
+env SCORE_V2=0 → no-op (RankPct 미산출, 원클릭 롤백).
 """
 from __future__ import annotations
 
 import os
-import re
 
 import numpy as np
 
@@ -24,26 +28,6 @@ FACTOR_GROUPS: dict[str, tuple[float, tuple[str, ...]]] = {
 }
 MIN_SAMPLE = 10
 
-# 시그널 사다리 — 기존 STEP 11 임계 유지 (fulfilled 조건은 v2에서 미사용 → 82 상한)
-_LADDER = [
-    (82, "⭐⭐⭐ STRONG LEADER"),
-    (72, "⭐⭐ LEADER"),
-    (60, "⭐ WATCH LIST — Accumulate"),
-    (48, "⏸ NEUTRAL — Hold"),
-    (35, "⚠️ CAUTION — Reduce"),
-    (0,  "📉 SELL / AVOID"),
-]
-# RiskFlags → 시그널 상한 점수 (사다리 기준값)
-_FLAG_CAPS = {
-    "LOW_LIQUIDITY": 60,   # 최대 WATCH
-    "MDD_HIGH":      60,
-    "MDD_EXTREME":   48,   # 최대 HOLD
-    "EPS_NEGATIVE":  48,
-    "RS_LAGGARD":    35,
-    "BEAR_MARKET":   48,
-}
-_SUFFIX_RE = re.compile(r"\s(?:🔔)?\[")
-
 
 def _winsorize_z(col: np.ndarray) -> np.ndarray:
     """MAD 기반 ±3σ winsorize 후 z-score. 상수 열이면 0."""
@@ -56,19 +40,6 @@ def _winsorize_z(col: np.ndarray) -> np.ndarray:
     if std <= 1e-12:
         return np.zeros_like(col)
     return (col - mean) / std
-
-
-def _label(score: float) -> str:
-    for th, lbl in _LADDER:
-        if score >= th:
-            return lbl
-    return _LADDER[-1][1]
-
-
-def _legacy_suffix(sig: str) -> str:
-    """기존 Signal의 부가 태그([BREAKOUT], [EPS🔥] 등) 보존."""
-    m = _SUFFIX_RE.search(sig or "")
-    return sig[m.start():] if m else ""
 
 
 def apply_score_v2(rows: list) -> None:
@@ -99,12 +70,4 @@ def apply_score_v2(rows: list) -> None:
     for r, sc in zip(items, pct):
         if "_LegacyScore" not in r and isinstance(r.get("TotalScore"), (int, float)):
             r["_LegacyScore"] = float(r["TotalScore"])
-        score = round(float(sc), 1)
-        # RiskFlags 시그널 강등 — 점수는 순수 순위 유지
-        cap = min((_FLAG_CAPS[f] for f in (r.get("RiskFlags") or []) if f in _FLAG_CAPS),
-                  default=None)
-        label_score = score if cap is None else min(score, cap)
-        legacy_sig = r.get("Signal") or ""
-        r["_LegacySignal"] = legacy_sig
-        r["Signal"] = _label(label_score) + _legacy_suffix(legacy_sig)
-        r["TotalScore"] = score
+        r["RankPct"] = round(float(sc), 1)

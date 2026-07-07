@@ -50,7 +50,8 @@ def _row_for_test(r: dict, rank: int = 1) -> dict:
     """save_snapshot._row와 동일 로직 — 단위 테스트 접근용.
 
     스냅샷 row 포맷을 생성: score, rank, entry, _PER, _PBR, regime_entry(선택),
-    regime_state(선택), ofi(선택), accum(선택), factors(선택), legacy(선택), flags(선택).
+    regime_state(선택), ofi(선택), accum(선택), factors(선택), legacy(선택),
+    v2(선택 — 횡단면 백분위 RankPct), flags(선택).
     """
     d = {
         "score": round(float(r.get("TotalScore", 0) or 0), 1),
@@ -75,6 +76,9 @@ def _row_for_test(r: dict, rank: int = 1) -> dict:
     leg = r.get("_LegacyScore")
     if leg is not None:
         d["legacy"] = round(float(leg), 1)
+    rp = r.get("RankPct")
+    if rp is not None:
+        d["v2"] = round(float(rp), 1)
     flags = r.get("RiskFlags")
     if flags:
         d["flags"] = flags

@@ -26,16 +26,19 @@ def _mkrow(i, mom, rev, q):
                          "mtf": 50, "bb_revert": 50, "orb": 0, "nr7": 0}}
 
 
-def test_apply_score_v2_percentile():
+def test_apply_score_v2_rankpct_decoupled():
+    """이원화(2026-07-07): 백분위는 RankPct로 병기, TotalScore/Signal 불변."""
     import os
     os.environ.pop("SCORE_V2", None)
     from score_v2 import apply_score_v2
     rows = [_mkrow(i, mom=float(i * 10), rev=0.0, q=50.0) for i in range(12)]
     apply_score_v2(rows)
-    scores = [r["TotalScore"] for r in rows]
-    assert scores == sorted(scores), "모멘텀 단조증가 → 점수 단조증가여야"
-    assert all(0 <= s <= 100 for s in scores)
-    assert rows[0]["_LegacyScore"] == 50.0
+    ranks = [r["RankPct"] for r in rows]
+    assert ranks == sorted(ranks), "모멘텀 단조증가 → 백분위 단조증가여야"
+    assert all(0 <= s <= 100 for s in ranks)
+    assert all(r["TotalScore"] == 50.0 for r in rows), "절대 점수는 덮어쓰지 않아야"
+    assert all(r["Signal"] == "⏸ NEUTRAL — Hold" for r in rows), "legacy Signal 보존"
+    assert rows[0]["_LegacyScore"] == 50.0, "스냅샷 legacy 계열 연속성 유지"
 
 
 def test_apply_score_v2_small_sample_noop():
@@ -43,14 +46,7 @@ def test_apply_score_v2_small_sample_noop():
     rows = [_mkrow(i, 10.0, 0.0, 50.0) for i in range(5)]
     apply_score_v2(rows)
     assert all(r["TotalScore"] == 50.0 for r in rows), "표본<10 → 변경 금지"
-
-
-def test_apply_score_v2_riskflag_signal_cap():
-    from score_v2 import apply_score_v2
-    rows = [_mkrow(i, float(i * 10), 0.0, 50.0) for i in range(12)]
-    rows[-1]["RiskFlags"] = ["MDD_EXTREME"]
-    apply_score_v2(rows)
-    assert "⏸" in rows[-1]["Signal"] or "📉" in rows[-1]["Signal"], "MDD_EXTREME → HOLD 이하로 강등"
+    assert all("RankPct" not in r for r in rows), "표본<10 → RankPct 미산출"
 
 
 def test_apply_score_v2_env_off():
@@ -61,8 +57,26 @@ def test_apply_score_v2_env_off():
         rows = [_mkrow(i, float(i * 10), 0.0, 50.0) for i in range(12)]
         apply_score_v2(rows)
         assert all(r["TotalScore"] == 50.0 for r in rows)
+        assert all("RankPct" not in r for r in rows)
     finally:
         os.environ.pop("SCORE_V2", None)
+
+
+def test_snapshot_row_records_v2_series():
+    """history 스냅샷: score=절대, legacy=절대, v2=백분위 — IC ablation 재료."""
+    # 다른 테스트가 동명의 'history' 모듈을 로드해도 안전하게 파일 경로로 직접 로드
+    import importlib.util
+    path = os.path.join(os.path.dirname(__file__), "..", "web_app", "history.py")
+    spec = importlib.util.spec_from_file_location("_webapp_history_for_test", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    _row_for_test = mod._row_for_test
+    row = {"TotalScore": 61.4, "_LegacyScore": 61.4, "RankPct": 87.5,
+           "_Factors": {"momentum": 70.0}, "EntryStatus": "WAIT"}
+    d = _row_for_test(row)
+    assert d["score"] == 61.4
+    assert d["legacy"] == 61.4
+    assert d["v2"] == 87.5
 
 
 def test_engine_adapter_wires_score_v2():

@@ -104,7 +104,10 @@ def main():
             continue
         usable_days += 1
         day_scores = {
-            "v2":     {t: r.get("score") for t, r in rows.items()},
+            # 신포맷(2026-07-07 이원화 이후): v2 필드 = RankPct 백분위.
+            # 구포맷(~07-07, score가 백분위였던 시기): legacy 필드 존재가 v2 실행 마커.
+            "v2":     {t: r.get("v2", r.get("score") if "legacy" in r else None)
+                       for t, r in rows.items()},
             "legacy": {t: r.get("legacy") for t, r in rows.items()},
             **{g: {t: group_score(r["factors"], g) for t, r in rows.items()}
                for g in GROUPS},

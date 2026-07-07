@@ -196,6 +196,15 @@ function scoreClass(score) {
   return 'score-low';
 }
 
+// RankPct(횡단면 백분위, 100=오늘 1등) → "상위 X%" 칩. 점수(절대 품질)와
+// 별개의 탐색용 참고 지표 — 없으면(v2 미실행/소표본) 빈 문자열.
+function _rankChipHtml(stock) {
+  const rp = stock && stock.RankPct;
+  if (rp == null || Number.isNaN(Number(rp))) return '';
+  const top = Math.max(1, Math.round(100 - Number(rp)));
+  return `<span class="rank-pct-chip" title="오늘 스캔한 종목들 중 상대 순위 — 시장이 나쁘면 상위권도 절대 점수는 낮을 수 있어요">상위 ${top}%</span>`;
+}
+
 function _scoreVerdict(score) {
   if (score >= 70) return '우수';   // green
   if (score >= 50) return '양호';   // yellow
@@ -1709,7 +1718,7 @@ function renderStockRow(stock, rank) {
   </td>
   <td><span class="sector-tag">${esc(stock.Sector || '—')}</span></td>
   <td class="score-col">
-    <div class="score-line"><span class="score-num ${sc}">${score}</span>${_deltaBadge(stock)}</div>
+    <div class="score-line"><span class="score-num ${sc}">${score}</span>${_deltaBadge(stock)}${_rankChipHtml(stock)}</div>
     <div class="score-bar-wrap"><div class="score-bar-fill ${sc}" style="width:${barW}%"></div></div>
   </td>
   <td>
@@ -1758,7 +1767,7 @@ function renderMobileCard(stock, rank) {
       </div>
     </div>
     <div class="stock-card-meta">
-      <span class="stock-card-score ${sc}">${score}</span>
+      <span class="stock-card-score ${sc}">${score}</span>${_rankChipHtml(stock)}
       <span class="stock-card-chg ${chgClass}">${chgSign}${chgPct}%</span>
     </div>
   </div>

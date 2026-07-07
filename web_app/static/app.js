@@ -4979,9 +4979,9 @@ async function loadDpFourAxis(ticker) {
     if (d.error) throw new Error(d.error);
     if (reqSeq !== _dpFourAxisReqSeq) return;
     _dpFourAxisData = d;
+    _dpFourAxisLoadedFor = ticker;
     document.dispatchEvent(new CustomEvent('dp-fouraxis-loaded'));
 
-    _dpFourAxisLoadedFor = ticker;
     _dpFourAxisLoadingFor = null;
 
     // ── 핸드드로잉 차트 이미지 렌더 ─────────────────────────────

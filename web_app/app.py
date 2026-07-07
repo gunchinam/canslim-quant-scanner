@@ -3023,6 +3023,7 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
         chart_title = chart_title or ticker
 
         _fib_levels = None
+        _fib_lookback = 50 if market == "US" else 120
         if want_chart:
             _sr_data      = None
             _nomura_data  = None
@@ -3039,8 +3040,6 @@ def _compute_four_axis_payload(ticker: str, market: str, want_chart: bool = True
                 pass
 
             # Fib 레벨 계산 — 렌더러에서 뺀 뒤 payload로 전달
-            _fib_levels = None
-            _fib_lookback = 50 if market == "US" else 120
             if hist is not None and len(hist) > 1:
                 _fib_hist = hist.iloc[-_fib_lookback:]
                 _h_max = float(_fib_hist["High"].max())

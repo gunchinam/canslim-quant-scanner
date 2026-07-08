@@ -2,31 +2,33 @@
  * Clean, minimal Apple aesthetic: SF Pro typography, tight letter-spacing, generous radius
  */
 :root {
-  /* Brand — Apple Blue */
-  --brand: #0071E3;
-  --primary: #1D1D1F;
+  /* Brand — HP Electric Blue */
+  --brand: #024ad8;
+  --brand-pressed: #0e3191;
+  --brand-soft: #c9e0fc;
+  --primary: #1a1a1a;
   --primary-foreground: #ffffff;
 
   /* Surface */
-  --background: #FFFFFF;
-  --foreground: #1D1D1F;
+  --background: #ffffff;
+  --foreground: #1a1a1a;
   --card: #ffffff;
-  --card-foreground: #1D1D1F;
+  --card-foreground: #1a1a1a;
   --popover: #ffffff;
-  --popover-foreground: #1D1D1F;
+  --popover-foreground: #1a1a1a;
 
-  /* Secondary / Muted */
-  --secondary: #F5F5F7;
-  --secondary-foreground: #1D1D1F;
-  --muted: #E8E8ED;
-  --muted-foreground: #6E6E73;
-  --accent: #E8F3FF;
-  --accent-foreground: #0071E3;
+  /* Secondary / Muted — HP cloud/fog bands */
+  --secondary: #f7f7f7;
+  --secondary-foreground: #1a1a1a;
+  --muted: #e8e8e8;
+  --muted-foreground: #636363;
+  --accent: #c9e0fc;
+  --accent-foreground: #024ad8;
 
   /* Semantic Status */
-  --destructive: #FF3B30;
+  --destructive: #b3262b;
   --destructive-foreground: #ffffff;
-  --success: #34C759;
+  --success: #0f8a5f;
   --success-foreground: #ffffff;
   --warning: #FF9500;
   --warning-foreground: #ffffff;
@@ -34,37 +36,40 @@
   --info-foreground: #ffffff;
 
   /* Text Hierarchy */
-  --text-primary: #1D1D1F;
-  --text-secondary: #424245;
-  --text-tertiary: #6E6E73;
-  --text-disabled: #86868B;
-  --icon-default: #424245;
+  --text-primary: #1a1a1a;
+  --text-secondary: #3d3d3d;
+  --text-tertiary: #636363;
+  --text-disabled: #929292;
+  --icon-default: #3d3d3d;
 
   /* Page Surfaces */
-  --surface-page: #FFFFFF;
-  --surface-subtle: #F5F5F7;
-  --surface-muted: #E8E8ED;
-  --brand-tint: #E8F3FF;
-  --alert-badge: #FF3B30;
+  --surface-page: #ffffff;
+  --surface-subtle: #f7f7f7;
+  --surface-muted: #e8e8e8;
+  --brand-tint: #c9e0fc;
+  --alert-badge: #b3262b;
 
-  /* Border / Input */
-  --border: #D2D2D7;
+  /* Border / Input — HP hairline default */
+  --border: #e8e8e8;
   --input: transparent;
-  --input-background: #F5F5F7;
-  --switch-background: #86868B;
-  --ring: rgba(0, 113, 227, 0.4);
+  --input-background: #f7f7f7;
+  --switch-background: #929292;
+  --ring: rgba(2, 74, 216, 0.4);
 
-  /* Radius — Apple generous rounding */
-  --radius: 18px;
+  /* Radius — HP 2-tier: sharp buttons, soft cards */
+  --radius: 16px;
+  --radius-sharp: 4px;
+  --radius-pill: 9999px;
+  --radius-badge: 8px;
 
-  /* Shadows — Apple subtle depth */
-  --shadow-card:     0 1px 4px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
-  --shadow-button:   0 1px 3px rgba(0, 0, 0, 0.04);
-  --shadow-hover:    0 4px 16px rgba(0, 0, 0, 0.08);
-  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.08);
-  --shadow-modal:    0 16px 40px rgba(0, 0, 0, 0.12);
+  /* Shadows — HP flat + color-contrast depth */
+  --shadow-card:     0 2px 8px rgba(26, 26, 26, 0.08);
+  --shadow-button:   none;
+  --shadow-hover:    0 2px 8px rgba(26, 26, 26, 0.08);
+  --shadow-elevated: 0 8px 24px rgba(26, 26, 26, 0.12);
+  --shadow-modal:    0 8px 24px rgba(26, 26, 26, 0.12);
 
-  /* Animation — Apple smooth curves */
+  /* Animation — unchanged */
   --duration-fast:     100ms;
   --duration-normal:   200ms;
   --duration-moderate: 300ms;
@@ -74,7 +79,7 @@
   --ease-out:     cubic-bezier(0, 0, 0.58, 1);
   --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  /* Charts */
+  /* Charts — unchanged, out of scope */
   --chart-1: #0071E3;
   --chart-2: #34C759;
   --chart-3: #FF3B30;

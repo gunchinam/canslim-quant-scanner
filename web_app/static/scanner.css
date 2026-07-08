@@ -416,7 +416,7 @@ html, body {
   height: 28px;
   padding: 0 12px;
   border: 1.5px solid var(--border);
-  border-radius: 100px;
+  border-radius: var(--radius-pill);
   background: var(--card);
   color: var(--text-secondary);
   font-size: 12px;
@@ -427,8 +427,8 @@ html, body {
 }
 .chip:hover { border-color: var(--brand); color: var(--brand); }
 .chip.active {
-  background: var(--brand);
-  color: var(--primary-foreground);
+  background: var(--brand-soft);
+  color: var(--brand);
   border-color: var(--brand);
 }
 .chip-count {
@@ -438,7 +438,7 @@ html, body {
   min-width: 18px;
   height: 16px;
   padding: 0 4px;
-  border-radius: 100px;
+  border-radius: var(--radius-pill);
   background: rgba(0,0,0,0.08);
   font-size: 10px;
   font-weight: 700;
@@ -884,8 +884,8 @@ td.score-col {
 .dp-rs-donut { display: inline-flex; align-items: center; justify-content: center; }
 
 /* 위험 퀵필터 칩 — 긍정 필터와 시각적으로 구분 (선택지처럼 평평하게 나열되지 않도록) */
-.chip[data-filter="laggard"] { border-color: #FCA5A5; color: #B91C1C; }
-.chip[data-filter="laggard"].active { background: #B91C1C; border-color: #B91C1C; color: #fff; }
+.chip[data-filter="laggard"] { border-color: var(--destructive); color: var(--destructive); }
+.chip[data-filter="laggard"].active { background: var(--destructive); border-color: var(--destructive); color: #fff; }
 
 /* "설명" 컬럼 — 종목명 hover 팝업(showStockPopup)과 내용이 중복되지만,
    사용자 요청으로 목록에 직접 노출(td.desc-cell 스타일은 아래 ~2970 참조). */
@@ -3078,14 +3078,14 @@ td.score-col {
   min-width: 22px;
   height: 22px;
   padding: 0 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-badge);
   font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
   flex-shrink: 0;
 }
 .grade-badge.grade-S { color: #fff; background: #7C3AED; }
-.grade-badge.grade-A { color: #fff; background: #2563EB; }
+.grade-badge.grade-A { color: #fff; background: var(--brand); }
 .grade-badge.grade-B { color: #fff; background: #16A34A; }
 .grade-badge.grade-C { color: #fff; background: #9CA3AF; }
 
@@ -4698,9 +4698,9 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 }
 
 /* 어제 대비 변동 필터 (점수급등·신규진입) — 청록 액센트로 "변동" 의미 구분 */
-.chip-delta { border-color: #0CA678; color: #0CA678; }
-.chip-delta:hover { border-color: #0CA678; color: #0CA678; background: rgba(12,166,120,0.08); }
-.chip-delta.active { background: #0CA678; border-color: #0CA678; color: #fff; }
+.chip-delta { border-color: var(--success); color: var(--success); }
+.chip-delta:hover { border-color: var(--success); color: var(--success); background: rgba(15,138,95,0.08); }
+.chip-delta.active { background: var(--success); border-color: var(--success); color: #fff; }
 
 /* 점수 신뢰도 배지 (표본외 IC 검증) */
 .score-eval-badge {

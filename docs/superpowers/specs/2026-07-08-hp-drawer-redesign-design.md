@@ -32,14 +32,25 @@
 - 그림자: `var(--shadow-card)`(Soft Lift) → `var(--shadow-elevated)`(Floating)로 승격 — 드로워 내 다른 카드보다 한 단계 더 뜬 느낌
 - 카드 우측 상단에 각진 블루 슬래시 장식(`chevron-decoration`: `background: var(--brand)`, `border-radius: 0`, 그림자 없음, 삼각형/평행사변형 형태) 1개 배치 — **드로워 전체에서 이 카드 한 곳에만 사용, 다른 카드에는 절대 쓰지 않는다**
 
-### 원라이너 포스터 / 판정 카드 (`dp-oneliner-poster`, `dp-verdict-poster`, `scanner.css:2353`)
-- `border: 3px solid #1a1a1a` → `border: 1px solid var(--border)`로 교체
-- `box-shadow: 6px 6px 0 #1a1a1a` → `var(--shadow-elevated)`로 교체
-- `background: #F4ECD8`(베이지) → `var(--brand-soft)`로 교체
-- 텍스트 크기(`clamp(30px, 5.5vw, 46px)`)는 유지 — 이 부분은 이미 HP식 큰 타이포그래피 원칙에 부합
+### 원라이너 포스터 (`dp-oneliner-poster`, `scanner.css:2353-2441`)
+
+**계획 작성 중 발견한 정정 사항**: 처음 스펙에서는 이 요소를 "베이지 배경 하나"로 가정했으나, 실제로는 `[data-tag="..."]` 어트리뷰트로 16종의 판정 태그(TRUE_VALUE, VALUE_TRAP, BUBBLE, STRONG_BUY, AVOID 등)마다 서로 다른 `background`/`color`/`border-color`/`box-shadow` 색을 쓰는 의도적인 시맨틱 색상 체계였다(`scanner.css:2388-2441`). 이 색 구분은 HP 스타일과 무관하게 그 자체로 유의미한 정보(어떤 판정 태그인지)이므로 **보존한다**. 이번 라운드에서 손대는 건 "하드 오프셋 그림자"라는 형태 자체이지, 태그별 색상이 아니다.
+
+- `border`: 각 `[data-tag]` 변형의 `border-color`(태그 고유 색)는 유지하되, 두께만 `3px` → `2px`로 살짝 얇게
+- `box-shadow: 6px 6px 0 <태그색>` → `var(--shadow-elevated)`로 교체 — 하드 오프셋 그림자 형태를 폐기하고 HP의 Floating 단계로 통일(그림자 자체는 무채색 처리, 태그색은 border/background에서만 표현)
+- `background`/`color`: 16개 `[data-tag]` 변형 그대로 유지 — **변경하지 않음**
+- 텍스트 크기(`clamp(30px, 5.5vw, 46px)`)는 유지 — 이미 HP식 큰 타이포그래피 원칙에 부합
+- 기본 `.dp-oneliner-poster` 규칙(태그 미지정 시 폴백)의 `background: #F4ECD8` 배경만 `var(--brand-soft)`로 교체(태그가 없는 경우에 한정된 변경)
+
+### 판정 카드 (`dp-verdict-poster`, `scanner.css:2578-2602`) — 범위 제외
+
+**계획 작성 중 발견한 정정 사항**: 이 요소는 하드 오프셋 그림자나 베이지 배경을 쓰지 않는다 — 실제로는 `dvp-green`/`dvp-yellow`/`dvp-red` 신호등 그라디언트 배경에 `inset 0 1px 0 rgba(255,255,255,.22)` 소프트 하이라이트만 쓰는, 이미 HP의 "무거운 그림자 없이 컬러로 신호"라는 원칙에 가까운 컴포넌트였다. 애초 스펙 작성 시 `dp-oneliner-poster`와 혼동해 잘못 기술한 것으로 확인 — **이번 라운드에서 수정하지 않는다.** 코너 radius(`18px 18px 0 0`, 상단만 둥근 부분 radius)도 1차 라운드 Task 5 리뷰에서 "포스터류는 카드 radius 토큰화 대상이 아니다"로 이미 확정된 사항이라 그대로 둔다.
 
 ### 목표가/컨센서스 박스 (`#detail-aux-box`, 컨센서스 카드, `detail.html:1152`, `1185` 부근)
-- 배경: `var(--bg-tertiary)`(회색) → `var(--brand-soft)`로 교체
+
+**계획 작성 중 발견한 사항**: `#detail-aux-box`의 현재 `background: var(--bg-tertiary)`는 `theme.css`에 정의되지 않은(폴백도 없는) 변수라 실제로는 배경이 비어 보이는 기존 버그였다. 이번 교체로 이 버그도 함께 해결된다.
+
+- 배경: `var(--bg-tertiary)`(미정의, 사실상 무배경) → `var(--brand-soft)`로 교체
 - 목표가 숫자(`#detail-target`, `#detail-broker-target`): 현재 인라인 크기(15px) → **24~28px, weight 600**으로 확대(HP `display-md`급)
 
 ## 데이터 나열 카드 · 섹션 그룹화

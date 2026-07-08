@@ -27,8 +27,12 @@
 결론/요약 정보(히어로 점수, 원라이너, 판정, 목표가)는 **컬러 대비 배경(`var(--brand-soft)`) + 확대된 타이포그래피**로 "이건 결론이다"를 표시한다. 하드 그림자·두꺼운 테두리는 쓰지 않는다.
 
 ### 히어로 카드 (`.hero-card`, `detail.html:92-100`)
+
+**계획 작성 중 발견한 정정 사항**: `.hero-score`(`detail.html:136-141`)는 이미 `font-size: 48px; font-weight: 700;`로 되어 있다 — 애초 제안한 목표 크기와 동일해 이 항목은 변경 불필요.
+
 - 배경: `var(--card)` → `var(--brand-soft)`로 교체 — 다른 흰 카드들과 색 대비로 구분되는 유일한 지점
-- `.hero-score`(종합점수 숫자): 현재 크기 → **48px, weight 700**으로 확대(HP `display-xxl`급)
+- `.hero-score`: 변경 없음(이미 48px/700)
+- `.hero-grade`(`detail.html:158-163`, 현재 17px/700): **22px, weight 700**으로 확대 — 등급 텍스트도 결론성 정보이므로 히어로 점수에 준하는 무게감 부여
 - 그림자: `var(--shadow-card)`(Soft Lift) → `var(--shadow-elevated)`(Floating)로 승격 — 드로워 내 다른 카드보다 한 단계 더 뜬 느낌
 - 카드 우측 상단에 각진 블루 슬래시 장식(`chevron-decoration`: `background: var(--brand)`, `border-radius: 0`, 그림자 없음, 삼각형/평행사변형 형태) 1개 배치 — **드로워 전체에서 이 카드 한 곳에만 사용, 다른 카드에는 절대 쓰지 않는다**
 

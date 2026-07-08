@@ -274,7 +274,7 @@ html, body {
   background: var(--brand);
   color: var(--primary-foreground);
   border: none;
-  border-radius: 980px;
+  border-radius: var(--radius-sharp);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -284,7 +284,7 @@ html, body {
   transition: background var(--duration-fast);
   white-space: nowrap;
 }
-.btn-scan:hover { background: #0077ED; }
+.btn-scan:hover { background: var(--brand-pressed); }
 .btn-scan:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .topbar-date {
@@ -3450,14 +3450,14 @@ td.score-col {
   gap: 2px;
   background: rgba(0, 0, 0, 0.06);
   border: none;
-  border-radius: 980px;
+  border-radius: var(--radius-pill);
   padding: 3px;
   flex-shrink: 0;
 }
 .btn-seg {
   padding: 4px 14px;
   border: none;
-  border-radius: 980px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--text-secondary);
   font-size: 12px;
@@ -3467,7 +3467,7 @@ td.score-col {
   transition: background 0.2s, color 0.2s, box-shadow 0.2s;
 }
 .btn-seg:hover { background: rgba(255,255,255,0.5); color: var(--text-primary); }
-.btn-seg.active { background: #fff; color: var(--text-primary); box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+.btn-seg.active { background: #fff; color: var(--text-primary); box-shadow: var(--shadow-button); }
 
 /* ── 리스크 배지 ──────────────────────────────────────────────────────── */
 .risk-badges { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }

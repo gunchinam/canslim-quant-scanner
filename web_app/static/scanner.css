@@ -1266,7 +1266,7 @@ td.score-col {
 .dp-ownership-card {
   margin: 12px 20px;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   background: var(--card);
   overflow: hidden;
 }
@@ -1391,7 +1391,7 @@ td.score-col {
 .dp-insider-card {
   margin: 12px 20px;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   background: var(--card);
   overflow: hidden;
 }
@@ -1471,7 +1471,7 @@ td.score-col {
 .dp-serenity-card {
   margin: 12px 20px;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   background: var(--card);
   overflow: hidden;
 }
@@ -1566,7 +1566,7 @@ td.score-col {
 .dp-events-card {
   margin: 12px 20px;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   background: var(--card);
   overflow: hidden;
 }
@@ -1988,7 +1988,7 @@ td.score-col {
   margin: 12px 20px 16px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   overflow: hidden;
   position: relative;
 }
@@ -2025,7 +2025,7 @@ td.score-col {
 }
 .dp-section-conclusion > .dp-oneliner-poster {
   margin: 16px 16px 12px;
-  border-radius: 18px;
+  border-radius: var(--radius);
 }
 
 /* ── ③ 타이밍 ────────────────────────────────────────────── */
@@ -2792,7 +2792,7 @@ td.score-col {
   padding: 14px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
 }
 .dp-earnings-head {
   display: flex;
@@ -2824,7 +2824,7 @@ td.score-col {
 .detail-panel .card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 #dp-investor-card,
@@ -2832,14 +2832,14 @@ td.score-col {
   margin: 12px 20px;
 }
 .detail-panel .card {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-card);
 }
 .dp-disclaimer {
   margin: 12px 20px;
   padding: 10px 16px;
   background: var(--surface-subtle, #F5F5F7);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   font-size: 11px;
   line-height: 1.5;
   color: var(--text-tertiary);
@@ -2849,7 +2849,7 @@ td.score-col {
   padding: 14px 16px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
 }
 .dp-drawdown-wrap:empty {
   display: none;
@@ -2859,7 +2859,7 @@ td.score-col {
   padding: 16px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
 }
 .dp-consensus-head {
   display: flex;
@@ -2894,7 +2894,7 @@ td.score-col {
   padding: 12px 16px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
 }
 
 /* ── Tabs Card (탭 영역 카드 래퍼) ──────────────────────────── */
@@ -2902,7 +2902,7 @@ td.score-col {
   margin: 8px 20px 12px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
@@ -5354,7 +5354,7 @@ a.news-card-title:hover { color: var(--brand); }
 .mece-inner {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--radius, 8px);
+  border-radius: var(--radius);
   padding: 16px;
 }
 .mece-header {

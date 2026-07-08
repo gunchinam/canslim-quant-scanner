@@ -34,7 +34,7 @@ html, body {
   align-items: center;
   gap: 8px;
   padding: 4px 24px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(232, 232, 232, 0.92);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-top: 1px solid rgba(245, 158, 11, 0.25);
@@ -274,7 +274,7 @@ html, body {
   background: var(--brand);
   color: var(--primary-foreground);
   border: none;
-  border-radius: 980px;
+  border-radius: var(--radius-sharp);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -284,7 +284,7 @@ html, body {
   transition: background var(--duration-fast);
   white-space: nowrap;
 }
-.btn-scan:hover { background: #0077ED; }
+.btn-scan:hover { background: var(--brand-pressed); }
 .btn-scan:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .topbar-date {
@@ -372,7 +372,7 @@ html, body {
 
 /* ── Stats Bar ─────────────────────────────────────────────── */
 .stats-bar {
-  background: var(--card);
+  background: var(--surface-subtle);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -416,7 +416,7 @@ html, body {
   height: 28px;
   padding: 0 12px;
   border: 1.5px solid var(--border);
-  border-radius: 100px;
+  border-radius: var(--radius-pill);
   background: var(--card);
   color: var(--text-secondary);
   font-size: 12px;
@@ -427,8 +427,8 @@ html, body {
 }
 .chip:hover { border-color: var(--brand); color: var(--brand); }
 .chip.active {
-  background: var(--brand);
-  color: var(--primary-foreground);
+  background: var(--brand-soft);
+  color: var(--brand);
   border-color: var(--brand);
 }
 .chip-count {
@@ -438,7 +438,7 @@ html, body {
   min-width: 18px;
   height: 16px;
   padding: 0 4px;
-  border-radius: 100px;
+  border-radius: var(--radius-pill);
   background: rgba(0,0,0,0.08);
   font-size: 10px;
   font-weight: 700;
@@ -884,8 +884,8 @@ td.score-col {
 .dp-rs-donut { display: inline-flex; align-items: center; justify-content: center; }
 
 /* 위험 퀵필터 칩 — 긍정 필터와 시각적으로 구분 (선택지처럼 평평하게 나열되지 않도록) */
-.chip[data-filter="laggard"] { border-color: #FCA5A5; color: #B91C1C; }
-.chip[data-filter="laggard"].active { background: #B91C1C; border-color: #B91C1C; color: #fff; }
+.chip[data-filter="laggard"] { border-color: var(--destructive); color: var(--destructive); }
+.chip[data-filter="laggard"].active { background: var(--destructive); border-color: var(--destructive); color: #fff; }
 
 /* "설명" 컬럼 — 종목명 hover 팝업(showStockPopup)과 내용이 중복되지만,
    사용자 요청으로 목록에 직접 노출(td.desc-cell 스타일은 아래 ~2970 참조). */
@@ -1266,7 +1266,7 @@ td.score-col {
 .dp-ownership-card {
   margin: 12px 20px;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   background: var(--card);
   overflow: hidden;
 }
@@ -1391,7 +1391,7 @@ td.score-col {
 .dp-insider-card {
   margin: 12px 20px;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   background: var(--card);
   overflow: hidden;
 }
@@ -1471,7 +1471,7 @@ td.score-col {
 .dp-serenity-card {
   margin: 12px 20px;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   background: var(--card);
   overflow: hidden;
 }
@@ -1518,7 +1518,7 @@ td.score-col {
 .macro-events-strip {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 16px;
-  background: linear-gradient(90deg, rgba(99, 102, 241, 0.06), rgba(139, 92, 246, 0.04));
+  background: var(--surface-subtle);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: thin;
@@ -1566,7 +1566,7 @@ td.score-col {
 .dp-events-card {
   margin: 12px 20px;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   background: var(--card);
   overflow: hidden;
 }
@@ -1988,7 +1988,7 @@ td.score-col {
   margin: 12px 20px 16px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   overflow: hidden;
   position: relative;
 }
@@ -2792,7 +2792,7 @@ td.score-col {
   padding: 14px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
 }
 .dp-earnings-head {
   display: flex;
@@ -2824,7 +2824,7 @@ td.score-col {
 .detail-panel .card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 #dp-investor-card,
@@ -2832,14 +2832,14 @@ td.score-col {
   margin: 12px 20px;
 }
 .detail-panel .card {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-card);
 }
 .dp-disclaimer {
   margin: 12px 20px;
   padding: 10px 16px;
   background: var(--surface-subtle, #F5F5F7);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   font-size: 11px;
   line-height: 1.5;
   color: var(--text-tertiary);
@@ -2849,7 +2849,7 @@ td.score-col {
   padding: 14px 16px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
 }
 .dp-drawdown-wrap:empty {
   display: none;
@@ -2859,7 +2859,7 @@ td.score-col {
   padding: 16px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
 }
 .dp-consensus-head {
   display: flex;
@@ -2894,7 +2894,7 @@ td.score-col {
   padding: 12px 16px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
 }
 
 /* ── Tabs Card (탭 영역 카드 래퍼) ──────────────────────────── */
@@ -2902,7 +2902,7 @@ td.score-col {
   margin: 8px 20px 12px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
@@ -3078,14 +3078,14 @@ td.score-col {
   min-width: 22px;
   height: 22px;
   padding: 0 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-badge);
   font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
   flex-shrink: 0;
 }
 .grade-badge.grade-S { color: #fff; background: #7C3AED; }
-.grade-badge.grade-A { color: #fff; background: #2563EB; }
+.grade-badge.grade-A { color: #fff; background: var(--brand); }
 .grade-badge.grade-B { color: #fff; background: #16A34A; }
 .grade-badge.grade-C { color: #fff; background: #9CA3AF; }
 
@@ -3450,14 +3450,14 @@ td.score-col {
   gap: 2px;
   background: rgba(0, 0, 0, 0.06);
   border: none;
-  border-radius: 980px;
+  border-radius: var(--radius-pill);
   padding: 3px;
   flex-shrink: 0;
 }
 .btn-seg {
   padding: 4px 14px;
   border: none;
-  border-radius: 980px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--text-secondary);
   font-size: 12px;
@@ -3467,7 +3467,7 @@ td.score-col {
   transition: background 0.2s, color 0.2s, box-shadow 0.2s;
 }
 .btn-seg:hover { background: rgba(255,255,255,0.5); color: var(--text-primary); }
-.btn-seg.active { background: #fff; color: var(--text-primary); box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+.btn-seg.active { background: #fff; color: var(--text-primary); box-shadow: var(--shadow-button); }
 
 /* ── 리스크 배지 ──────────────────────────────────────────────────────── */
 .risk-badges { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
@@ -4698,9 +4698,9 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
 }
 
 /* 어제 대비 변동 필터 (점수급등·신규진입) — 청록 액센트로 "변동" 의미 구분 */
-.chip-delta { border-color: #0CA678; color: #0CA678; }
-.chip-delta:hover { border-color: #0CA678; color: #0CA678; background: rgba(12,166,120,0.08); }
-.chip-delta.active { background: #0CA678; border-color: #0CA678; color: #fff; }
+.chip-delta { border-color: var(--success); color: var(--success); }
+.chip-delta:hover { border-color: var(--success); color: var(--success); background: rgba(15,138,95,0.08); }
+.chip-delta.active { background: var(--success); border-color: var(--success); color: #fff; }
 
 /* 점수 신뢰도 배지 (표본외 IC 검증) */
 .score-eval-badge {
@@ -5354,7 +5354,7 @@ a.news-card-title:hover { color: var(--brand); }
 .mece-inner {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--radius, 8px);
+  border-radius: var(--radius);
   padding: 16px;
 }
 .mece-header {

@@ -18,9 +18,10 @@
 
 ## 범위
 
-- 대상 파일: `web_app/templates/detail.html`(인라인 `<style>`), `web_app/static/scanner.css`(dp-oneliner-poster/dp-verdict-poster가 정의된 부분)
+- 대상 파일: `web_app/templates/detail.html`(인라인 `<style>` + 마크업)만. `scanner.css`는 이번 라운드에서 수정하지 않는다(`dp-oneliner-poster`는 죽은 코드로 확인돼 손댈 필요 없음)
 - scanner.html/compare.html/pyramid.html은 범위 밖(1차 라운드로 충분)
 - 데이터 나열형 컴포넌트(CAN SLIM 리스트, 투자자 동향, 실적 표, 소유구조/내부자 카드)는 구조 변경 없음 — 1차 라운드에서 이미 `var(--radius)`/`var(--shadow-card)`로 토큰화됨
+- `.hero-oneliner`(원라이너), `dp-verdict-poster`(판정 카드)는 범위 제외 — 상세 사유는 아래 각 섹션 참조
 
 ## 결론 지점 재설계 ("포스터" 대체)
 
@@ -36,15 +37,11 @@
 - 그림자: `var(--shadow-card)`(Soft Lift) → `var(--shadow-elevated)`(Floating)로 승격 — 드로워 내 다른 카드보다 한 단계 더 뜬 느낌
 - 카드 우측 상단에 각진 블루 슬래시 장식(`chevron-decoration`: `background: var(--brand)`, `border-radius: 0`, 그림자 없음, 삼각형/평행사변형 형태) 1개 배치 — **드로워 전체에서 이 카드 한 곳에만 사용, 다른 카드에는 절대 쓰지 않는다**
 
-### 원라이너 포스터 (`dp-oneliner-poster`, `scanner.css:2353-2441`)
+### 원라이너 포스터 (`.hero-oneliner`, `dp-oneliner-poster`) — 범위 제외
 
-**계획 작성 중 발견한 정정 사항**: 처음 스펙에서는 이 요소를 "베이지 배경 하나"로 가정했으나, 실제로는 `[data-tag="..."]` 어트리뷰트로 16종의 판정 태그(TRUE_VALUE, VALUE_TRAP, BUBBLE, STRONG_BUY, AVOID 등)마다 서로 다른 `background`/`color`/`border-color`/`box-shadow` 색을 쓰는 의도적인 시맨틱 색상 체계였다(`scanner.css:2388-2441`). 이 색 구분은 HP 스타일과 무관하게 그 자체로 유의미한 정보(어떤 판정 태그인지)이므로 **보존한다**. 이번 라운드에서 손대는 건 "하드 오프셋 그림자"라는 형태 자체이지, 태그별 색상이 아니다.
+**계획 작성 중 발견한 최종 정정 사항**: `scanner.css`의 `dp-oneliner-poster`는 `detail.html`/`app.js` 어디에서도 참조되지 않는 죽은 코드였다(grep 결과 마크업 사용처 없음). 실제 히어로 카드에서 쓰이는 건 `detail.html` 자체의 `.hero-oneliner`(`detail.html:788-1026`)인데, 16개 판정 태그마다 고유 색상뿐 아니라 halftone 도트·경고 줄무늬·대각선 패턴·스파클 그리드 같은 **손으로 제작한 고유 텍스처 오버레이**(`::before`/`::after` background-image 패턴)까지 갖춘, 일반 UI 컴포넌트가 아닌 의도적인 "트레이딩 카드" 아트였다.
 
-- `border`: 각 `[data-tag]` 변형의 `border-color`(태그 고유 색)는 유지하되, 두께만 `3px` → `2px`로 살짝 얇게
-- `box-shadow: 6px 6px 0 <태그색>` → `var(--shadow-elevated)`로 교체 — 하드 오프셋 그림자 형태를 폐기하고 HP의 Floating 단계로 통일(그림자 자체는 무채색 처리, 태그색은 border/background에서만 표현)
-- `background`/`color`: 16개 `[data-tag]` 변형 그대로 유지 — **변경하지 않음**
-- 텍스트 크기(`clamp(30px, 5.5vw, 46px)`)는 유지 — 이미 HP식 큰 타이포그래피 원칙에 부합
-- 기본 `.dp-oneliner-poster` 규칙(태그 미지정 시 폴백)의 `background: #F4ECD8` 배경만 `var(--brand-soft)`로 교체(태그가 없는 경우에 한정된 변경)
+하드 오프셋 그림자는 이 컴포넌트의 "스티커" 정체성을 이루는 핵심 요소이며, 텍스처 패턴까지 딸려 있어 HP 톤으로 손대는 순간 공들여 만든 개성이 훼손된다. **`.hero-oneliner`와 `dp-oneliner-poster` 둘 다 이번 라운드 범위에서 완전히 제외한다** — 아무것도 바꾸지 않는다.
 
 ### 판정 카드 (`dp-verdict-poster`, `scanner.css:2578-2602`) — 범위 제외
 

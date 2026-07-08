@@ -2025,7 +2025,7 @@ td.score-col {
 }
 .dp-section-conclusion > .dp-oneliner-poster {
   margin: 16px 16px 12px;
-  border-radius: var(--radius);
+  border-radius: 18px;
 }
 
 /* ── ③ 타이밍 ────────────────────────────────────────────── */

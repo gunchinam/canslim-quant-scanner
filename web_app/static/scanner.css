@@ -34,7 +34,7 @@ html, body {
   align-items: center;
   gap: 8px;
   padding: 4px 24px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(232, 232, 232, 0.92);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-top: 1px solid rgba(245, 158, 11, 0.25);
@@ -372,7 +372,7 @@ html, body {
 
 /* ── Stats Bar ─────────────────────────────────────────────── */
 .stats-bar {
-  background: var(--card);
+  background: var(--surface-subtle);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -1518,7 +1518,7 @@ td.score-col {
 .macro-events-strip {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 16px;
-  background: linear-gradient(90deg, rgba(99, 102, 241, 0.06), rgba(139, 92, 246, 0.04));
+  background: var(--surface-subtle);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: thin;

@@ -1431,6 +1431,23 @@ def _apply_aq_fusion(results: list, market: str, top_n: int = 30) -> list:
     return results
 
 
+_universe_count_cache: dict[str, int] = {}
+
+
+def _universe_count(market: str) -> int | None:
+    """스캔 유니버스(큐레이션 섹터 티커 합집합) 크기 — 커버리지 경고용."""
+    if market in _universe_count_cache:
+        return _universe_count_cache[market]
+    try:
+        adapter = _make_adapter()
+        n = len({t for ts in adapter.get_sectors().values() for t in ts})
+        _universe_count_cache[market] = n
+        return n
+    except Exception as _e:
+        logging.debug("universe count failed: %s", _e)
+        return None
+
+
 @app.route("/api/scan")
 def api_scan():
     """GET /api/scan?market=US&strategy=BALANCED&sector=SaaS → [{...}, ...]"""
@@ -1469,6 +1486,10 @@ def api_scan():
                 if as_of_iso:
                     resp.headers["X-As-Of"] = as_of_iso
                 resp.headers["X-Warming-In-Progress"] = "true" if _age_sec > _SCAN_RESULTS_TTL_SEC else "false"
+                if not sector:
+                    _uc = _universe_count(market)
+                    if _uc:
+                        resp.headers["X-Universe-Count"] = str(_uc)
             except Exception as _e:
                 logging.debug("silent except (app.py): %s", _e)
             return resp
@@ -1555,6 +1576,10 @@ def api_scan():
             if as_of_iso:
                 resp.headers["X-As-Of"] = as_of_iso
             resp.headers["X-Warming-In-Progress"] = "true" if warming_in_progress else "false"
+            if not sector:
+                _uc = _universe_count(market)
+                if _uc:
+                    resp.headers["X-Universe-Count"] = str(_uc)
         except Exception as _e:
             logging.debug("silent except (app.py): %s", _e)
         return resp

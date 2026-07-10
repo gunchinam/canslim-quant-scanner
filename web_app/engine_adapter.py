@@ -671,13 +671,19 @@ class ScanAdapter:
             # _analyze_ticker(quant_nexus_v20.py:4684)와 동일한 dated 키 포맷.
             # 키 포맷 불일치 시 cache_only 분기에서 종목이 대량 누락되어
             # /api/scan 이 일부 universe만 반환하던 버그를 잡는다.
-            # 오늘 캐시가 없으면 최대 7일 이전까지 fallback — 주말·공휴일 대응.
+            # 오늘 캐시가 없으면 최대 14일 이전까지 fallback — 주말·공휴일에 더해
+            # yfinance rate-limit 연타로 신규 분석이 며칠씩 막혀도 종목이 리스트에서
+            # 조용히 사라지지 않게 한다. 대신 스테일 감쇄(-3점/일, 최대 15)와
+            # StaleDays 마킹으로 오래된 데이터임을 점수·UI에 정직하게 반영.
             from datetime import datetime as _dt, timedelta as _td
-            for _days_back in range(8):
+            for _days_back in range(15):
                 _date = (_dt.now() - _td(days=_days_back)).strftime("%Y%m%d")
                 strategy_key = f"{ticker}__{self._scan_strategy}__{_date}"
                 cached = self.cache.get(strategy_key, max_age_minutes=60 * 24 * (_days_back + 1))
                 if cached:
+                    if _days_back > 0:
+                        cached = dict(cached)  # 캐시 원본 오염 방지
+                        _qn._apply_stale_penalty(cached, _days_back)
                     if self._market == "US":
                         _us_nm = getattr(_qn.QuantNexusApp, "US_NAMES", {}).get(ticker)
                         if _us_nm and cached.get("Name") != _us_nm:

@@ -146,27 +146,24 @@ html, body {
   color: var(--text-secondary);
 }
 
-.hero-grade-dot {
-  width: 5px;
-  height: 5px;
-  background: var(--surface-muted);
-  border-radius: 50%;
-  margin: 0 4px;
-  align-self: center;
-}
-
 .hero-grade {
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--brand);
   align-self: center;
+}
+
+.hero-evidence {
+  background: var(--surface-subtle);
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 14px;
 }
 
 .hero-bottom {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 8px;
 }
 
 .hero-change {
@@ -178,14 +175,6 @@ html, body {
 .hero-change-label {
   font-size: 12px;
   color: var(--text-tertiary);
-}
-
-.hero-watermark {
-  position: absolute;
-  right: -8px;
-  bottom: -8px;
-  opacity: 0.05;
-  pointer-events: none;
 }
 
 /* Tab nav */
@@ -206,19 +195,21 @@ html, body {
   align-items: center;
   justify-content: center;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-tertiary);
   border: none;
   background: none;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: color 0.15s, border-color 0.15s;
+  border-bottom: 3px solid transparent;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
   font-family: inherit;
   min-height: 44px;
 }
 
 .tab-btn.active {
   color: var(--brand);
+  font-weight: 700;
+  background: var(--surface-subtle);
   border-bottom-color: var(--brand);
 }
 
@@ -311,21 +302,6 @@ html, body {
 .cs-bar-fill.score-high { background: var(--success); }
 .cs-bar-fill.score-mid  { background: var(--warning); }
 .cs-bar-fill.score-low  { background: var(--destructive); }
-
-.cs-summary {
-  margin: 12px 24px 0;
-  background: var(--brand-tint);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  border: 1px solid rgba(49,130,246,0.12);
-}
-
-.cs-summary-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--brand);
-  text-align: center;
-}
 
 /* 4-axis tab */
 .axis-grid {
@@ -1122,7 +1098,6 @@ html, body {
     <div class="hero-wrap">
       <div class="hero-card">
         <div id="detail-oneliner" class="hero-oneliner" style="display:none;"></div>
-        <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;margin-bottom:2px;">🏆 이 회사 자체는 좋은가?</div>
         <div class="hero-top">
           <span class="hero-label">종합점수 <span style="font-size:10px;font-weight:500;color:var(--text-tertiary);margin-left:4px;">(재무·밸류·기술 모두 합산)</span></span>
           <span id="detail-sector" class="hero-sector">—</span>
@@ -1130,79 +1105,68 @@ html, body {
         <div class="hero-main">
           <span id="detail-score" class="hero-score">—</span>
           <span class="hero-unit">점</span>
-          <span class="hero-grade-dot"></span>
           <span id="detail-signal" class="hero-grade">—</span>
         </div>
-        <div class="hero-bottom" id="detail-rsi-wrap">
-          <svg id="detail-rsi-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="18 15 12 9 6 15"/>
-          </svg>
-          <span id="detail-rsi" class="hero-change" style="color:var(--text-tertiary)">—</span>
-          <span class="hero-change-label">RSI</span>
-        </div>
-        <!-- 점수 추세 스파크라인 -->
-        <div id="score-sparkline-wrap" style="display:none; margin-top:10px;">
-          <div style="font-size:10px;color:var(--text-tertiary);font-weight:600;margin-bottom:4px;letter-spacing:0.03em;">점수 추세</div>
-          <svg id="score-sparkline" width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none" style="display:block;"></svg>
-          <div id="score-sparkline-meta" style="font-size:10px;color:var(--text-tertiary);margin-top:2px;"></div>
-        </div>
-
-        <div style="margin-top:8px; display:flex; flex-direction:column; gap:8px; font-size:12px; color:var(--text-secondary);">
-          <div>현재가 <strong id="detail-price">—</strong> <span id="detail-day-chg" style="font-size:11px;font-weight:700;margin-left:4px;"></span></div>
-          <div id="detail-aux-box" style="padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--bg-tertiary);">
-            <div id="detail-aux-label" style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">목표가</div>
-            <div id="detail-dcf-line">DCF 적정가 <strong id="detail-target">—</strong> <span id="detail-dcf-upside" style="font-size:11px;font-weight:700;margin-left:2px;"></span> <span id="detail-target-src" style="font-size:10px;color:var(--text-tertiary);margin-left:4px;"></span></div>
-            <div id="detail-broker-line" style="margin-top:4px;">
-              <div style="display:flex; align-items:baseline; gap:6px; flex-wrap:wrap;">
-                <span id="detail-broker-label" style="font-weight:700;">증권사 목표가</span>
-                <strong id="detail-broker-target" style="font-size:15px;">—</strong>
-                <span id="detail-broker-upside" style="font-size:12px;font-weight:700;"></span>
+        <div class="hero-evidence">
+          <div class="hero-bottom" id="detail-rsi-wrap">
+            <svg id="detail-rsi-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="18 15 12 9 6 15"/>
+            </svg>
+            <span id="detail-rsi" class="hero-change" style="color:var(--text-tertiary)">—</span>
+            <span class="hero-change-label">RSI</span>
+          </div>
+          <div style="margin-top:8px; display:flex; flex-direction:column; gap:8px; font-size:12px; color:var(--text-secondary);">
+            <div>현재가 <strong id="detail-price">—</strong> <span id="detail-day-chg" style="font-size:11px;font-weight:700;margin-left:4px;"></span></div>
+            <div id="detail-aux-box" style="padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--brand-soft);">
+              <div id="detail-aux-label" style="font-size:11px; font-weight:700; color:var(--text-tertiary); margin-bottom:4px;">목표가</div>
+              <div id="detail-dcf-line">DCF 적정가 <strong id="detail-target" style="font-size:17px;">—</strong> <span id="detail-dcf-upside" style="font-size:11px;font-weight:700;margin-left:2px;"></span> <span id="detail-target-src" style="font-size:10px;color:var(--text-tertiary);margin-left:4px;"></span></div>
+              <div id="detail-broker-line" style="margin-top:4px;">
+                <div style="display:flex; align-items:baseline; gap:6px; flex-wrap:wrap;">
+                  <span id="detail-broker-label" style="font-weight:700;">증권사 목표가</span>
+                  <strong id="detail-broker-target" style="font-size:17px;">—</strong>
+                  <span id="detail-broker-upside" style="font-size:12px;font-weight:700;"></span>
+                </div>
+                <div id="detail-broker-src" style="font-size:11px;color:var(--text-tertiary);margin-top:3px;line-height:1.4;"></div>
               </div>
-              <div id="detail-broker-src" style="font-size:11px;color:var(--text-tertiary);margin-top:3px;line-height:1.4;"></div>
             </div>
           </div>
         </div>
-        <!-- Watermark chart icon -->
-        <svg class="hero-watermark" width="140" height="100" viewBox="0 0 140 100" fill="none">
-          <polyline points="10,80 30,55 50,65 70,30 90,45 110,20 130,35" stroke="#3182F6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-          <line x1="10" y1="90" x2="130" y2="90" stroke="#3182F6" stroke-width="2"/>
-        </svg>
       </div>
     </div>
 
     <!-- 실적 한눈에 (Hero 바로 아래) -->
     <div id="detail-earnings-card" style="padding:12px 24px 0; display:none;">
-      <div class="card" style="padding:14px 16px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+      <div class="card" style="padding:0; overflow:hidden;">
+        <div style="padding:10px 16px; background:var(--surface-subtle);">
           <span style="font-size:13px; font-weight:700; color:var(--text-primary);">📈 실적 한눈에</span>
-          <span style="font-size:10px; font-weight:500; color:var(--text-tertiary);">자세히는 재무 지표 탭</span>
         </div>
-        <div id="detail-earnings-chips" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+        <div id="detail-earnings-chips" style="display:flex; gap:8px; flex-wrap:wrap; padding:12px 16px;"></div>
       </div>
     </div>
 
     <!-- 증권사 컨센서스 상세 -->
     <div id="consensus-wrap" style="padding:12px 24px 0; display:none;">
-      <div class="card" style="padding:14px 16px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+      <div class="card" style="padding:0; overflow:hidden;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:var(--surface-subtle);">
           <span style="font-size:13px; font-weight:700; color:var(--text-primary);">증권사 컨센서스</span>
           <span id="cons-opinion-badge" style="font-size:11px; font-weight:600; padding:2px 10px; border-radius:100px; background:var(--brand-tint); color:var(--brand);"></span>
         </div>
-        <div id="cons-range" style="display:flex; gap:16px; font-size:12px; color:var(--text-secondary); margin-bottom:8px;">
-          <span>최저 <strong id="cons-low">—</strong></span>
-          <span>평균 <strong id="cons-mean">—</strong></span>
-          <span>최고 <strong id="cons-high">—</strong></span>
-          <span id="cons-count-wrap" style="color:var(--text-tertiary);"></span>
+        <div style="padding:12px 16px 14px; background:var(--brand-soft);">
+          <div id="cons-range" style="display:flex; gap:16px; font-size:12px; color:var(--text-secondary); margin-bottom:8px;">
+            <span>최저 <strong id="cons-low">—</strong></span>
+            <span>평균 <strong id="cons-mean">—</strong></span>
+            <span>최고 <strong id="cons-high">—</strong></span>
+            <span id="cons-count-wrap" style="color:var(--text-tertiary);"></span>
+          </div>
+          <div id="cons-reports" style="display:flex; flex-direction:column; gap:0;"></div>
         </div>
-        <div id="cons-reports" style="display:flex; flex-direction:column; gap:0;"></div>
       </div>
     </div>
-
 
     <!-- 투자자 동향 카드 -->
     <div id="dp-investor-card" style="display:none; padding:0 24px 4px;">
       <div class="card" style="padding:0; overflow:hidden;">
-        <div style="padding:12px 16px 8px; font-size:12px; font-weight:700; color:var(--text-tertiary); letter-spacing:0.03em;">투자자 동향</div>
+        <div style="padding:10px 16px; font-size:12px; font-weight:700; color:var(--text-tertiary); letter-spacing:0.03em; background:var(--surface-subtle);">투자자 동향</div>
         <div id="dp-investor-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:0; border-top:1px solid var(--border);"></div>
       </div>
     </div>
@@ -1259,9 +1223,6 @@ html, body {
         </p>
       </div>
 
-      <div class="cs-summary" id="detail-cs-summary" style="display:none;">
-        <div class="cs-summary-text" id="detail-cs-summary-text">—</div>
-      </div>
       <div style="height:24px;"></div>
     </div>
 

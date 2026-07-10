@@ -30,6 +30,7 @@ __pycache__/
 .pytest_cache/
 cache_v19/
 cache_dartlab/
+.venv64/
 backtest/cache/
 backtest/reports/
 .deps-installed.marker

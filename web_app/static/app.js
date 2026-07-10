@@ -3746,11 +3746,20 @@ function _renderEntryVerdict(d) {
     _pvBg = _pick(['깡통', '절대금지', '최위험']);
   }
 
+  // 헤드라인은 conv 기반 고정 문구 대신 한줄평(d.OneLiner)을 사용한다.
+  // 배경색/확신도/이유 설명(_pvReason)은 conv 기반 로직 그대로 유지.
+  if (d.OneLiner) { _pvWord = esc(d.OneLiner); }
+  // 한줄평은 길이가 제각각이라(기존 2~6글자 고정 문구와 달리) 글자수 기반으로
+  // 폰트를 추가로 낮춰 CSS clamp()만으로는 못 잡는 긴 문구도 카드 안에 담는다.
+  const _pvLen = _pvWord.length;
+  const _dvpWordPx = Math.max(20, Math.min(38, 38 - Math.max(0, _pvLen - 8) * 1.1));
+  const _dhbWordPx = Math.max(14, Math.min(26, 26 - Math.max(0, _pvLen - 8) * 0.7));
+
   const _vpEl = document.getElementById('dp-verdict-poster');
   if (_vpEl) {
     _vpEl.style.display = '';
     _vpEl.className = `dp-verdict-poster ${_pgCls}`;
-    _vpEl.innerHTML = `<div class="dvp-main"><div class="dvp-eyebrow-row"><div class="dvp-eyebrow">살까? 말까?</div><div class="dvp-conf"><div class="dvp-conf-num">${conv}<span class="dvp-conf-pct">%</span></div><div class="dvp-conf-lbl">확신도</div></div></div><div class="dvp-word">${_pvWord}</div><div class="dvp-reason">${_pvReason}</div></div><div class="dvp-bg">${_pvBg}</div>`;
+    _vpEl.innerHTML = `<div class="dvp-main"><div class="dvp-eyebrow-row"><div class="dvp-eyebrow">살까? 말까?</div><div class="dvp-conf"><div class="dvp-conf-num">${conv}<span class="dvp-conf-pct">%</span></div><div class="dvp-conf-lbl">확신도</div></div></div><div class="dvp-word" style="font-size:${_dvpWordPx}px">${_pvWord}</div><div class="dvp-reason">${_pvReason}</div></div><div class="dvp-bg">${_pvBg}</div>`;
   }
 
   // ── 데스크탑 히어로 배너 ──
@@ -3769,7 +3778,7 @@ function _renderEntryVerdict(d) {
     _dtEl.innerHTML = `
       <div class="dhb-verdict">
         <div class="dhb-eye">살까? 말까?</div>
-        <div class="dhb-word">${_pvWord}</div>
+        <div class="dhb-word" style="font-size:${_dhbWordPx}px">${_pvWord}</div>
       </div>
       <div class="dhb-reason">${_pvReason}</div>
       <div class="dhb-meta">

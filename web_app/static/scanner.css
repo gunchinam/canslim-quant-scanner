@@ -2618,9 +2618,10 @@ td.score-col {
 .dvp-conf-pct { font-size: 11px; font-weight: 700; vertical-align: super; }
 .dvp-conf-lbl { font-size: 10px; color: rgba(255,255,255,.8); }
 .dvp-word {
-  font-size: 38px; font-weight: 900; letter-spacing: -1.5px;
-  line-height: 1.04; margin: 6px 0 9px;
+  font-size: clamp(20px, 7vw, 38px); font-weight: 900; letter-spacing: -1.5px;
+  line-height: 1.15; margin: 6px 0 9px;
   text-shadow: 0 1px 2px rgba(0,0,0,0.12);
+  word-break: keep-all;
 }
 .dvp-reason { font-size: 13px; opacity: .92; line-height: 1.55; }
 .dvp-bg {
@@ -3938,10 +3939,11 @@ th.sortable.desc .sort-arrow::after { content: "▼"; opacity: 1; color: var(--b
   margin-bottom: 2px;
 }
 .dhb-word {
-  font-size: 26px;
+  font-size: clamp(16px, 2.4vw, 26px);
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.2;
   letter-spacing: -0.02em;
+  word-break: keep-all;
 }
 
 /* reason text */

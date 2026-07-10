@@ -1,7 +1,6 @@
-# 판단 포스터 한줄평 연결 + 명사형 종결 재정비 — 프로젝트 스펙
+# 판단 포스터 한줄평 헤드라인 레이아웃 재설계 -- 프로젝트 스펙
 
 > AI가 코드를 짤 때 지켜야 할 규칙과 절대 하면 안 되는 것.
-> 이 문서를 AI에게 항상 함께 공유하세요.
 
 ---
 
@@ -9,88 +8,62 @@
 
 | 영역 | 선택 | 이유 |
 |------|------|------|
-| 언어 | 순수 Python(기존) | `web_app/one_liner.py`와 4개 V2 모듈 |
-| 프론트 | 순수 JS(기존) | `web_app/static/app.js`의 `_renderEntryVerdict` |
-| 스타일링 | 순수 CSS(기존) | `dvp-word`/`dhb-word` 클래스에 `clamp()` 추가 |
-| 테스트 | pytest(`tests/test_one_liner_consistency.py`, `web_app/tests/`) | 기존 회귀 테스트 스위트 |
+| 백엔드 | Flask (기존) | 변경 없음, `d.OneLiner` 필드는 이미 존재 |
+| 프론트 | Vanilla JS(`app.js`) + Jinja 템플릿(`scanner.html`) | 기존 스택 그대로, 새 프레임워크 도입 없음 |
+| 스타일링 | 순수 CSS(`scanner.css`) | 기존 스택 그대로, clamp()/미디어쿼리 등 표준 CSS만 사용 |
 
 ---
 
-## 프로젝트 구조 (관련 부분만)
+## 관련 파일 (프로젝트 구조)
 
 ```
-종목스캐너/
-├── web_app/
-│   ├── one_liner.py                   # 문구 종결어미 재정비 대상
-│   ├── _spicy_v2_negative.py          # 필요시 종결어미 재정비 대상
-│   ├── _spicy_v2_positive_a.py        # 필요시 종결어미 재정비 대상
-│   ├── _spicy_v2_positive_b.py        # 필요시 종결어미 재정비 대상(신규 파일일 수 있음, 확인 필요)
-│   ├── _spicy_v2_mixed.py             # 필요시 종결어미 재정비 대상
-│   ├── static/
-│   │   └── app.js                     # _renderEntryVerdict 수정 대상(헤드라인 로직 + CSS 인접부)
-│   ├── templates/
-│   │   ├── scanner.html               # dp-verdict-poster 마크업(수정 대상 아님, 확인만)
-│   │   └── detail.html                # hero-oneliner(이번 범위 밖, 건드리지 않음)
-│   └── tests/                         # pytest 회귀 테스트
-└── PRD/                                # 이 문서들
+web_app/
+├── static/
+│   ├── app.js            # _renderEntryVerdict(d) 함수, _pvWord/_dvpWordPx/_dhbWordPx 계산(약 3593~3790줄)
+│   └── scanner.css        # .dp-verdict-poster/.dvp-word(모바일, 약 2578~2632줄),
+│                           # .dhb-verdict/.dhb-word(데스크톱, 약 3900~3960줄)
+├── templates/
+│   └── scanner.html       # dp-verdict-poster, dp-hero-banner-dt 마크업(259~260줄)
+├── one_liner.py            # OneLiner 문구 풀 -- 이번 골에서 변경 안 함
+└── app.py                  # _annotate_one_liners -- 이번 골에서 변경 안 함
 ```
 
 ---
 
 ## 절대 하지 마 (DO NOT)
 
-> AI에게 코드를 시킬 때 이 목록을 반드시 함께 공유하세요.
-
-- [ ] `_renderEntryVerdict`의 `conv` 계산 로직(BFScore/EntryScore/TotalScore/GreedZone/MDD 가중치)을 변경하지 마
-- [ ] `_pvReason`(3줄 이유), `_pgCls`(배경 신호등 클래스), `_pvBg`(배경 라벨) 로직을 변경하지 마 — 이번 범위는 헤드라인(`_pvWord` 자리)뿐
-- [ ] `_bucket()`, `_raw_bucket()`, `get_one_liner()` 등 한줄평 선택 로직을 변경하지 마 — 문구 "텍스트"만 국소 교정
-- [ ] `_PHRASES`의 버킷 개수, 문구 개수, 각 문구의 극성(긍정/부정/중립)을 바꾸지 마
-- [ ] 격식체(습니다/합니다/입니다), 기술용어(RSI/PER/PBR 등), 숫자, 마침표를 새로 넣지 마(직전 골에서 이미 검증된 규칙 유지)
-- [ ] `detail.html`의 `hero-oneliner`, `dp-verdict-poster`(주갤 텍스처 카드) 마크업/CSS를 건드리지 마
-- [ ] 새 API 필드나 백엔드 엔드포인트를 추가하지 마 — `d.OneLiner`가 이미 존재함
-- [ ] 스크린샷으로 실제 화면 검증 없이 "완료"로 보고하지 마
+- [ ] `_pgCls`(배경색 등급), `conv`(확신도 계산) 로직을 변경하지 마 -- 이번 골 범위 밖.
+- [ ] `_pvReason`(3줄 이유 문구 풀)을 변경하지 마 -- 이번 골 범위 밖.
+- [ ] `one_liner.py`의 `_PHRASES`(문구 자체)를 변경하지 마 -- 직전 골에서 이미 완료된 영역.
+- [ ] `d.OneLiner`를 텍스트로 렌더링할 때 `esc()` 없이 직접 삽입하지 마(XSS 방지, 기존 `esc(d.OneLiner)` 패턴 유지).
+- [ ] 텍스트를 자르거나(`text-overflow:ellipsis` 등으로 잘라내거나) `max-length`로 제한하지 마 -- 사용자가 "길이 그대로 다 보이게"를 이전 골에서 명시적으로 요구했고, 이번 골도 그 원칙을 유지한다.
+- [ ] 모바일/데스크톱 중 한쪽만 고치고 다른 쪽을 방치하지 마 -- 두 레이아웃 모두 이번 골의 성공 기준 대상이다.
+- [ ] 기존 pytest 베이스라인(V5: 2 failed/24 passed, V6: 195 passed)을 깨뜨리지 마.
 
 ---
 
 ## 항상 해 (ALWAYS DO)
 
-- [ ] 헤드라인 연결(Phase 1의 1~2번)을 먼저 끝내고 스크린샷으로 확인한 뒤, 문구 재정비(3번)로 넘어가기
-- [ ] 문구 재정비는 버킷 그룹 단위(negative/positive_a/positive_b/mixed/STRONG_BUY)로 나눠 회차 진행
-- [ ] 각 회차마다 `tests/test_one_liner_consistency.py` 실행해 회귀 확인
-- [ ] 데스크톱과 모바일 두 뷰포트 모두에서 헤드라인 표시 확인(긴 문구 잘림/줄바꿈 여부)
-- [ ] "명사형 종결" 판단이 애매한 문구는 원문 의미를 최우선으로 보존하고, 억지로 어색하게 명사형으로 바꾸지 않기(자연스러운 명사형 어미가 없으면 원문 유지도 허용)
-- [ ] 커밋은 단계 단위로 작게 나눠서 진행
+- [ ] 레이아웃을 바꾸기 전에 현재 CSS/JS 코드(줄 번호 포함)를 먼저 읽고 정확한 위치를 파악해.
+- [ ] 짧은 한줄평(15자 내외)과 긴 한줄평(35~40자) 두 극단 모두로 테스트해.
+- [ ] 폰트 크기 변경 시 실제 렌더링 결과(스크린샷 또는 브라우저 확인)로 검증하고, 코드만 보고 "될 것 같다"로 통과 처리하지 마.
+- [ ] 모바일 반응형(기존 미디어쿼리 브레이크포인트) 유지.
 
 ---
 
 ## 테스트 방법
 
 ```bash
-# 한줄평 관련 테스트만 실행
-cd web_app && python -m pytest ../tests/test_one_liner_consistency.py -q
+# 저장소 루트에서
+python3 -m pytest tests/test_one_liner_consistency.py -q
+python3 -m pytest web_app/tests/ -q --deselect web_app/tests/test_history_timeline.py
 
-# 전체 회귀 테스트
-cd web_app && python -m pytest tests/ -q
-
-# 실제 화면 스모크 테스트
-cd web_app && PORT=5061 python app.py
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5061/
+# 로컬 서버로 육안 확인
+cd web_app && python3 app.py   # 이후 브라우저로 드로워 열어 판단 포스터 확인
 ```
-
----
-
-## 배포 방법
-
-- 해당 없음(로컬 UI/문구 변경이며, 기존 배포 파이프라인을 그대로 사용).
-
----
-
-## 환경변수
-
-- 해당 없음.
 
 ---
 
 ## [NEEDS CLARIFICATION]
 
-- `_spicy_v2_positive_b.py` 파일이 실제로 존재하는지(직전 골에서 positive_b 그룹 리라이트 시 별도 V2 모듈 없이 base/V1/MEME/V3/V4만 있었을 수 있음) 구현 착수 시 확인 필요.
+- 없음.

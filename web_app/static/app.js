@@ -3750,10 +3750,12 @@ function _renderEntryVerdict(d) {
   // 배경색/확신도/이유 설명(_pvReason)은 conv 기반 로직 그대로 유지.
   if (d.OneLiner) { _pvWord = esc(d.OneLiner); }
   // 한줄평은 길이가 제각각이라(기존 2~6글자 고정 문구와 달리) 글자수 기반으로
-  // 폰트를 추가로 낮춰 CSS clamp()만으로는 못 잡는 긴 문구도 카드 안에 담는다.
+  // 폰트를 조정한다. 슬롯 자체가 2~3줄 자연 줄바꿈을 전제로 넉넉히 재설계되어
+  // 있으므로, 문구를 한두 줄에 욱여넣기 위해 폰트를 공격적으로 줄이지 않고
+  // 최소 20px(모바일)/22px(데스크톱) 아래로는 절대 내려가지 않게 한다.
   const _pvLen = _pvWord.length;
-  const _dvpWordPx = Math.max(20, Math.min(38, 38 - Math.max(0, _pvLen - 8) * 1.1));
-  const _dhbWordPx = Math.max(14, Math.min(26, 26 - Math.max(0, _pvLen - 8) * 0.7));
+  const _dvpWordPx = Math.max(20, Math.min(32, 32 - Math.max(0, _pvLen - 14) * 0.55));
+  const _dhbWordPx = Math.max(22, Math.min(32, 32 - Math.max(0, _pvLen - 18) * 0.4));
 
   const _vpEl = document.getElementById('dp-verdict-poster');
   if (_vpEl) {
